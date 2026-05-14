@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}审核管理 - Warehouse-s{% endblock %}
+
+{% block content %}
+<h2 class="mb-16">审核管理</h2>
+
+<div class="stats-grid" style="margin-bottom:20px;">
+  <div class="stat-card"><div class="stat-value" id="stat-pending">--</div><div class="stat-label">待审核</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-overtime">--</div><div class="stat-label">已超时</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-today">--</div><div class="stat-label">今日处理</div></div>
+</div>
+
+<div id="approvals-table-container">
+  <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let approvalPage = 1;
+
+async function loadStats() {
+  const resp = await api('/api/v1/approvals/stats');
+  if (resp.ok) {
+    const d = await resp.json();
+    document.getElementById('stat-pending').textContent = d.total_pending;
+    document.getElementById('stat-overtime').textContent = d.total_overtime;
+    document.getElementById('stat-today').textContent = d.today_processed;
+  }
+}
+
+async function loadApprovals(page = 1) {
+  approvalPage = page;
+  const resp = await api(`/api/v1/approvals/pending?page=${page}&page_size=15`);
+  const container = document.getElementById('approvals-table-container');
+  if (!resp.ok) { container.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
+
+  const data = await resp.json();
+  if (data.items.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>暂无待审核记录</p></div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="table">
+      <thead><tr><th>ID</th><th>物品</th><th>借用人</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>事由</th><th>审核截止</th><th>操作</th></tr></thead>
+      <tbody>${data.items.map(r => `
+        <tr style="${r.is_overtime ? 'background:rgba(244,67,54,0.05);' : ''}">
+          <td>${r.id}</td><td>${r.item_name}</td><td>${r.borrower_name}</td>
+          <td>${r.quantity}</td><td>${r.borrow_date}</td><td>${r.expected_return_date}</td>
+          <td>${r.reason || '-'}</td>
+          <td>${r.approval_deadline || '-'} ${r.is_overtime ? '<span class="status-badge overdue">超时</span>' : ''}</td>
+          <td>
+            <div class="btn-group">
+              <button class="btn btn-success btn-sm" onclick="doApprove(${r.id})">通过</button>
+              <button class="btn btn-danger btn-sm" onclick="showReject(${r.id})">驳回</button>
+            </div>
+          </td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+
+  const pages = Math.ceil(data.total / 15);
+  if (pages > 1) {
+    let pagHtml = '<div class="pagination">';
+    pagHtml += `<button onclick="loadApprovals(${page-1})" ${page===1?'disabled':''}>上一页</button>`;
+    for (let i = 1; i <= pages; i++) {
+      pagHtml += `<button class="${i===page?'active':''}" onclick="loadApprovals(${i})">${i}</button>`;
+    }
+    pagHtml += `<button onclick="loadApprovals(${page+1})" ${page===pages?'disabled':''}>下一页</button></div>`;
+    container.innerHTML += pagHtml;
+  }
+}
+
+async function doApprove(id) {
+  const resp = await api(`/api/v1/approvals/${id}/approve`, { method: 'PUT', body: JSON.stringify({ comment: '' }) });
+  if (resp.ok) { showToast('已通过'); loadApprovals(approvalPage); loadStats(); }
+  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+}
+
+async function showReject(id) {
+  const reason = prompt('请输入驳回原因（必填）：');
+  if (!reason) return;
+  const resp = await api(`/api/v1/approvals/${id}/reject`, { method: 'PUT', body: JSON.stringify({ comment: reason }) });
+  if (resp.ok) { showToast('已驳回'); loadApprovals(approvalPage); loadStats(); }
+  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', () => { loadStats(); loadApprovals(); });
+</script>
+{% endblock %}

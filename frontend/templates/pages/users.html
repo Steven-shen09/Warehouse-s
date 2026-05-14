@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}用户管理 - Warehouse-s{% endblock %}
+
+{% block content %}
+<div class="flex-between mb-16">
+  <h2>用户管理</h2>
+  <button class="btn btn-primary" onclick="openModal('user-form-modal')">
+    <i class="bi bi-person-plus"></i> 新增用户
+  </button>
+</div>
+
+<div class="filter-bar">
+  <input type="text" id="user-search" class="form-input" placeholder="搜索用户名/姓名..." oninput="loadUsers()">
+</div>
+
+<div id="users-table-container">
+  <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+</div>
+
+<!-- 新增用户模态框 -->
+<div class="modal-overlay" id="user-form-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>新增用户</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('user-form-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form onsubmit="createUser(event)">
+        <div class="form-group"><label class="form-label">用户名 *</label><input type="text" id="new-username" class="form-input" required></div>
+        <div class="form-group"><label class="form-label">密码 *</label><input type="password" id="new-password" class="form-input" required minlength="6"></div>
+        <div class="form-group"><label class="form-label">显示名称</label><input type="text" id="new-display-name" class="form-input"></div>
+        <div class="form-group">
+          <label class="form-label">角色</label>
+          <select id="new-role" class="form-select">
+            <option value="user">普通用户</option>
+            <option value="approver">审核员</option>
+            <option value="admin">管理员</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">邮箱</label><input type="email" id="new-email" class="form-input"></div>
+        <div class="form-group"><label class="form-label">手机号</label><input type="text" id="new-phone" class="form-input"></div>
+        <button type="submit" class="btn btn-primary">创建用户</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let userPage = 1;
+
+async function loadUsers(page = 1) {
+  userPage = page;
+  const keyword = document.getElementById('user-search').value;
+  const resp = await api(`/api/v1/users/?page=${page}&page_size=15&keyword=${keyword}`);
+  const container = document.getElementById('users-table-container');
+  if (!resp.ok) { container.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
+
+  const data = await resp.json();
+  if (data.items.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">👥</div><p>暂无用户</p></div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="table">
+      <thead><tr><th>ID</th><th>用户名</th><th>显示名称</th><th>角色</th><th>邮箱</th><th>电话</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+      <tbody>${data.items.map(u => `
+        <tr>
+          <td>${u.id}</td><td>${u.username}</td><td>${u.display_name}</td>
+          <td><span class="status-badge ${u.role === 'admin' ? 'overdue' : u.role === 'approver' ? 'pending' : 'available'}">${u.role}</span></td>
+          <td>${u.email || '-'}</td><td>${u.phone || '-'}</td>
+          <td><span class="status-badge ${u.is_active ? 'available' : 'rejected'}">${u.is_active ? '启用' : '停用'}</span></td>
+          <td>${u.created_at}</td>
+          <td>
+            <div class="btn-group">
+              <button class="btn btn-outline btn-sm" onclick="toggleUser(${u.id})">${u.is_active ? '停用' : '启用'}</button>
+              <button class="btn btn-warning btn-sm" onclick="resetPassword(${u.id})">重置密码</button>
+            </div>
+          </td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+
+  const pages = Math.ceil(data.total / 15);
+  if (pages > 1) {
+    let pagHtml = '<div class="pagination">';
+    pagHtml += `<button onclick="loadUsers(${page-1})" ${page===1?'disabled':''}>上一页</button>`;
+    for (let i = 1; i <= pages; i++) {
+      pagHtml += `<button class="${i===page?'active':''}" onclick="loadUsers(${i})">${i}</button>`;
+    }
+    pagHtml += `<button onclick="loadUsers(${page+1})" ${page===pages?'disabled':''}>下一页</button></div>`;
+    container.innerHTML += pagHtml;
+  }
+}
+
+async function createUser(e) {
+  e.preventDefault();
+  const body = {
+    username: document.getElementById('new-username').value,
+    password: document.getElementById('new-password').value,
+    display_name: document.getElementById('new-display-name').value,
+    role: document.getElementById('new-role').value,
+    email: document.getElementById('new-email').value,
+    phone: document.getElementById('new-phone').value,
+  };
+  const resp = await api('/api/v1/users/', { method: 'POST', body: JSON.stringify(body) });
+  if (resp.ok) { showToast('用户已创建'); closeModal('user-form-modal'); loadUsers(userPage); }
+  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+}
+
+async function toggleUser(id) {
+  const resp = await api(`/api/v1/users/${id}/toggle`, { method: 'PUT' });
+  if (resp.ok) { showToast('状态已切换'); loadUsers(userPage); }
+  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+}
+
+async function resetPassword(id) {
+  if (!confirm('确定重置密码为 123456 吗？')) return;
+  const resp = await api(`/api/v1/users/${id}/reset-password`, { method: 'PUT' });
+  if (resp.ok) { showToast('密码已重置'); }
+  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', () => loadUsers());
+</script>
+{% endblock %}

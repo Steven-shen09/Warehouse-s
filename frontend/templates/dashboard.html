@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 - Warehouse-s{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom:20px;">仪表盘</h2>
+
+<div class="stats-grid" id="stats-grid">
+  <div class="stat-card"><div class="stat-value" id="stat-total-items">--</div><div class="stat-label">物品总数</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-available">--</div><div class="stat-label">可用物品</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-borrowed">--</div><div class="stat-label">借出中</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-pending">--</div><div class="stat-label">待审核</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-overdue">--</div><div class="stat-label">逾期记录</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-returned-today">--</div><div class="stat-label">今日归还</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-low-stock">--</div><div class="stat-label">低库存预警</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-timeout">--</div><div class="stat-label">审核超时</div></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">最近租借记录</span>
+    <a href="/records" class="btn btn-outline btn-sm">查看全部</a>
+  </div>
+  <div id="recent-records">加载中...</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadStats() {
+  const resp = await api('/api/v1/stats/');
+  if (resp.ok) {
+    const data = await resp.json();
+    document.getElementById('stat-total-items').textContent = data.total_items;
+    document.getElementById('stat-available').textContent = data.total_available;
+    document.getElementById('stat-borrowed').textContent = data.total_borrowed;
+    document.getElementById('stat-pending').textContent = data.total_pending_approval;
+    document.getElementById('stat-overdue').textContent = data.total_overdue;
+    document.getElementById('stat-returned-today').textContent = data.total_returned_today;
+    document.getElementById('stat-low-stock').textContent = data.low_stock_items;
+    document.getElementById('stat-timeout').textContent = data.approval_timeout_count;
+  }
+}
+
+async function loadRecentRecords() {
+  const resp = await api('/api/v1/records/?page_size=5');
+  if (resp.ok) {
+    const data = await resp.json();
+    const container = document.getElementById('recent-records');
+    if (data.items.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>暂无租借记录</p></div>';
+      return;
+    }
+    container.innerHTML = `
+      <table class="table">
+        <thead><tr>
+          <th>物品</th><th>借用人</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>状态</th>
+        </tr></thead>
+        <tbody>${data.items.map(r => `
+          <tr>
+            <td>${r.item_name}</td>
+            <td>${r.borrower_name}</td>
+            <td>${r.quantity}</td>
+            <td>${r.borrow_date}</td>
+            <td>${r.expected_return_date}</td>
+            <td><span class="status-badge ${r.status === '借出中' ? 'lent' : r.status === '已归还' ? 'returned' : r.status === '逾期' ? 'overdue' : 'pending'}">${r.status}</span></td>
+          </tr>`).join('')}</tbody>
+      </table>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadStats();
+  loadRecentRecords();
+});
+</script>
+{% endblock %}

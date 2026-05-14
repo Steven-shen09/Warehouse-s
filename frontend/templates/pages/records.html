@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block title %}租借记录 - Warehouse-s{% endblock %}
+
+{% block content %}
+<div class="flex-between mb-16">
+  <h2>租借记录</h2>
+  {% if current_user.role == 'user' %}
+  <button class="btn btn-primary" onclick="openModal('borrow-modal')">
+    <i class="bi bi-plus-lg"></i> 提交申请
+  </button>
+  {% endif %}
+</div>
+
+<!-- 筛选栏 -->
+<div class="filter-bar">
+  <input type="text" id="search-input" class="form-input" placeholder="搜索借用人/事由..." oninput="loadRecords()">
+  <select id="status-filter" class="form-select" onchange="loadRecords()">
+    <option value="">全部状态</option>
+    <option value="待审核">待审核</option>
+    <option value="借出中">借出中</option>
+    <option value="已拒绝">已拒绝</option>
+    <option value="已归还">已归还</option>
+    <option value="逾期">逾期</option>
+  </select>
+</div>
+
+<div id="records-table-container">
+  <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+</div>
+
+<!-- 租借申请模态框 -->
+<div class="modal-overlay" id="borrow-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>提交租借申请</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('borrow-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form onsubmit="submitBorrow(event)">
+        <div class="form-group">
+          <label class="form-label">物品 *</label>
+          <select id="borrow-item" class="form-select" required onchange="checkStock()">
+            <option value="">请选择物品</option>
+          </select>
+          <small id="stock-hint" class="text-muted"></small>
+        </div>
+        <div style="display:flex;gap:12px;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">数量 *</label>
+            <input type="number" id="borrow-quantity" class="form-input" min="1" value="1" required>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">借出日期 *</label>
+            <input type="date" id="borrow-date" class="form-input" required>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">预计归还 *</label>
+            <input type="date" id="borrow-return-date" class="form-input" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">联系方式</label>
+          <input type="text" id="borrow-contact" class="form-input" placeholder="手机号">
+        </div>
+        <div class="form-group">
+          <label class="form-label">租借事由</label>
+          <textarea id="borrow-reason" class="form-textarea" placeholder="请简要说明租借原因"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">提交申请</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 归还模态框 -->
+<div class="modal-overlay" id="return-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>归还物品</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('return-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form onsubmit="submitReturn(event)">
+        <input type="hidden" id="return-record-id">
+        <p id="return-item-info" class="mb-16"></p>
+        <div class="form-group">
+          <label class="form-label">归还数量 *</label>
+          <input type="number" id="return-quantity" class="form-input" min="1" required>
+          <small id="return-max-hint" class="text-muted"></small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">实际归还日期</label>
+          <input type="date" id="return-date" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">备注</label>
+          <textarea id="return-notes" class="form-textarea" placeholder="归还备注（可选）"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">确认归还</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let recordsPage = 1;
+
+async function loadItemsForSelect() {
+  const resp = await api('/api/v1/items/?page_size=100');
+  if (resp.ok) {
+    const data = await resp.json();
+    const select = document.getElementById('borrow-item');
+    data.items.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.id;
+      opt.dataset.available = item.available_quantity;
+      opt.textContent = `${item.name} (可用: ${item.available_quantity})`;
+      select.appendChild(opt);
+    });
+  }
+}
+
+function checkStock() {
+  const select = document.getElementById('borrow-item');
+  const opt = select.selectedOptions[0];
+  const hint = document.getElementById('stock-hint');
+  if (opt && opt.dataset.available) {
+    hint.textContent = `可用库存: ${opt.dataset.available}`;
+  } else {
+    hint.textContent = '';
+  }
+}
+
+async function submitBorrow(e) {
+  e.preventDefault();
+  const body = {
+    item_id: parseInt(document.getElementById('borrow-item').value),
+    quantity: parseInt(document.getElementById('borrow-quantity').value),
+    borrow_date: document.getElementById('borrow-date').value,
+    expected_return_date: document.getElementById('borrow-return-date').value,
+    reason: document.getElementById('borrow-reason').value,
+    contact: document.getElementById('borrow-contact').value,
+  };
+  const resp = await api('/api/v1/records/', { method: 'POST', body: JSON.stringify(body) });
+  if (resp.ok) {
+    const data = await resp.json();
+    showToast(data.message || '申请已提交');
+    closeModal('borrow-modal');
+    loadRecords(recordsPage);
+  } else {
+    const data = await resp.json();
+    showToast(data.detail || '提交失败', 'error');
+  }
+}
+
+function openReturnModal(record) {
+  document.getElementById('return-record-id').value = record.id;
+  document.getElementById('return-item-info').textContent =
+    `物品: ${record.item_name} | 借出数量: ${record.quantity} | 借用人: ${record.borrower_name}`;
+  document.getElementById('return-quantity').max = record.quantity;
+  document.getElementById('return-quantity').value = record.quantity;
+  document.getElementById('return-max-hint').textContent = `最大可归还: ${record.quantity}`;
+  document.getElementById('return-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('return-notes').value = '';
+  openModal('return-modal');
+}
+
+async function submitReturn(e) {
+  e.preventDefault();
+  const recordId = document.getElementById('return-record-id').value;
+  const body = {
+    return_quantity: parseInt(document.getElementById('return-quantity').value),
+    actual_return_date: document.getElementById('return-date').value,
+    return_notes: document.getElementById('return-notes').value,
+  };
+  const resp = await api(`/api/v1/records/${recordId}/return`, { method: 'PUT', body: JSON.stringify(body) });
+  if (resp.ok) {
+    const data = await resp.json();
+    showToast(data.message || '归还成功');
+    closeModal('return-modal');
+    loadRecords(recordsPage);
+  } else {
+    const data = await resp.json();
+    showToast(data.detail || '归还失败', 'error');
+  }
+}
+
+async function loadRecords(page = 1) {
+  recordsPage = page;
+  const keyword = document.getElementById('search-input').value;
+  const status = document.getElementById('status-filter').value;
+  const params = new URLSearchParams({ page, page_size: 15, keyword, status });
+
+  const resp = await api(`/api/v1/records/?${params}`);
+  const container = document.getElementById('records-table-container');
+  if (!resp.ok) { container.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
+
+  const data = await resp.json();
+  if (data.items.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>暂无租借记录</p></div>';
+    return;
+  }
+
+  const isStaff = AppState.isAdmin || AppState.isApprover;
+  container.innerHTML = `
+    <table class="table">
+      <thead><tr>
+        <th>ID</th><th>物品</th><th>借用人</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>状态</th>
+        ${isStaff ? '<th>操作</th>' : ''}
+      </tr></thead>
+      <tbody>${data.items.map(r => `
+        <tr>
+          <td>${r.id}</td><td>${r.item_name}</td><td>${r.borrower_name}</td>
+          <td>${r.quantity}</td><td>${r.borrow_date}</td><td>${r.expected_return_date}</td>
+          <td><span class="status-badge ${r.status === '借出中' ? 'lent' : r.status === '已归还' ? 'returned' : r.status === '逾期' ? 'overdue' : r.status === '待审核' ? 'pending' : 'rejected'}">${r.status}</span></td>
+          ${isStaff ? `<td>
+            ${r.status === '借出中' || r.status === '逾期' ? `<button class="btn btn-success btn-sm" onclick='openReturnModal(${JSON.stringify(r)})'>归还</button>` : ''}
+          </td>` : ''}
+        </tr>`).join('')}</tbody>
+    </table>`;
+
+  // Add pagination
+  const pages = Math.ceil(data.total / 15);
+  if (pages > 1) {
+    let pagHtml = '<div class="pagination">';
+    pagHtml += `<button onclick="loadRecords(${page-1})" ${page===1?'disabled':''}>上一页</button>`;
+    for (let i = 1; i <= pages; i++) {
+      pagHtml += `<button class="${i===page?'active':''}" onclick="loadRecords(${i})">${i}</button>`;
+    }
+    pagHtml += `<button onclick="loadRecords(${page+1})" ${page===pages?'disabled':''}>下一页</button></div>`;
+    container.innerHTML += pagHtml;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadItemsForSelect();
+  loadRecords();
+  document.getElementById('borrow-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('borrow-return-date').value = new Date(Date.now() + 7*86400000).toISOString().split('T')[0];
+});
+</script>
+{% endblock %}

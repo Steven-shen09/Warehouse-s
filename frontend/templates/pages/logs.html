@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}操作日志 - Warehouse-s{% endblock %}
+
+{% block content %}
+<h2 class="mb-16">操作日志</h2>
+
+<div class="filter-bar">
+  <input type="text" id="log-username" class="form-input" placeholder="操作人..." oninput="loadLogs()">
+  <select id="log-action" class="form-select" onchange="loadLogs()">
+    <option value="">全部操作</option>
+    <option value="borrow">租借申请</option>
+    <option value="approve">审核通过</option>
+    <option value="reject">审核驳回</option>
+    <option value="return_full">完全归还</option>
+    <option value="return_partial">部分归还</option>
+  </select>
+  <select id="log-type" class="form-select" onchange="loadLogs()">
+    <option value="">全部类型</option>
+    <option value="record">租借记录</option>
+    <option value="item">物品</option>
+    <option value="user">用户</option>
+  </select>
+</div>
+
+<div id="logs-table-container">
+  <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let logPage = 1;
+
+async function loadLogs(page = 1) {
+  logPage = page;
+  const params = new URLSearchParams({
+    page, page_size: 30,
+    username: document.getElementById('log-username').value,
+    action: document.getElementById('log-action').value,
+    target_type: document.getElementById('log-type').value,
+  });
+
+  const resp = await api(`/api/v1/logs/?${params}`);
+  const container = document.getElementById('logs-table-container');
+  if (!resp.ok) { container.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
+
+  const data = await resp.json();
+  if (data.items.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">📜</div><p>暂无操作日志</p></div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="table">
+      <thead><tr><th>ID</th><th>操作人</th><th>操作</th><th>对象类型</th><th>对象ID</th><th>详情</th><th>时间</th></tr></thead>
+      <tbody>${data.items.map(l => `
+        <tr>
+          <td>${l.id}</td><td>${l.username}</td>
+          <td><span class="status-badge ${l.action.includes('approve') ? 'available' : l.action.includes('reject') ? 'rejected' : l.action.includes('return') ? 'returned' : 'pending'}">${l.action}</span></td>
+          <td>${l.target_type}</td><td>${l.target_id}</td>
+          <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.detail || '-'}</td>
+          <td>${l.created_at}</td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+
+  const pages = Math.ceil(data.total / 30);
+  if (pages > 1) {
+    let pagHtml = '<div class="pagination">';
+    pagHtml += `<button onclick="loadLogs(${page-1})" ${page===1?'disabled':''}>上一页</button>`;
+    for (let i = 1; i <= pages; i++) {
+      pagHtml += `<button class="${i===page?'active':''}" onclick="loadLogs(${i})">${i}</button>`;
+    }
+    pagHtml += `<button onclick="loadLogs(${page+1})" ${page===pages?'disabled':''}>下一页</button></div>`;
+    container.innerHTML += pagHtml;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => loadLogs());
+</script>
+{% endblock %}

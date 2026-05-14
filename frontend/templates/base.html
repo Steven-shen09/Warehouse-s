@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Warehouse-s 物品租借系统{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/bootstrap-icons.css">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="/static/js/htmx.min.js"></script>
+  <script src="/static/js/alpine.min.js" defer></script>
+</head>
+<body>
+  {% if current_user %}
+  <!-- 导航栏 -->
+  <nav class="navbar">
+    <a href="/dashboard" class="navbar-brand">
+      <i class="bi bi-box-seam"></i> Warehouse-s
+    </a>
+    <ul class="navbar-nav">
+      <li><span class="badge-role">{{ current_user.role_display }}</span></li>
+      <li><span>{{ current_user.display_name or current_user.username }}</span></li>
+      <li>
+        <button class="btn btn-outline btn-sm" onclick="AppState.toggleTheme()" title="切换主题">
+          <i class="bi bi-moon-stars"></i>
+        </button>
+      </li>
+      <li><a href="/logout" class="btn btn-outline btn-sm"><i class="bi bi-box-arrow-right"></i> 退出</a></li>
+    </ul>
+  </nav>
+
+  <div class="layout">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <a href="/dashboard" class="{{ 'active' if active_page == 'dashboard' }}">
+        <i class="bi bi-speedometer2"></i> 仪表盘
+      </a>
+      <a href="/items" class="{{ 'active' if active_page == 'items' }}">
+        <i class="bi bi-box"></i> 物品管理
+      </a>
+      <a href="/records" class="{{ 'active' if active_page == 'records' }}">
+        <i class="bi bi-journal-text"></i> 租借记录
+      </a>
+      {% if current_user.role in ('admin', 'approver') %}
+      <a href="/approvals" class="{{ 'active' if active_page == 'approvals' }}">
+        <i class="bi bi-check-circle"></i> 审核管理
+      </a>
+      {% endif %}
+      {% if current_user.role == 'admin' %}
+      <a href="/users" class="{{ 'active' if active_page == 'users' }}">
+        <i class="bi bi-people"></i> 用户管理
+      </a>
+      <a href="/logs" class="{{ 'active' if active_page == 'logs' }}">
+        <i class="bi bi-clock-history"></i> 操作日志
+      </a>
+      {% endif %}
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% else %}
+  {% block fullpage %}{% endblock %}
+  {% endif %}
+
+  <!-- Toast 容器 -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="/static/js/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

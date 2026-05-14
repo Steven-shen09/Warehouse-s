@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}物品管理 - Warehouse-s{% endblock %}
+
+{% block content %}
+<div class="flex-between mb-16">
+  <h2>物品管理</h2>
+  {% if current_user.role in ('admin', 'approver') %}
+  <button class="btn btn-primary" onclick="openModal('item-form-modal')">
+    <i class="bi bi-plus-lg"></i> 新增物品
+  </button>
+  {% endif %}
+</div>
+
+<!-- 筛选栏 -->
+<div class="filter-bar">
+  <input type="text" id="search-input" class="form-input" placeholder="搜索物品名称..." oninput="loadItems()">
+  <select id="category-filter" class="form-select" onchange="loadItems()">
+    <option value="">全部分类</option>
+  </select>
+  <select id="status-filter" class="form-select" onchange="loadItems()">
+    <option value="">全部状态</option>
+    <option value="可用">可用</option>
+    <option value="租借中">租借中</option>
+    <option value="损坏">损坏</option>
+  </select>
+</div>
+
+<!-- 物品列表 -->
+<div id="items-table-container">
+  <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+</div>
+
+<!-- 新增/编辑物品模态框 -->
+<div class="modal-overlay" id="item-form-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="item-form-title">新增物品</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('item-form-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="item-form" onsubmit="saveItem(event)">
+        <input type="hidden" id="item-id">
+        <div class="form-group">
+          <label class="form-label">物品名称 *</label>
+          <input type="text" id="item-name" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">分类</label>
+          <input type="text" id="item-category" class="form-input" placeholder="如：电子设备、家具、工具">
+        </div>
+        <div class="form-group">
+          <label class="form-label">描述</label>
+          <textarea id="item-description" class="form-textarea"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">存放位置</label>
+          <input type="text" id="item-location" class="form-input" placeholder="如：A-101">
+        </div>
+        <div style="display:flex;gap:12px;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">总数量 *</label>
+            <input type="number" id="item-quantity" class="form-input" min="1" value="1" required>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">单价 (元)</label>
+            <input type="number" id="item-value" class="form-input" min="0" step="0.01" value="0">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">预警阈值</label>
+            <input type="number" id="item-threshold" class="form-input" min="0" value="2">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">保 存</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+
+async function loadCategories() {
+  const resp = await api('/api/v1/items/categories');
+  if (resp.ok) {
+    const data = await resp.json();
+    const select = document.getElementById('category-filter');
+    data.categories.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c; opt.textContent = c;
+      select.appendChild(opt);
+    });
+  }
+}
+
+async function loadItems(page = 1) {
+  currentPage = page;
+  const keyword = document.getElementById('search-input').value;
+  const category = document.getElementById('category-filter').value;
+  const status = document.getElementById('status-filter').value;
+  const params = new URLSearchParams({ page, page_size: 15, keyword, category, status });
+
+  const resp = await api(`/api/v1/items/?${params}`);
+  const container = document.getElementById('items-table-container');
+
+  if (!resp.ok) { container.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
+
+  const data = await resp.json();
+  if (data.items.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">📦</div><p>暂无物品</p></div>';
+    return;
+  }
+
+  const isAdmin = AppState.isAdmin || AppState.isApprover;
+  container.innerHTML = `
+    <table class="table">
+      <thead><tr>
+        <th>ID</th><th>名称</th><th>分类</th><th>位置</th><th>总库存</th><th>可用</th><th>状态</th><th>单价</th>
+        ${isAdmin ? '<th>操作</th>' : ''}
+      </tr></thead>
+      <tbody>${data.items.map(item => `
+        <tr>
+          <td>${item.id}</td>
+          <td><a href="/items/${item.id}">${item.name}</a></td>
+          <td>${item.category || '-'}</td>
+          <td>${item.location || '-'}</td>
+          <td>${item.total_quantity}</td>
+          <td><strong>${item.available_quantity}</strong></td>
+          <td><span class="status-badge ${item.status === '可用' ? 'available' : item.status === '租借中' ? 'lent' : 'damaged'}">${item.status}</span></td>
+          <td>¥${item.value.toFixed(2)}</td>
+          ${isAdmin ? `<td>
+            <div class="btn-group">
+              <button class="btn btn-outline btn-sm" onclick='editItem(${JSON.stringify(item)})'>编辑</button>
+              ${item.status === '损坏' ? `<button class="btn btn-success btn-sm" onclick="markAvailable(${item.id})">修复</button>` : `<button class="btn btn-warning btn-sm" onclick="markDamaged(${item.id})">损坏</button>`}
+              <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})">删除</button>
+            </div>
+          </td>` : ''}
+        </tr>`).join('')}</tbody>
+    </table>
+    ${renderPagination(data.total, data.page_size, currentPage)}
+  `;
+}
+
+function renderPagination(total, pageSize, currentPage) {
+  const pages = Math.ceil(total / pageSize);
+  if (pages <= 1) return '';
+  let html = '<div class="pagination">';
+  html += `<button onclick="loadItems(${currentPage-1})" ${currentPage===1?'disabled':''}>上一页</button>`;
+  for (let i = 1; i <= pages; i++) {
+    html += `<button class="${i===currentPage?'active':''}" onclick="loadItems(${i})">${i}</button>`;
+  }
+  html += `<button onclick="loadItems(${currentPage+1})" ${currentPage===pages?'disabled':''}>下一页</button>`;
+  html += '</div>';
+  return html;
+}
+
+function editItem(item) {
+  document.getElementById('item-form-title').textContent = '编辑物品';
+  document.getElementById('item-id').value = item.id;
+  document.getElementById('item-name').value = item.name;
+  document.getElementById('item-category').value = item.category || '';
+  document.getElementById('item-description').value = item.description || '';
+  document.getElementById('item-location').value = item.location || '';
+  document.getElementById('item-quantity').value = item.total_quantity;
+  document.getElementById('item-value').value = item.value;
+  document.getElementById('item-threshold').value = item.low_stock_threshold;
+  openModal('item-form-modal');
+}
+
+async function saveItem(e) {
+  e.preventDefault();
+  const id = document.getElementById('item-id').value;
+  const body = {
+    name: document.getElementById('item-name').value,
+    category: document.getElementById('item-category').value,
+    description: document.getElementById('item-description').value,
+    location: document.getElementById('item-location').value,
+    total_quantity: parseInt(document.getElementById('item-quantity').value),
+    value: parseFloat(document.getElementById('item-value').value),
+    low_stock_threshold: parseInt(document.getElementById('item-threshold').value),
+  };
+
+  const method = id ? 'PUT' : 'POST';
+  const url = id ? `/api/v1/items/${id}` : '/api/v1/items/';
+  const resp = await api(url, { method, body: JSON.stringify(body) });
+  if (resp.ok) {
+    closeModal('item-form-modal');
+    document.getElementById('item-form').reset();
+    document.getElementById('item-id').value = '';
+    document.getElementById('item-form-title').textContent = '新增物品';
+    showToast(id ? '物品已更新' : '物品已创建');
+    loadItems(currentPage);
+  } else {
+    const data = await resp.json();
+    showToast(data.detail || '操作失败', 'error');
+  }
+}
+
+async function markDamaged(id) {
+  if (!confirm('确定标记该物品为损坏吗？')) return;
+  const resp = await api(`/api/v1/items/${id}/mark-damaged`, { method: 'PUT' });
+  if (resp.ok) { showToast('已标记为损坏'); loadItems(currentPage); }
+  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+}
+
+async function markAvailable(id) {
+  const resp = await api(`/api/v1/items/${id}/mark-available`, { method: 'PUT' });
+  if (resp.ok) { showToast('已恢复为可用'); loadItems(currentPage); }
+  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+}
+
+async function deleteItem(id) {
+  if (!confirm('确定删除该物品吗？')) return;
+  const resp = await api(`/api/v1/items/${id}`, { method: 'DELETE' });
+  if (resp.ok) { showToast('物品已删除'); loadItems(currentPage); }
+  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadCategories();
+  loadItems();
+});
+</script>
+{% endblock %}

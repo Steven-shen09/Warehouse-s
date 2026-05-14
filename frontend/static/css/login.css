@@ -1,0 +1,6 @@
+/* 登录页样式 */
+.login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #3a5a8c, #4a6fa5); }
+.login-card { width: 380px; padding: 40px; background: #fff; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+.login-card h1 { text-align: center; margin-bottom: 24px; color: #4a6fa5; font-size: 22px; }
+.login-card .btn { width: 100%; justify-content: center; margin-top: 16px; }
+.login-error { color: #f44336; font-size: 13px; margin-top: 8px; text-align: center; display: none; }
