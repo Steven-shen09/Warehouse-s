@@ -4,7 +4,9 @@ from typing import Optional
 
 
 class AIAdapter(ABC):
-    """AI 服务适配器抽象基类"""
+    """AI 服务适配器抽象基类 — 各实现按需覆盖子集，未覆盖的方法返回安全默认值"""
+
+    # ── 审核与异常检测（DeepSeek 主责）─────────────────────────────
 
     @abstractmethod
     async def get_approval_suggestion(self, record_info: dict) -> Optional[str]:
@@ -14,6 +16,18 @@ class AIAdapter(ABC):
     @abstractmethod
     async def detect_anomaly(self, records: list) -> list:
         """异常检测，返回异常记录列表"""
+        ...
+
+    # ── 前端生成与图像（Kimi 主责）─────────────────────────────────
+
+    @abstractmethod
+    async def generate_page_template(self, description: str, context: dict | None = None) -> Optional[str]:
+        """根据描述生成前端页面 HTML/CSS 片段，失败返回 None"""
+        ...
+
+    @abstractmethod
+    async def generate_image(self, prompt: str, style: str = "flat") -> Optional[bytes]:
+        """根据描述生成图片，返回图片二进制数据，失败返回 None"""
         ...
 
 

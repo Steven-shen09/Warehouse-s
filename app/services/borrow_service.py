@@ -2,7 +2,7 @@
 import sqlite3
 from app.state_machine.transitions import can_transition
 from app.state_machine.events import SUBMIT_BORROW, RESUBMIT
-from app.services.inventory_service import reserve_stock, update_item_status
+from app.services.inventory_service import reserve_stock, update_item_status, check_stock
 from app.services.audit_service import log
 from app.config import settings
 from app.utils.helpers import deadline_str
@@ -97,3 +97,62 @@ def resubmit_borrow(
         f"重新提交租借申请：数量={quantity}，预计归还={expected_return_date}")
     conn.commit()
     return {"message": "申请已重新提交，等待审核"}
+
+
+def submit_batch_borrow(
+    conn: sqlite3.Connection,
+    items: list[dict],
+    borrower_id: int,
+    borrower_name: str,
+    borrow_date: str,
+    expected_return_date: str,
+    reason: str = "",
+    contact: str = "",
+) -> dict:
+    """
+    批量提交租借申请（购物车模式）。
+    在单个事务中处理所有物品，任一库存不足则全部回滚。
+    """
+    if not items:
+        raise ValueError("租借物品列表不能为空")
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        # Phase 1: 校验所有物品库存充足
+        for item in items:
+            if not check_stock(conn, item["item_id"], item["quantity"]):
+                conn.rollback()
+                raise ValueError(f"物品ID={item['item_id']} 库存不足，无法提交申请")
+
+        # Phase 2: 创建记录
+        deadline = deadline_str(settings.APPROVAL_TIMEOUT_HOURS)
+        record_ids = []
+
+        for item in items:
+            cursor = conn.execute(
+                """INSERT INTO records
+                   (item_id, borrower_id, borrower_name, contact, quantity, borrow_date,
+                    expected_return_date, reason, status, approval_deadline, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, '待审核', ?, ?)""",
+                (item["item_id"], borrower_id, borrower_name, contact,
+                 item["quantity"], borrow_date, expected_return_date,
+                 reason, deadline, borrower_id),
+            )
+            record_ids.append(cursor.lastrowid)
+
+            update_item_status(conn, item["item_id"])
+
+            log(conn, borrower_id, borrower_name, "batch_borrow", "record",
+                cursor.lastrowid,
+                f"批量租借申请：物品ID={item['item_id']}，数量={item['quantity']}，"
+                f"预计归还={expected_return_date}")
+
+        conn.commit()
+        return {
+            "record_ids": record_ids,
+            "count": len(record_ids),
+            "message": f"批量租借申请已提交，共 {len(record_ids)} 件物品，等待审核",
+        }
+    except Exception:
+        conn.rollback()
+        raise

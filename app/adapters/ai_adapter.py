@@ -73,3 +73,13 @@ class DeepSeekAdapter(AIAdapter):
                 logger.warning(f"DeepSeek 异常检测返回格式错误: {result}")
                 return []
         return []
+
+    async def generate_page_template(self, description: str, context: dict | None = None) -> Optional[str]:
+        """DeepSeek 不具备生图/前端美化能力，降级返回 None"""
+        logger.info("DeepSeek 不支持前端页面生成，跳过")
+        return None
+
+    async def generate_image(self, prompt: str, style: str = "flat") -> Optional[bytes]:
+        """DeepSeek 不支持图像生成，降级返回 None"""
+        logger.info("DeepSeek 不支持图像生成，跳过")
+        return None

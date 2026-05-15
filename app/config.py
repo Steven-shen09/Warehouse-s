@@ -10,9 +10,13 @@ class Settings(BaseSettings):
     DATABASE_PATH: str = "data/warehouse.db"
     APPROVAL_TIMEOUT_HOURS: int = 24
 
-    # DeepSeek AI
+    # DeepSeek AI（审核建议、异常检测）
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1"
+
+    # Moonshot Kimi AI（前端页面生成、图像生成）
+    KIMI_API_KEY: str = ""
+    KIMI_BASE_URL: str = "https://api.moonshot.cn/v1"
 
     # 阿里云 OSS
     OSS_ACCESS_KEY_ID: str = ""

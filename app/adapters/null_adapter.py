@@ -17,6 +17,14 @@ class NullAIAdapter(AIAdapter):
         logger.info(f"[NullAI] 跳过异常检测（未配置 DeepSeek）")
         return []
 
+    async def generate_page_template(self, description: str, context: dict | None = None) -> Optional[str]:
+        logger.info(f"[NullAI] 跳过前端页面生成（未配置 Kimi）")
+        return None
+
+    async def generate_image(self, prompt: str, style: str = "flat") -> Optional[bytes]:
+        logger.info(f"[NullAI] 跳过图像生成（未配置 Kimi）")
+        return None
+
 
 class NullOSSAdapter(OSSAdapter):
     """空 OSS 适配器：文件存本地"""

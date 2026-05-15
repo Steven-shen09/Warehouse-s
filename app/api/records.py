@@ -1,8 +1,8 @@
 """租借记录路由"""
 from fastapi import APIRouter, Depends, HTTPException
 from app.api.deps import get_db, get_current_user, require_role
-from app.schemas.record import BorrowRequest, ReturnRequest
-from app.services.borrow_service import submit_borrow, resubmit_borrow
+from app.schemas.record import BorrowRequest, ReturnRequest, BatchBorrowRequest
+from app.services.borrow_service import submit_borrow, resubmit_borrow, submit_batch_borrow
 from app.services.return_service import process_return
 
 router = APIRouter(prefix="/api/v1/records", tags=["租借记录"])
@@ -55,6 +55,30 @@ def list_records(
         "page": page,
         "page_size": page_size,
     }
+
+
+@router.post("/batch-borrow")
+def create_batch_borrow(
+    body: BatchBorrowRequest,
+    current_user: dict = Depends(require_role("user")),
+    conn=Depends(get_db),
+):
+    """批量提交租借申请（购物车模式）"""
+    try:
+        items = [{"item_id": i.item_id, "quantity": i.quantity} for i in body.items]
+        result = submit_batch_borrow(
+            conn,
+            items=items,
+            borrower_id=current_user["id"],
+            borrower_name=current_user["display_name"] or current_user["username"],
+            borrow_date=body.borrow_date,
+            expected_return_date=body.expected_return_date,
+            reason=body.reason,
+            contact=body.contact,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/{record_id}")

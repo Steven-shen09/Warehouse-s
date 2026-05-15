@@ -2,32 +2,89 @@
 {% block title %}物品管理 - Warehouse-s{% endblock %}
 
 {% block content %}
-<div class="flex-between mb-16">
-  <h2>物品管理</h2>
-  {% if current_user.role in ('admin', 'approver') %}
-  <button class="btn btn-primary" onclick="openModal('item-form-modal')">
-    <i class="bi bi-plus-lg"></i> 新增物品
-  </button>
+<div class="content-layout">
+  <div class="content-main">
+    <div class="flex-between mb-16">
+      <h2>物品管理</h2>
+      {% if current_user.role in ('admin', 'approver') %}
+      <button class="btn btn-primary" onclick="openModal('item-form-modal')">
+        <i class="bi bi-plus-lg"></i> 新增物品
+      </button>
+      {% endif %}
+    </div>
+
+    <!-- 筛选栏 -->
+    <div class="filter-bar">
+      <input type="text" id="search-input" class="form-input" placeholder="搜索物品名称..." oninput="loadItems()">
+      <select id="category-filter" class="form-select" onchange="loadItems()">
+        <option value="">全部分类</option>
+      </select>
+      <select id="status-filter" class="form-select" onchange="loadItems()">
+        <option value="">全部状态</option>
+        <option value="可用">可用</option>
+        <option value="租借中">租借中</option>
+        <option value="损坏">损坏</option>
+      </select>
+    </div>
+
+    <!-- 物品列表 -->
+    <div id="items-table-container">
+      <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+    </div>
+  </div>
+
+  {% if current_user.role == 'user' %}
+  <!-- 租借清单购物车面板 -->
+  <aside class="cart-panel" id="cart-panel">
+    <div class="cart-panel-inner">
+      <div class="cart-header">
+        <h3 class="cart-title">
+          租借清单
+          <span class="cart-count-badge" id="cart-count-badge" style="display:none;">0 件</span>
+        </h3>
+        <button class="btn btn-sm btn-outline" id="cart-clear-btn" style="display:none;" onclick="clearCart()">清空</button>
+      </div>
+
+      <div class="cart-empty" id="cart-empty">
+        <div class="icon">&#x1F6D2;</div>
+        <p>请从左侧表格勾选需要租借的物品</p>
+      </div>
+
+      <div class="cart-items-list" id="cart-items-list" style="display:none;"></div>
+
+      <div class="cart-summary" id="cart-summary" style="display:none;">
+        <div class="cart-summary-row">
+          <span id="cart-total-items">共 0 件物品</span>
+          <span class="cart-total-amount" id="cart-total-amount">¥0.00</span>
+        </div>
+      </div>
+
+      <form class="cart-form" onsubmit="submitCart(event)">
+        <div style="display:flex;gap:12px;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">借出日期 *</label>
+            <input type="date" id="cart-borrow-date" class="form-input" required>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">预计归还 *</label>
+            <input type="date" id="cart-return-date" class="form-input" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">联系方式</label>
+          <input type="text" id="cart-contact" class="form-input" placeholder="手机号">
+        </div>
+        <div class="form-group">
+          <label class="form-label">租借事由</label>
+          <textarea id="cart-reason" class="form-textarea" placeholder="请简要说明租借原因"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+          <i class="bi bi-send"></i> 提交申请
+        </button>
+      </form>
+    </div>
+  </aside>
   {% endif %}
-</div>
-
-<!-- 筛选栏 -->
-<div class="filter-bar">
-  <input type="text" id="search-input" class="form-input" placeholder="搜索物品名称..." oninput="loadItems()">
-  <select id="category-filter" class="form-select" onchange="loadItems()">
-    <option value="">全部分类</option>
-  </select>
-  <select id="status-filter" class="form-select" onchange="loadItems()">
-    <option value="">全部状态</option>
-    <option value="可用">可用</option>
-    <option value="租借中">租借中</option>
-    <option value="损坏">损坏</option>
-  </select>
-</div>
-
-<!-- 物品列表 -->
-<div id="items-table-container">
-  <div class="text-center text-muted" style="padding:48px;">加载中...</div>
 </div>
 
 <!-- 新增/编辑物品模态框 -->
@@ -81,6 +138,161 @@
 <script>
 let currentPage = 1;
 
+// ── HTML 转义 ──
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── 购物车状态 ──
+const cart = {
+  items: {},
+
+  add(item) {
+    if (!(item.id in this.items)) {
+      this.items[item.id] = { ...item, quantity: 1 };
+    }
+  },
+  remove(itemId) {
+    delete this.items[itemId];
+  },
+  updateQuantity(itemId, delta) {
+    const item = this.items[itemId];
+    if (!item) return;
+    const newQty = item.quantity + delta;
+    if (newQty < 1 || newQty > item.max) return;
+    item.quantity = newQty;
+  },
+  clear() {
+    this.items = {};
+  },
+  get count() {
+    return Object.keys(this.items).length;
+  },
+  get totalItems() {
+    return Object.values(this.items).reduce((s, i) => s + i.quantity, 0);
+  },
+  get totalAmount() {
+    return Object.values(this.items).reduce((s, i) => s + i.price * i.quantity, 0);
+  },
+  isEmpty() {
+    return this.count === 0;
+  },
+};
+
+// ── 购物车操作 ──
+function toggleCartItem(checkbox) {
+  if (checkbox.checked) {
+    cart.add({
+      id: parseInt(checkbox.dataset.itemId),
+      name: checkbox.dataset.itemName,
+      price: parseFloat(checkbox.dataset.itemPrice),
+      max: parseInt(checkbox.dataset.itemMax),
+    });
+  } else {
+    cart.remove(parseInt(checkbox.dataset.itemId));
+  }
+  renderCart();
+}
+
+function updateCartQuantity(itemId, delta) {
+  cart.updateQuantity(itemId, delta);
+  renderCart();
+}
+
+function removeCartItem(itemId) {
+  cart.remove(itemId);
+  const cb = document.querySelector(`.cart-checkbox[data-item-id="${itemId}"]`);
+  if (cb) cb.checked = false;
+  renderCart();
+}
+
+function clearCart() {
+  cart.clear();
+  document.querySelectorAll('.cart-checkbox').forEach(cb => { cb.checked = false; });
+  renderCart();
+}
+
+function renderCart() {
+  const empty = document.getElementById('cart-empty');
+  const list = document.getElementById('cart-items-list');
+  const summary = document.getElementById('cart-summary');
+  const badge = document.getElementById('cart-count-badge');
+  const clearBtn = document.getElementById('cart-clear-btn');
+  const totalItems = document.getElementById('cart-total-items');
+  const totalAmount = document.getElementById('cart-total-amount');
+
+  if (cart.isEmpty()) {
+    empty.style.display = '';
+    list.style.display = 'none';
+    summary.style.display = 'none';
+    badge.style.display = 'none';
+    clearBtn.style.display = 'none';
+  } else {
+    empty.style.display = 'none';
+    list.style.display = '';
+    summary.style.display = '';
+    badge.style.display = '';
+    clearBtn.style.display = '';
+
+    badge.textContent = `${cart.count} 件`;
+    totalItems.textContent = `共 ${cart.totalItems} 件物品`;
+    totalAmount.textContent = `¥${cart.totalAmount.toFixed(2)}`;
+
+    list.innerHTML = Object.values(cart.items).map(item => `
+      <div class="cart-item">
+        <div class="cart-item-header">
+          <span class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+          <button class="cart-item-remove" onclick="removeCartItem(${item.id})" title="移除">&times;</button>
+        </div>
+        <div class="cart-item-body">
+          <span class="cart-item-price">¥${item.price.toFixed(2)}</span>
+          <div class="cart-quantity-control">
+            <button onclick="updateCartQuantity(${item.id}, -1)" ${item.quantity <= 1 ? 'disabled' : ''}>−</button>
+            <span class="cart-quantity-value">${item.quantity}</span>
+            <button onclick="updateCartQuantity(${item.id}, 1)" ${item.quantity >= item.max ? 'disabled' : ''}>+</button>
+          </div>
+          <span class="cart-item-subtotal">¥${(item.price * item.quantity).toFixed(2)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+function syncCartCheckboxes() {
+  document.querySelectorAll('.cart-checkbox').forEach(cb => {
+    const id = parseInt(cb.dataset.itemId);
+    cb.checked = id in cart.items;
+  });
+}
+
+async function submitCart(e) {
+  e.preventDefault();
+  if (cart.isEmpty()) {
+    showToast('请先勾选需要租借的物品', 'warning');
+    return;
+  }
+  const body = {
+    items: Object.values(cart.items).map(item => ({
+      item_id: item.id,
+      quantity: item.quantity,
+    })),
+    borrow_date: document.getElementById('cart-borrow-date').value,
+    expected_return_date: document.getElementById('cart-return-date').value,
+    reason: document.getElementById('cart-reason').value,
+    contact: document.getElementById('cart-contact').value,
+  };
+  const resp = await api('/api/v1/records/batch-borrow', { method: 'POST', body: JSON.stringify(body) });
+  if (resp.ok) {
+    const data = await resp.json();
+    showToast(data.message || '申请已提交');
+    clearCart();
+    loadItems(currentPage);
+  } else {
+    const data = await resp.json();
+    showToast(data.detail || '提交失败', 'error');
+  }
+}
+
 async function loadCategories() {
   const resp = await api('/api/v1/items/categories');
   if (resp.ok) {
@@ -113,14 +325,25 @@ async function loadItems(page = 1) {
   }
 
   const isAdmin = AppState.isAdmin || AppState.isApprover;
+  const isUser = AppState.isUser;
   container.innerHTML = `
     <table class="table">
       <thead><tr>
+        ${isUser ? '<th class="col-check">选择</th>' : ''}
         <th>ID</th><th>名称</th><th>分类</th><th>位置</th><th>总库存</th><th>可用</th><th>状态</th><th>单价</th>
         ${isAdmin ? '<th>操作</th>' : ''}
       </tr></thead>
       <tbody>${data.items.map(item => `
         <tr>
+          ${isUser ? `<td class="col-check">
+            <input type="checkbox" class="cart-checkbox"
+              data-item-id="${item.id}"
+              data-item-name="${escapeHtml(item.name)}"
+              data-item-price="${item.value}"
+              data-item-max="${item.available_quantity}"
+              ${item.status !== '可用' || item.available_quantity <= 0 ? 'disabled' : ''}
+              onchange="toggleCartItem(this)">
+          </td>` : ''}
           <td>${item.id}</td>
           <td><a href="/items/${item.id}">${item.name}</a></td>
           <td>${item.category || '-'}</td>
@@ -140,6 +363,7 @@ async function loadItems(page = 1) {
     </table>
     ${renderPagination(data.total, data.page_size, currentPage)}
   `;
+  if (isUser) syncCartCheckboxes();
 }
 
 function renderPagination(total, pageSize, currentPage) {
@@ -220,6 +444,10 @@ async function deleteItem(id) {
 document.addEventListener('DOMContentLoaded', () => {
   loadCategories();
   loadItems();
+  if (AppState.isUser) {
+    document.getElementById('cart-borrow-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('cart-return-date').value = new Date(Date.now() + 7*86400000).toISOString().split('T')[0];
+  }
 });
 </script>
 {% endblock %}

@@ -183,3 +183,9 @@ async def logs_page(request: Request):
     if not user or user["role"] != "admin":
         return RedirectResponse(url="/dashboard")
     return _render(request, "pages/logs.html", {"current_user": user, "active_page": "logs"})
+
+
+@router.get("/about", response_class=HTMLResponse)
+async def about_page(request: Request):
+    user = await get_optional_user(request)
+    return _render(request, "pages/about.html", {"current_user": user, "active_page": "about"})

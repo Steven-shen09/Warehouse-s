@@ -1,0 +1,252 @@
+<!-- 项目简介 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title"><i class="bi bi-star-fill" style="color: var(--warning); font-size: 14px;"></i> 项目简介</span>
+  </div>
+  <p style="line-height: 1.8; color: var(--text-secondary);">
+    <strong>Warehouse-s</strong> 是一套全栈物品租借管理系统，旨在帮助团队或组织高效管理物品的借出、归还、审核与追踪。
+    系统围绕"申请 → 审核 → 借出 → 归还"这一核心流程，结合<strong>状态机引擎</strong>和<strong>RBAC 权限控制</strong>，
+    确保每次租借操作都被正确记录和追踪，避免物品丢失或超期未还。
+  </p>
+</div>
+
+<!-- 核心功能 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title"><i class="bi bi-grid-3x3-gap-fill" style="color: var(--primary); font-size: 14px;"></i> 核心功能</span>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+    <div style="padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <i class="bi bi-box" style="font-size: 20px; color: var(--primary);"></i>
+        <strong>物品管理</strong>
+      </div>
+      <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+        物品 CRUD、分类筛选、库存实时计算、低库存预警，支持上传物品图片。
+      </p>
+    </div>
+    <div style="padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <i class="bi bi-arrow-left-right" style="font-size: 20px; color: var(--success);"></i>
+        <strong>租借引擎</strong>
+      </div>
+      <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+        库存检查、数据库事务保护、部分归还支持，防止超租和并发冲突。
+      </p>
+    </div>
+    <div style="padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <i class="bi bi-check-circle" style="font-size: 20px; color: var(--info);"></i>
+        <strong>审核工作流</strong>
+      </div>
+      <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+        单级审核、超时检测与自动提醒、驳回后重新提交，确保租借合规。
+      </p>
+    </div>
+    <div style="padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <i class="bi bi-diagram-3" style="font-size: 20px; color: var(--warning);"></i>
+        <strong>状态机驱动</strong>
+      </div>
+      <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+        严格的状态流转：待审核 → 借出中 → 已归还 / 逾期，仅由明确事件触发变更。
+      </p>
+    </div>
+    <div style="padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <i class="bi bi-shield-check" style="font-size: 20px; color: var(--danger);"></i>
+        <strong>RBAC 权限</strong>
+      </div>
+      <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+        admin / approver / user 三级角色隔离，细粒度控制页面访问和操作权限。
+      </p>
+    </div>
+    <div style="padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <i class="bi bi-clock-history" style="font-size: 20px; color: var(--text-secondary);"></i>
+        <strong>操作日志</strong>
+      </div>
+      <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+        完整审计追踪，记录申请、审核、归还全链路操作，便于排查和责任追溯。
+      </p>
+    </div>
+    <div style="padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <i class="bi bi-lightbulb" style="font-size: 20px; color: var(--info);"></i>
+        <strong>适配器模式</strong>
+      </div>
+      <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+        可选 AI 审核（DeepSeek）、OSS 图片存储（阿里云）、SMS 通知（阿里云），未配置自动降级。
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- 技术栈 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title"><i class="bi bi-tools" style="color: var(--success); font-size: 14px;"></i> 技术栈</span>
+  </div>
+  <table class="table">
+    <thead>
+      <tr><th style="width: 100px;">层级</th><th>技术</th><th style="width: 260px;">说明</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="status-badge" style="background: rgba(74,111,165,0.1); color: var(--primary);">后端</span></td>
+        <td>Python FastAPI</td>
+        <td style="color: var(--text-secondary);">异步 Web 框架，自动生成 OpenAPI 文档</td>
+      </tr>
+      <tr>
+        <td><span class="status-badge" style="background: rgba(76,175,80,0.1); color: var(--success);">数据库</span></td>
+        <td>SQLite（WAL 模式）</td>
+        <td style="color: var(--text-secondary);">零配置、高性能、单文件部署</td>
+      </tr>
+      <tr>
+        <td><span class="status-badge" style="background: rgba(255,152,0,0.1); color: var(--warning);">前端</span></td>
+        <td>Jinja2 + HTMX 2.0 + Alpine.js 3.14</td>
+        <td style="color: var(--text-secondary);">服务端渲染 + 轻量前端交互</td>
+      </tr>
+      <tr>
+        <td><span class="status-badge" style="background: rgba(156,39,176,0.1); color: var(--status-overdue);">样式</span></td>
+        <td>Flat Design + Bootstrap Icons</td>
+        <td style="color: var(--text-secondary);">自定义设计系统，支持暗色模式</td>
+      </tr>
+      <tr>
+        <td><span class="status-badge" style="background: rgba(244,67,54,0.1); color: var(--danger);">安全</span></td>
+        <td>PBKDF2-SHA256 + JWT (HS256)</td>
+        <td style="color: var(--text-secondary);">密码哈希 + 无状态令牌认证</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 系统架构 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title"><i class="bi bi-layers" style="color: var(--info); font-size: 14px;"></i> 系统架构</span>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+    <div style="text-align: center; padding: 20px 12px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="font-size: 28px; margin-bottom: 8px;"><i class="bi bi-window" style="color: var(--primary);"></i></div>
+      <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">表现层</div>
+      <div style="font-size: 12px; color: var(--text-muted);">Web 界面 / Jinja2 模板</div>
+    </div>
+    <div style="text-align: center; padding: 20px 12px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="font-size: 28px; margin-bottom: 8px;"><i class="bi bi-cpu" style="color: var(--success);"></i></div>
+      <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">应用层</div>
+      <div style="font-size: 12px; color: var(--text-muted);">租借引擎 + 审核 + 状态机</div>
+    </div>
+    <div style="text-align: center; padding: 20px 12px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="font-size: 28px; margin-bottom: 8px;"><i class="bi bi-server" style="color: var(--warning);"></i></div>
+      <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">数据层</div>
+      <div style="font-size: 12px; color: var(--text-muted);">物品 / 用户 / 记录 / 日志</div>
+    </div>
+    <div style="text-align: center; padding: 20px 12px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="font-size: 28px; margin-bottom: 8px;"><i class="bi bi-plug" style="color: var(--info);"></i></div>
+      <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">适配层</div>
+      <div style="font-size: 12px; color: var(--text-muted);">AI 审核 / OSS / SMS</div>
+    </div>
+  </div>
+</div>
+
+<!-- 用户角色 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title"><i class="bi bi-people-fill" style="color: var(--warning); font-size: 14px;"></i> 用户角色与权限</span>
+  </div>
+  <table class="table">
+    <thead>
+      <tr><th>角色</th><th>标识</th><th>权限概述</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="status-badge" style="background: rgba(244,67,54,0.1); color: var(--danger);">管理员</span></td>
+        <td><code style="background: var(--bg); padding: 2px 8px; border-radius: 4px; font-size: 13px;">admin</code></td>
+        <td style="color: var(--text-secondary);">全部功能：物品管理、用户管理、审核操作、日志查看、系统配置</td>
+      </tr>
+      <tr>
+        <td><span class="status-badge" style="background: rgba(33,150,243,0.1); color: var(--info);">审核员</span></td>
+        <td><code style="background: var(--bg); padding: 2px 8px; border-radius: 4px; font-size: 13px;">approver</code></td>
+        <td style="color: var(--text-secondary);">审核租借申请、查看物品和记录</td>
+      </tr>
+      <tr>
+        <td><span class="status-badge" style="background: rgba(76,175,80,0.1); color: var(--success);">普通用户</span></td>
+        <td><code style="background: var(--bg); padding: 2px 8px; border-radius: 4px; font-size: 13px;">user</code></td>
+        <td style="color: var(--text-secondary);">提交租借申请、归还物品、查看个人记录</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 核心流程 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title"><i class="bi bi-arrow-repeat" style="color: var(--primary); font-size: 14px;"></i> 核心业务流程</span>
+  </div>
+  <div style="display: flex; align-items: center; justify-content: center; gap: 0; flex-wrap: wrap; padding: 16px 0;">
+    <div style="text-align: center; padding: 12px 16px; border: 2px solid var(--primary); border-radius: var(--radius); min-width: 90px; background: rgba(74,111,165,0.03);">
+      <div style="font-size: 20px; margin-bottom: 4px;"><i class="bi bi-pencil-square" style="color: var(--primary);"></i></div>
+      <div style="font-size: 12px; font-weight: 600;">提交申请</div>
+    </div>
+    <div style="font-size: 20px; color: var(--primary); padding: 0 6px; font-weight: 700;">→</div>
+    <div style="text-align: center; padding: 12px 16px; border: 2px solid var(--info); border-radius: var(--radius); min-width: 90px; background: rgba(33,150,243,0.03);">
+      <div style="font-size: 20px; margin-bottom: 4px;"><i class="bi bi-check-circle" style="color: var(--info);"></i></div>
+      <div style="font-size: 12px; font-weight: 600;">审核通过</div>
+    </div>
+    <div style="font-size: 20px; color: var(--primary); padding: 0 6px; font-weight: 700;">→</div>
+    <div style="text-align: center; padding: 12px 16px; border: 2px solid var(--warning); border-radius: var(--radius); min-width: 90px; background: rgba(255,152,0,0.03);">
+      <div style="font-size: 20px; margin-bottom: 4px;"><i class="bi bi-box-arrow-right" style="color: var(--warning);"></i></div>
+      <div style="font-size: 12px; font-weight: 600;">借出中</div>
+    </div>
+    <div style="font-size: 20px; color: var(--primary); padding: 0 6px; font-weight: 700;">→</div>
+    <div style="text-align: center; padding: 12px 16px; border: 2px solid var(--success); border-radius: var(--radius); min-width: 90px; background: rgba(76,175,80,0.03);">
+      <div style="font-size: 20px; margin-bottom: 4px;"><i class="bi bi-box-arrow-in-left" style="color: var(--success);"></i></div>
+      <div style="font-size: 12px; font-weight: 600;">归还完成</div>
+    </div>
+  </div>
+  <p style="text-align: center; font-size: 13px; color: var(--text-muted); margin-top: 12px;">
+    支持部分归还 · 驳回后重新提交 · 超时自动提醒 · 逾期状态追踪
+  </p>
+</div>
+
+<!-- 快速开始 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title"><i class="bi bi-rocket-takeoff" style="color: var(--danger); font-size: 14px;"></i> 快速开始</span>
+  </div>
+  <div style="background: var(--bg); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 12px;">
+    <pre style="font-family: var(--font-mono); font-size: 13px; color: var(--text); margin: 0; line-height: 1.8;">
+pip install -r requirements.txt
+python run.py
+    </pre>
+  </div>
+  <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+    启动后访问 <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">http://localhost:8000</code> 即可使用。
+  </p>
+  <p style="font-size: 13px; color: var(--text-muted);">
+    <strong>预置账号：</strong> 管理员 <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">admin / admin123</code> · 审核员 <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">approver1 / 123456</code> · 普通用户 <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">user1 / 123456</code>
+  </p>
+</div>
+
+<!-- 相关链接 -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title"><i class="bi bi-book" style="color: var(--text-secondary); font-size: 14px;"></i> 相关资源</span>
+  </div>
+  <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px;">
+      <i class="bi bi-file-earmark-text" style="color: var(--primary);"></i>
+      <span>DEV.md — 开发文档</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px;">
+      <i class="bi bi-file-earmark-richtext" style="color: var(--warning);"></i>
+      <span>warehouse.txt — 需求方案</span>
+    </div>
+    <a href="/docs" target="_blank" style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; transition: var(--transition); text-decoration: none; color: var(--text);">
+      <i class="bi bi-code-slash" style="color: var(--success);"></i>
+      <span>API 文档 (Swagger)</span>
+      <i class="bi bi-box-arrow-up-right" style="font-size: 11px; color: var(--text-muted);"></i>
+    </a>
+  </div>
+</div>
