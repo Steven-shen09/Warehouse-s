@@ -2,7 +2,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.api.deps import get_db, get_current_user, require_role
 from app.schemas.approval import ApproveRequest, RejectRequest
-from app.services.approval_service import approve, reject, get_pending_approvals, get_overdue_approvals_count
+from app.services.approval_service import (
+    approve, reject, get_pending_approvals, get_overdue_approvals_count,
+    approve_by_document, reject_by_document, get_pending_approvals_grouped,
+)
 
 router = APIRouter(prefix="/api/v1/approvals", tags=["审核管理"])
 
@@ -69,6 +72,59 @@ def reject_record(
         result = reject(
             conn,
             record_id=record_id,
+            approver_id=current_user["id"],
+            approver_name=current_user["display_name"] or current_user["username"],
+            comment=body.comment,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/pending-grouped")
+def list_pending_grouped(
+    page: int = 1,
+    page_size: int = 20,
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """待审核记录列表（按单据号分组）"""
+    return get_pending_approvals_grouped(conn, page, page_size)
+
+
+@router.put("/by-document/{document_no}/approve")
+def approve_document(
+    document_no: str,
+    body: ApproveRequest = ApproveRequest(),
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """按单据号批量审核通过"""
+    try:
+        result = approve_by_document(
+            conn,
+            document_no=document_no,
+            approver_id=current_user["id"],
+            approver_name=current_user["display_name"] or current_user["username"],
+            comment=body.comment,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/by-document/{document_no}/reject")
+def reject_document(
+    document_no: str,
+    body: RejectRequest,
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """按单据号批量驳回"""
+    try:
+        result = reject_by_document(
+            conn,
+            document_no=document_no,
             approver_id=current_user["id"],
             approver_name=current_user["display_name"] or current_user["username"],
             comment=body.comment,

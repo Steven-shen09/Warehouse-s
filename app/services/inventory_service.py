@@ -30,20 +30,11 @@ def check_stock(conn: sqlite3.Connection, item_id: int, quantity: int) -> bool:
 
 def reserve_stock(conn: sqlite3.Connection, item_id: int, quantity: int) -> bool:
     """
-    在事务中检查并预留库存。
-    使用 IMMEDIATE 事务模式防止并发写入冲突。
-    返回 True 表示预留成功，False 表示库存不足。
+    检查库存是否充足。
+    调用方负责事务管理——库存检查和记录创建在调用方的事务上下文中是原子操作。
+    返回 True 表示库存充足，False 表示不足。
     """
-    conn.execute("BEGIN IMMEDIATE")
-    try:
-        if not check_stock(conn, item_id, quantity):
-            conn.rollback()
-            return False
-        conn.commit()
-        return True
-    except Exception:
-        conn.rollback()
-        raise
+    return check_stock(conn, item_id, quantity)
 
 
 def release_stock(conn: sqlite3.Connection, item_id: int, quantity: int):

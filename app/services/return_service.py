@@ -89,3 +89,47 @@ def _get_remaining_quantity(conn: sqlite3.Connection, record: dict) -> int:
     # 如果有 original_record_id，表示这是被拆分的记录的一部分
     # 直接返回当前记录 quantity 即可
     return record["quantity"]
+
+
+def process_return_by_document(
+    conn: sqlite3.Connection,
+    document_no: str,
+    operator_id: int,
+    operator_name: str,
+    actual_return_date: str = "",
+    return_notes: str = "",
+) -> dict:
+    """按单据号批量归还"""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        records = conn.execute(
+            "SELECT * FROM records WHERE document_no = ? AND status IN ('借出中', '逾期')",
+            (document_no,)
+        ).fetchall()
+        if not records:
+            conn.rollback()
+            raise ValueError(f"单据 {document_no} 下没有可归还的记录")
+
+        returned_count = 0
+        for record in records:
+            if not can_transition(record["status"], RETURN_FULL):
+                continue
+            conn.execute(
+                """UPDATE records SET status = '已归还', actual_return_date = ?,
+                   return_notes = ?, updated_at = datetime('now','localtime') WHERE id = ?""",
+                (actual_return_date, return_notes, record["id"])
+            )
+            update_item_status(conn, record["item_id"])
+            log(conn, operator_id, operator_name, "return_full", "record", record["id"],
+                f"批量归还（单据号: {document_no}）")
+            returned_count += 1
+
+        conn.commit()
+        return {
+            "message": f"单据 {document_no} 下 {returned_count} 条记录已归还",
+            "returned_count": returned_count,
+            "document_no": document_no,
+        }
+    except Exception:
+        conn.rollback()
+        raise

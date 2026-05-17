@@ -59,29 +59,12 @@
         </div>
       </div>
 
-      <form class="cart-form" onsubmit="submitCart(event)">
-        <div style="display:flex;gap:12px;">
-          <div class="form-group" style="flex:1;">
-            <label class="form-label">借出日期 *</label>
-            <input type="date" id="cart-borrow-date" class="form-input" required>
-          </div>
-          <div class="form-group" style="flex:1;">
-            <label class="form-label">预计归还 *</label>
-            <input type="date" id="cart-return-date" class="form-input" required>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">联系方式</label>
-          <input type="text" id="cart-contact" class="form-input" placeholder="手机号">
-        </div>
-        <div class="form-group">
-          <label class="form-label">租借事由</label>
-          <textarea id="cart-reason" class="form-textarea" placeholder="请简要说明租借原因"></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
-          <i class="bi bi-send"></i> 提交申请
+      <div class="cart-form" id="cart-form" style="display:none;">
+        <button type="button" class="btn btn-primary" style="width:100%;justify-content:center;"
+                onclick="openBatchBorrowModal()">
+          <i class="bi bi-send"></i> 提交租借清单
         </button>
-      </form>
+      </div>
     </div>
   </aside>
   {% endif %}
@@ -128,6 +111,40 @@
           </div>
         </div>
         <button type="submit" class="btn btn-primary">保 存</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 批量提交租借清单模态框 -->
+<div class="modal-overlay" id="batch-borrow-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>提交租借清单</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('batch-borrow-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="batch-items-summary" class="mb-16"></div>
+      <form onsubmit="submitCart(event)">
+        <div style="display:flex;gap:12px;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">借出日期 *</label>
+            <input type="date" id="cart-borrow-date" class="form-input" required>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">预计归还 *</label>
+            <input type="date" id="cart-return-date" class="form-input" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">联系方式</label>
+          <input type="text" id="cart-contact" class="form-input" placeholder="手机号">
+        </div>
+        <div class="form-group">
+          <label class="form-label">租借事由</label>
+          <textarea id="cart-reason" class="form-textarea" placeholder="请简要说明租借原因"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;">确认提交</button>
       </form>
     </div>
   </div>
@@ -218,6 +235,7 @@ function renderCart() {
   const summary = document.getElementById('cart-summary');
   const badge = document.getElementById('cart-count-badge');
   const clearBtn = document.getElementById('cart-clear-btn');
+  const cartForm = document.getElementById('cart-form');
   const totalItems = document.getElementById('cart-total-items');
   const totalAmount = document.getElementById('cart-total-amount');
 
@@ -227,12 +245,14 @@ function renderCart() {
     summary.style.display = 'none';
     badge.style.display = 'none';
     clearBtn.style.display = 'none';
+    cartForm.style.display = 'none';
   } else {
     empty.style.display = 'none';
     list.style.display = '';
     summary.style.display = '';
     badge.style.display = '';
     clearBtn.style.display = '';
+    cartForm.style.display = '';
 
     badge.textContent = `${cart.count} 件`;
     totalItems.textContent = `共 ${cart.totalItems} 件物品`;
@@ -258,39 +278,78 @@ function renderCart() {
   }
 }
 
-function syncCartCheckboxes() {
-  document.querySelectorAll('.cart-checkbox').forEach(cb => {
-    const id = parseInt(cb.dataset.itemId);
-    cb.checked = id in cart.items;
-  });
+// ── 批量提交租借清单 ──
+function openBatchBorrowModal() {
+  if (cart.isEmpty()) return;
+  renderBatchSummary();
+  document.getElementById('cart-borrow-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('cart-return-date').value = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+  openModal('batch-borrow-modal');
+}
+
+function renderBatchSummary() {
+  const container = document.getElementById('batch-items-summary');
+  const items = Object.values(cart.items);
+  container.innerHTML = `
+    <p class="text-muted" style="margin-bottom:8px;">共 <strong>${items.length}</strong> 件物品：</p>
+    ${items.map(item => `
+      <div class="cart-item" style="margin-bottom:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:600;">${escapeHtml(item.name)}</span>
+          <span>x${item.quantity}  &yen;${(item.price * item.quantity).toFixed(2)}</span>
+        </div>
+      </div>
+    `).join('')}
+    <div style="text-align:right;margin-top:8px;font-size:16px;font-weight:700;color:var(--primary-dark);">
+      合计：&yen;${cart.totalAmount.toFixed(2)}
+    </div>
+  `;
 }
 
 async function submitCart(e) {
   e.preventDefault();
-  if (cart.isEmpty()) {
-    showToast('请先勾选需要租借的物品', 'warning');
-    return;
-  }
+  const items = Object.values(cart.items).map(item => ({
+    item_id: item.id,
+    quantity: item.quantity,
+  }));
+
   const body = {
-    items: Object.values(cart.items).map(item => ({
-      item_id: item.id,
-      quantity: item.quantity,
-    })),
+    items: items,
     borrow_date: document.getElementById('cart-borrow-date').value,
     expected_return_date: document.getElementById('cart-return-date').value,
     reason: document.getElementById('cart-reason').value,
     contact: document.getElementById('cart-contact').value,
   };
-  const resp = await api('/api/v1/records/batch-borrow', { method: 'POST', body: JSON.stringify(body) });
+
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  btn.textContent = '提交中...';
+
+  const resp = await api('/api/v1/records/batch-borrow', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+  btn.disabled = false;
+  btn.textContent = '确认提交';
+
   if (resp.ok) {
     const data = await resp.json();
-    showToast(data.message || '申请已提交');
+    closeModal('batch-borrow-modal');
     clearCart();
-    loadItems(currentPage);
+    showToast(data.message || '租借清单已提交');
+    setTimeout(() => { window.location.href = '/records'; }, 1500);
   } else {
     const data = await resp.json();
     showToast(data.detail || '提交失败', 'error');
   }
+}
+
+function syncCartCheckboxes() {
+  document.querySelectorAll('.cart-checkbox').forEach(cb => {
+    const id = parseInt(cb.dataset.itemId);
+    cb.checked = id in cart.items;
+  });
 }
 
 async function loadCategories() {
@@ -444,10 +503,6 @@ async function deleteItem(id) {
 document.addEventListener('DOMContentLoaded', () => {
   loadCategories();
   loadItems();
-  if (AppState.isUser) {
-    document.getElementById('cart-borrow-date').value = new Date().toISOString().split('T')[0];
-    document.getElementById('cart-return-date').value = new Date(Date.now() + 7*86400000).toISOString().split('T')[0];
-  }
 });
 </script>
 {% endblock %}

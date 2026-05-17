@@ -40,3 +40,60 @@
 - 库存操作使用 `BEGIN IMMEDIATE` 事务保护一致性。
 - 第三方服务（DeepSeek AI / 阿里云 OSS / 阿里云 SMS）未配置时自动降级为空适配器，不报错。
 - 所有前端资源本地托管，**不引入任何外部 CDN 依赖**。
+
+## 设计系统
+
+### 配色（柔和暖杏系 Flat Design）
+
+CSS 变量定义在 `frontend/static/css/style.css :root` 中：
+
+| 用途 | 变量 | 色值 |
+|------|------|------|
+| 主色 | `--primary` | `#c97d60` |
+| 主色深 | `--primary-dark` | `#b06a4e` |
+| 主色浅 | `--primary-light` | `#e0a68c` |
+| 成功 | `--success` | `#5d9b62` |
+| 危险 | `--danger` | `#c9635e` |
+| 警告 | `--warning` | `#e09a4a` |
+| 信息 | `--info` | `#7a9ec4` |
+| 页面背景 | `--bg` | `#faf7f4` |
+| 卡片背景 | `--bg-card` | `#fefdfc` |
+| 侧边栏背景 | `--bg-sidebar` | `#3d2e26` |
+| 正文字色 | `--text` | `#3d3028` |
+| 圆角 | `--radius` | `12px` |
+| 阴影 | `--shadow` | `0 4px 12px rgba(0,0,0,0.06)` |
+
+暗色模式通过 `[data-theme="dark"]` 选择器切换，变量值在 `style.css` 第 50-63 行定义。
+
+### 组件使用规范
+
+**模态框** — 新建弹窗必须使用系统模态框组件：
+```html
+<div class="modal-overlay" id="xxx-modal">
+  <div class="modal">
+    <div class="modal-header">...</div>
+    <div class="modal-body">...</div>
+    <div class="modal-footer">...</div>
+  </div>
+</div>
+```
+JS 控制：`openModal(id)` / `closeModal(id)`，定义在 `frontend/static/js/app.js` 第 61-66 行。
+
+**确认弹窗** — **禁止使用浏览器原生 `confirm()` 和 `prompt()`**，必须用自定义模态框实现。参考 `approvals.html` 的 `#confirm-modal` 和 `#reject-modal` 模式：
+- 用 `showConfirmDialog(title, message, onConfirm)` 回调模式
+- 取消按钮 `btn-outline`，确认按钮 `btn-success`（通过）/ `btn-danger`（驳回/危险操作）
+- 驳回操作在弹窗内用 `<textarea>` 收集原因
+
+**Toast 通知** — `showToast(message, type)` 定义在 `app.js` 第 43-58 行，type 可选 `'success'` / `'error'` / `'warning'`。
+
+**按钮** — 使用 `.btn` 基类 + `.btn-primary` / `.btn-success` / `.btn-danger` / `.btn-outline` 等变体，支持 `.btn-sm` 小尺寸。
+
+**表格** — 使用 `.table` 类，状态标签用 `.status-badge` + `.lent` / `.returned` / `.overdue` / `.pending` / `.rejected` / `.available` / `.damaged`。
+
+**单据分组** — 使用 `.doc-group` > `.doc-group-header` + `.doc-group-body` 结构，分组可折叠展开。
+
+### 前端硬约束
+
+- **禁止** `confirm()` / `prompt()` / `alert()` — 必须使用自定义模态框
+- **禁止** 外部 CDN 引用 — 所有 CSS/JS/字体本地托管
+- **禁止** 内联 `style` 中写硬编码颜色 — 优先使用 CSS 变量

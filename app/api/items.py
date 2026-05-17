@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.api.deps import get_db, get_current_user, require_role
 from app.schemas.item import ItemCreate, ItemUpdate
-from app.services.inventory_service import get_available_quantity, update_item_status, reserve_stock
+from app.services.inventory_service import get_available_quantity, update_item_status
 
 router = APIRouter(prefix="/api/v1/items", tags=["物品管理"])
 

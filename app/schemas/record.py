@@ -33,3 +33,9 @@ class ReturnRequest(BaseModel):
     return_quantity: int = Field(..., ge=1, description="归还数量")
     actual_return_date: str = Field(default="", description="实际归还日期")
     return_notes: str = Field(default="", description="归还备注")
+
+
+class DocumentReturnRequest(BaseModel):
+    """按单据归还请求"""
+    actual_return_date: str = Field(default="", description="实际归还日期")
+    return_notes: str = Field(default="", description="归还备注")

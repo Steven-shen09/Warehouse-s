@@ -1,9 +1,9 @@
 """租借记录路由"""
 from fastapi import APIRouter, Depends, HTTPException
 from app.api.deps import get_db, get_current_user, require_role
-from app.schemas.record import BorrowRequest, ReturnRequest, BatchBorrowRequest
+from app.schemas.record import BorrowRequest, ReturnRequest, BatchBorrowRequest, DocumentReturnRequest
 from app.services.borrow_service import submit_borrow, resubmit_borrow, submit_batch_borrow
-from app.services.return_service import process_return
+from app.services.return_service import process_return, process_return_by_document
 
 router = APIRouter(prefix="/api/v1/records", tags=["租借记录"])
 
@@ -15,6 +15,7 @@ def list_records(
     status: str = "",
     item_id: int = 0,
     keyword: str = "",
+    document_no: str = "",
     current_user: dict = Depends(get_current_user),
     conn=Depends(get_db),
 ):
@@ -36,6 +37,9 @@ def list_records(
     if keyword:
         where += " AND (r.borrower_name LIKE ? OR r.reason LIKE ?)"
         params.extend([f"%{keyword}%", f"%{keyword}%"])
+    if document_no:
+        where += " AND r.document_no = ?"
+        params.append(document_no)
 
     total = conn.execute(
         f"SELECT COUNT(*) FROM records r {where}", params
@@ -169,6 +173,28 @@ def return_item(
             operator_id=current_user["id"],
             operator_name=current_user["display_name"] or current_user["username"],
             actual_return_date=actual_date,
+            return_notes=body.return_notes,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/by-document/{document_no}/return")
+def return_by_document(
+    document_no: str,
+    body: DocumentReturnRequest,
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """按单据号归还物品"""
+    try:
+        result = process_return_by_document(
+            conn,
+            document_no=document_no,
+            operator_id=current_user["id"],
+            operator_name=current_user["display_name"] or current_user["username"],
+            actual_return_date=body.actual_return_date,
             return_notes=body.return_notes,
         )
         return result

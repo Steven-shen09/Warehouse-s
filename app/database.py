@@ -119,6 +119,14 @@ def _create_tables(conn: sqlite3.Connection):
         CREATE INDEX IF NOT EXISTS idx_approvals_record_id ON approvals(record_id);
     """)
 
+    # 迁移：添加单据号字段（兼容旧数据，允许 NULL）
+    try:
+        conn.execute("ALTER TABLE records ADD COLUMN document_no TEXT DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass  # 字段已存在
+
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_records_document_no ON records(document_no)")
+
 
 def _seed_data(conn: sqlite3.Connection):
     """插入预置种子数据"""
