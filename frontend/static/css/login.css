@@ -1,9 +1,1 @@
-/* 登录页样式 — 使用 CSS 变量，与主设计系统保持一致 */
-.login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, var(--primary-dark), var(--primary)); }
-.login-card { width: 400px; padding: 44px 40px; background: var(--bg-card); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
-.login-card h1 { text-align: center; margin-bottom: 24px; color: var(--primary-dark); font-size: 22px; }
-.login-card .btn { width: 100%; justify-content: center; margin-top: 16px; }
-.login-card .btn-primary { padding: 10px; font-size: 15px; }
-.login-error { color: var(--danger); font-size: 13px; margin-top: 8px; text-align: center; display: none; }
-.login-card .demo-accounts { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-light); }
-.login-card .demo-accounts p { font-size: 12px; color: var(--text-muted); text-align: center; }
+/* 登录页样式 — Apple Liquid Glass 风格（主样式已在 style.css 中定义） */

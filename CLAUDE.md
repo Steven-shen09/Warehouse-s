@@ -6,7 +6,7 @@
 
 ## 项目概述
 
-全栈物品租借管理系统。后端 Python FastAPI + SQLite（WAL 模式），前端 Jinja2 + HTMX 2.0 + Alpine.js 3.14，Flat Design 自定义设计系统（支持暗色模式），安全方案 PBKDF2-SHA256 + JWT (HS256)。
+全栈物品租借管理系统。后端 Python FastAPI + SQLite（WAL 模式），前端 Jinja2 + HTMX 2.0 + Alpine.js 3.14，**Apple Liquid Glass** 设计系统（支持暗色模式），安全方案 PBKDF2-SHA256 + JWT (HS256)。
 
 详见 [DEV.md](./DEV.md) 和 [README.md](./README.md)。
 
@@ -24,7 +24,7 @@
 
 ### 前端与 UI
 - **frontend-design** — 创建/改进 Jinja2 模板页面时使用，生成有设计感的界面。
-- **ui-ux-pro-max** — 优化 Flat Design 设计系统、暗色模式、响应式布局、组件交互时使用。
+- **ui-ux-pro-max** — 优化 Apple Liquid Glass 设计系统、暗色模式、响应式布局、组件交互时使用。
 
 ### 安全与审查
 - **security-review** — 提交前审查 JWT、RBAC、密码哈希等安全相关变更。
@@ -40,30 +40,39 @@
 - 库存操作使用 `BEGIN IMMEDIATE` 事务保护一致性。
 - 第三方服务（DeepSeek AI / 阿里云 OSS / 阿里云 SMS）未配置时自动降级为空适配器，不报错。
 - 所有前端资源本地托管，**不引入任何外部 CDN 依赖**。
+- 版本号规则：每次推送 GitHub 时版本号 +0.1（v1.1 → v1.2 → v1.3 ...）。
 
-## 设计系统
+## 设计系统 — Apple Liquid Glass
 
-### 配色（柔和暖杏系 Flat Design）
+> 完整设计规范见 [`design-system/MASTER.md`](./design-system/MASTER.md)
+> 风格：玻璃拟态 · 半透明毛玻璃 · 蓝紫渐变 · 液态高光 · 24px大圆角
+
+### 配色（Apple Liquid Glass）
 
 CSS 变量定义在 `frontend/static/css/style.css :root` 中：
 
 | 用途 | 变量 | 色值 |
 |------|------|------|
-| 主色 | `--primary` | `#c97d60` |
-| 主色深 | `--primary-dark` | `#b06a4e` |
-| 主色浅 | `--primary-light` | `#e0a68c` |
-| 成功 | `--success` | `#5d9b62` |
-| 危险 | `--danger` | `#c9635e` |
-| 警告 | `--warning` | `#e09a4a` |
-| 信息 | `--info` | `#7a9ec4` |
-| 页面背景 | `--bg` | `#faf7f4` |
-| 卡片背景 | `--bg-card` | `#fefdfc` |
-| 侧边栏背景 | `--bg-sidebar` | `#3d2e26` |
-| 正文字色 | `--text` | `#3d3028` |
-| 圆角 | `--radius` | `12px` |
-| 阴影 | `--shadow` | `0 4px 12px rgba(0,0,0,0.06)` |
+| 主色（Apple蓝） | `--primary` | `#5B8CFF` |
+| 主色深 | `--primary-dark` | `#4A7AF0` |
+| 点缀色（冰川紫） | `--accent` | `#8B7CFF` |
+| 成功 | `--success` | `#34C759` |
+| 危险 | `--danger` | `#FF453A` |
+| 警告 | `--warning` | `#FF9F0A` |
+| 信息 | `--info` | `#64D2FF` |
+| 页面背景 | `--bg` | `#F4F8FF` |
+| 卡片背景 | `--bg-card` | `rgba(255,255,255,0.45)` |
+| 侧边栏背景 | `--bg-sidebar` | `rgba(255,255,255,0.25)` |
+| 圆角 | `--radius` | `24px` |
+| 阴影 | `--shadow` | `0 4px 20px rgba(120,160,255,0.10)` |
 
-暗色模式通过 `[data-theme="dark"]` 选择器切换，变量值在 `style.css` 第 50-63 行定义。
+核心视觉效果：
+- **玻璃拟态**：卡片/面板使用 `backdrop-filter: blur(20px~30px)` + 半透明背景
+- **边缘高光**：卡片顶部 1px 白色渐变线（模拟液态折射）
+- **流动背景**：5层径向渐变光晕，20s 循环流动
+- **悬浮动效**：hover 上浮 + 阴影增强 + 液态高光出现
+
+暗色模式通过 `[data-theme="dark"]` 选择器切换，底色 `#0a0e1a`（深蓝黑）。
 
 ### 组件使用规范
 
