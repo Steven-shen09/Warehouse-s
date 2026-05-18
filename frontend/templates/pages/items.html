@@ -266,6 +266,226 @@
 <script>
 let currentPage = 1;
 
+// ── 导入功能 ──
+let importPreviewData = null;
+let importSelectedFile = null;
+
+function openImportModal() {
+  importPreviewData = null;
+  importSelectedFile = null;
+  resetImportStep1();
+  document.getElementById('import-file-input').value = '';
+  showImportStep(1);
+  openModal('import-modal');
+}
+
+function closeImportModal() {
+  closeModal('import-modal');
+}
+
+function resetImportStep1() {
+  importPreviewData = null;
+  importSelectedFile = null;
+  document.getElementById('import-file-input').value = '';
+  document.getElementById('import-selected-file').style.display = 'none';
+  document.getElementById('import-upload-btn').disabled = true;
+  document.getElementById('import-dropzone').style.display = '';
+  showImportStep(1);
+}
+
+function showImportStep(step) {
+  document.getElementById('import-step1-content').style.display = step === 1 ? '' : 'none';
+  document.getElementById('import-step2-content').style.display = step === 2 ? '' : 'none';
+  document.getElementById('import-step3-content').style.display = step === 3 ? '' : 'none';
+
+  document.querySelectorAll('#import-steps .import-step').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.step) <= step);
+  });
+}
+
+function handleFileSelected(file) {
+  if (!file) return;
+  importSelectedFile = file;
+  document.getElementById('import-selected-filename').textContent = file.name;
+  document.getElementById('import-selected-file').style.display = '';
+  document.getElementById('import-dropzone').style.display = 'none';
+  document.getElementById('import-upload-btn').disabled = false;
+}
+
+// 拖拽支持
+(function initDropzone() {
+  document.addEventListener('DOMContentLoaded', () => {
+    const dz = document.getElementById('import-dropzone');
+    if (!dz) return;
+    dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => { dz.classList.remove('drag-over'); });
+    dz.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dz.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        document.getElementById('import-file-input').files = e.dataTransfer.files;
+        handleFileSelected(file);
+      }
+    });
+  });
+})();
+
+async function uploadFileForPreview() {
+  if (!importSelectedFile) return;
+
+  const btn = document.getElementById('import-upload-btn');
+  btn.disabled = true;
+  btn.textContent = '解析中...';
+
+  const formData = new FormData();
+  formData.append('file', importSelectedFile);
+
+  const resp = await fetch('/api/v1/items/import/preview', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${AppState.token}` },
+    body: formData,
+  });
+
+  btn.disabled = false;
+  btn.textContent = '上传并预览';
+
+  if (!resp.ok) {
+    const err = await resp.json();
+    showToast(err.detail || '文件解析失败', 'error');
+    return;
+  }
+
+  importPreviewData = await resp.json();
+  renderImportPreview();
+  showImportStep(2);
+}
+
+function renderImportPreview() {
+  const data = importPreviewData;
+  if (!data) return;
+
+  // 摘要
+  const s = data.summary;
+  document.getElementById('import-preview-summary').innerHTML =
+    `解析结果：共 <strong>${s.total}</strong> 行，` +
+    `<span style="color:#34C759;">✅ ${s.ok} 条可导入</span>` +
+    (s.duplicate > 0 ? `，<span style="color:#FF9500;">⚠ ${s.duplicate} 条同名重复</span>` : '') +
+    (s.error > 0 ? `，<span style="color:#FF3B30;">❌ ${s.error} 条错误</span>` : '');
+
+  // 表格
+  const tbody = document.querySelector('#import-preview-table tbody');
+  tbody.innerHTML = data.rows.map(row => {
+    const checked = row.status === 'ok' ? 'checked' : '';
+    const disabled = row.status === 'error' ? 'disabled' : '';
+    const rowClass = row.status === 'duplicate' ? 'import-row-duplicate' : (row.status === 'error' ? 'import-row-error' : '');
+    const statusHtml = row.status === 'ok'
+      ? '<span class="status-badge available">正常</span>'
+      : row.status === 'duplicate'
+        ? `<span class="status-badge lent" title="${escapeHtml(row.message)}">⚠ 重复</span><br><small class="text-muted">${escapeHtml(row.message)}</small>`
+        : `<span class="status-badge damaged" title="${escapeHtml(row.message)}">❌ 错误</span><br><small style="color:#FF3B30;">${escapeHtml(row.message)}</small>`;
+
+    return `
+      <tr class="${rowClass}">
+        <td class="col-check">
+          <input type="checkbox" class="import-row-checkbox" data-index="${row.index}"
+            data-action="${row.status === 'duplicate' ? 'add_to_existing' : 'create'}"
+            data-item-id="${row.duplicate_item ? row.duplicate_item.id : ''}"
+            ${checked} ${disabled} onchange="onImportRowToggle()">
+        </td>
+        <td>${row.index}</td>
+        <td>${escapeHtml(row.data['物品名称'] || '')}</td>
+        <td>${escapeHtml(row.data['分类'] || '')}</td>
+        <td>${escapeHtml(row.data['总数量'] || '1')}</td>
+        <td>${escapeHtml(row.data['单价(元)'] || '0')}</td>
+        <td>${statusHtml}</td>
+      </tr>
+    `;
+  }).join('');
+
+  document.getElementById('import-select-all').checked = true;
+}
+
+function onImportRowToggle() {
+  const allCbs = document.querySelectorAll('.import-row-checkbox:not([disabled])');
+  const checkedCbs = document.querySelectorAll('.import-row-checkbox:not([disabled]):checked');
+  document.getElementById('import-select-all').checked = allCbs.length === checkedCbs.length;
+}
+
+function toggleAllImportRows() {
+  const selectAll = document.getElementById('import-select-all').checked;
+  document.querySelectorAll('.import-row-checkbox:not([disabled])').forEach(cb => {
+    cb.checked = selectAll;
+  });
+}
+
+async function confirmImport() {
+  const checkedRows = document.querySelectorAll('.import-row-checkbox:checked');
+  if (checkedRows.length === 0) {
+    showToast('请至少选择一行', 'warning');
+    return;
+  }
+
+  const selections = [];
+  checkedRows.forEach(cb => {
+    const sel = { index: parseInt(cb.dataset.index), action: cb.dataset.action };
+    if (cb.dataset.action === 'add_to_existing' && cb.dataset.itemId) {
+      sel.item_id = parseInt(cb.dataset.itemId);
+    }
+    selections.push(sel);
+  });
+
+  const btn = document.getElementById('import-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = '导入中...';
+
+  const formData = new FormData();
+  formData.append('file', importSelectedFile);
+  formData.append('selections', JSON.stringify(selections));
+
+  const resp = await fetch('/api/v1/items/import/confirm', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${AppState.token}` },
+    body: formData,
+  });
+
+  btn.disabled = false;
+  btn.textContent = '确认导入';
+
+  if (!resp.ok) {
+    const err = await resp.json();
+    document.getElementById('import-result-icon').textContent = '❌';
+    document.getElementById('import-result-message').textContent = '导入失败';
+    document.getElementById('import-result-detail').textContent = err.detail || '未知错误';
+    showImportStep(3);
+    return;
+  }
+
+  const result = await resp.json();
+  document.getElementById('import-result-icon').textContent = '✅';
+  document.getElementById('import-result-message').textContent = '导入成功！';
+  document.getElementById('import-result-detail').innerHTML =
+    `成功导入 <strong>${result.imported}</strong> 件物品` +
+    (result.updated > 0 ? `，累加更新 <strong>${result.updated}</strong> 件物品` : '') +
+    (result.skipped > 0 ? `，跳过 <strong>${result.skipped}</strong> 条` : '');
+  showImportStep(3);
+}
+
+function finishImport() {
+  closeImportModal();
+  loadItems(currentPage);
+}
+
+function downloadTemplate(format) {
+  const url = `/api/v1/items/import/template?format=${format}`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = format === 'xlsx' ? 'import_template.xlsx' : 'import_template.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 // ── HTML 转义 ──
 function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
