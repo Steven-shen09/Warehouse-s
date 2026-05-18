@@ -402,12 +402,27 @@ def import_confirm(
     if not selected_rows:
         raise HTTPException(status_code=400, detail="没有选择任何行")
 
-    # 重新解析文件
+    # 验证文件类型
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in (".csv", ".xlsx", ".xls"):
+        raise HTTPException(status_code=400, detail="仅支持 CSV (.csv) 和 Excel (.xlsx) 文件")
+
+    # 验证文件大小（最大 5MB）
     file_content = file.file.read()
+    if len(file_content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 5MB")
+
+    # 重新解析文件
     try:
         rows = parse_uploaded_file(file_content, file.filename)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"文件解析失败：{str(e)}")
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="文件中没有数据行")
+
+    if len(rows) > 500:
+        raise HTTPException(status_code=400, detail="单次导入最多 500 行")
 
     # 重新验证
     preview_rows = validate_and_check_duplicates(conn, rows)
@@ -440,7 +455,16 @@ def import_confirm(
             value = float(data.get("单价(元)", "0").strip() or "0")
             low_stock_threshold = int(data.get("预警阈值", "2").strip() or "2")
 
-            if sel.get("action") == "add_to_existing" and sel.get("item_id"):
+            if sel.get("action") == "add_to_existing":
+                # 校验：该行必须是服务端确认的重复行
+                if row_data["status"] != "duplicate" or not row_data.get("duplicate_item"):
+                    raise HTTPException(status_code=400, detail=f"第{idx}行不是重复物品，无法累加")
+                if sel.get("item_id") != row_data["duplicate_item"]["id"]:
+                    raise HTTPException(status_code=400, detail=f"第{idx}行目标物品ID不匹配")
+                # 验证目标物品存在
+                target = conn.execute("SELECT id FROM items WHERE id = ?", (sel["item_id"],)).fetchone()
+                if not target:
+                    raise HTTPException(status_code=400, detail=f"目标物品(ID:{sel['item_id']})不存在")
                 # 累加到已有物品
                 conn.execute(
                     "UPDATE items SET total_quantity = total_quantity + ?, updated_at = datetime('now','localtime') WHERE id = ?",
@@ -457,6 +481,9 @@ def import_confirm(
                 imported += 1
 
         conn.commit()
+    except HTTPException:
+        conn.rollback()
+        raise
     except Exception:
         conn.rollback()
         raise HTTPException(status_code=500, detail="导入失败，已回滚所有更改")
