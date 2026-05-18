@@ -25,3 +25,34 @@ class ItemUpdate(BaseModel):
     value: Optional[float] = Field(default=None, ge=0)
     low_stock_threshold: Optional[int] = Field(default=None, ge=0)
     image_url: Optional[str] = None
+
+
+# ── 批量导入 Schema ──
+
+class ImportPreviewRow(BaseModel):
+    """导入预览单行"""
+    index: int
+    data: dict
+    status: str  # "ok" | "duplicate" | "error"
+    message: Optional[str] = None
+    duplicate_item: Optional[dict] = None
+
+
+class ImportConfirmRow(BaseModel):
+    """确认导入单行选择"""
+    index: int
+    action: str  # "create" | "add_to_existing"
+    item_id: Optional[int] = None  # 仅 add_to_existing 时需要
+
+
+class ImportConfirmRequest(BaseModel):
+    """确认导入请求"""
+    rows: list[ImportConfirmRow]
+
+
+class ImportResult(BaseModel):
+    """导入结果"""
+    message: str
+    imported: int
+    updated: int
+    skipped: int
