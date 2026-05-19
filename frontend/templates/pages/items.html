@@ -188,7 +188,7 @@
       <!-- 步骤 1：选择文件 -->
       <div id="import-step1-content">
         <div class="import-dropzone" id="import-dropzone" onclick="document.getElementById('import-file-input').click()">
-          <div class="import-dropzone-icon">📁</div>
+          <div class="import-dropzone-icon"><i class="bi bi-file-earmark-arrow-up" style="font-size:32px;color:var(--primary);"></i></div>
           <p>拖拽文件到此处，或点击选择文件</p>
           <p class="text-muted" style="font-size:13px;">支持 CSV (.csv) / Excel (.xlsx) 格式，最大 5MB</p>
           <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none;" onchange="handleFileSelected(this.files[0])">
@@ -198,9 +198,9 @@
           <button class="btn btn-sm btn-outline" onclick="resetImportStep1()">重新选择</button>
         </div>
         <div style="margin-top:12px;">
-          <a href="javascript:void(0)" onclick="downloadTemplate('csv')" class="text-muted" style="font-size:13px;">📥 下载导入模板 (CSV)</a>
+          <a href="javascript:void(0)" onclick="downloadTemplate('csv')" class="text-muted" style="font-size:13px;"><i class="bi bi-download"></i> 下载导入模板 (CSV)</a>
           <span style="margin:0 8px;color:var(--text-secondary);">|</span>
-          <a href="javascript:void(0)" onclick="downloadTemplate('xlsx')" class="text-muted" style="font-size:13px;">📥 下载导入模板 (Excel)</a>
+          <a href="javascript:void(0)" onclick="downloadTemplate('xlsx')" class="text-muted" style="font-size:13px;"><i class="bi bi-download"></i> 下载导入模板 (Excel)</a>
         </div>
         <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">
           <button class="btn btn-outline" onclick="closeImportModal()">取消</button>
@@ -262,6 +262,10 @@
 .import-preview-table-wrapper { border-radius:var(--radius); border:1px solid var(--border-color, rgba(128,128,128,.15)); }
 .import-row-duplicate { background:rgba(255,193,7,.08); }
 .import-row-error { background:rgba(255,59,48,.08); }
+.import-summary-ok { color:#34C759; }
+.import-summary-duplicate { color:#FF9500; }
+.import-summary-error { color:#FF3B30; }
+.text-error { color:#FF3B30; }
 </style>
 <script>
 let currentPage = 1;
@@ -369,9 +373,9 @@ function renderImportPreview() {
   const s = data.summary;
   document.getElementById('import-preview-summary').innerHTML =
     `解析结果：共 <strong>${s.total}</strong> 行，` +
-    `<span style="color:#34C759;">✅ ${s.ok} 条可导入</span>` +
-    (s.duplicate > 0 ? `，<span style="color:#FF9500;">⚠ ${s.duplicate} 条同名重复</span>` : '') +
-    (s.error > 0 ? `，<span style="color:#FF3B30;">❌ ${s.error} 条错误</span>` : '');
+    `<span class="import-summary-ok"><i class="bi bi-check-circle-fill"></i> ${s.ok} 条可导入</span>` +
+    (s.duplicate > 0 ? `，<span class="import-summary-duplicate"><i class="bi bi-exclamation-triangle-fill"></i> ${s.duplicate} 条同名重复</span>` : '') +
+    (s.error > 0 ? `，<span class="import-summary-error"><i class="bi bi-x-circle-fill"></i> ${s.error} 条错误</span>` : '');
 
   // 表格
   const tbody = document.querySelector('#import-preview-table tbody');
@@ -382,8 +386,8 @@ function renderImportPreview() {
     const statusHtml = row.status === 'ok'
       ? '<span class="status-badge available">正常</span>'
       : row.status === 'duplicate'
-        ? `<span class="status-badge lent" title="${escapeHtml(row.message)}">⚠ 重复</span><br><small class="text-muted">${escapeHtml(row.message)}</small>`
-        : `<span class="status-badge damaged" title="${escapeHtml(row.message)}">❌ 错误</span><br><small style="color:#FF3B30;">${escapeHtml(row.message)}</small>`;
+        ? `<span class="status-badge lent" title="${escapeHtml(row.message)}"><i class="bi bi-exclamation-triangle-fill"></i> 重复</span><br><small class="text-muted">${escapeHtml(row.message)}</small>`
+        : `<span class="status-badge damaged" title="${escapeHtml(row.message)}"><i class="bi bi-x-circle-fill"></i> 错误</span><br><small class="text-error">${escapeHtml(row.message)}</small>`;
 
     return `
       <tr class="${rowClass}">
@@ -454,7 +458,7 @@ async function confirmImport() {
 
   if (!resp.ok) {
     const err = await resp.json();
-    document.getElementById('import-result-icon').textContent = '❌';
+    document.getElementById('import-result-icon').innerHTML = '<i class="bi bi-x-circle-fill" style="color:#FF3B30;"></i>';
     document.getElementById('import-result-message').textContent = '导入失败';
     document.getElementById('import-result-detail').textContent = err.detail || '未知错误';
     showImportStep(3);
@@ -462,7 +466,7 @@ async function confirmImport() {
   }
 
   const result = await resp.json();
-  document.getElementById('import-result-icon').textContent = '✅';
+  document.getElementById('import-result-icon').innerHTML = '<i class="bi bi-check-circle-fill" style="color:#34C759;"></i>';
   document.getElementById('import-result-message').textContent = '导入成功！';
   document.getElementById('import-result-detail').innerHTML =
     `成功导入 <strong>${result.imported}</strong> 件物品` +
