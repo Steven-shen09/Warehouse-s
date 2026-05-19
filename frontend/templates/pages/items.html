@@ -476,14 +476,20 @@ function finishImport() {
   loadItems(currentPage);
 }
 
-function downloadTemplate(format) {
-  const url = `/api/v1/items/import/template?format=${format}`;
+async function downloadTemplate(format) {
+  const resp = await fetch(`/api/v1/items/import/template?format=${format}`, {
+    headers: { 'Authorization': `Bearer ${AppState.token}` },
+  });
+  if (!resp.ok) return;
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = format === 'xlsx' ? 'import_template.xlsx' : 'import_template.csv';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ── HTML 转义 ──
