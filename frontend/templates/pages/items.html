@@ -268,8 +268,8 @@
 .text-error { color:#FF3B30; }
 .item-name-cell { position:relative; }
 .item-tooltip {
-  position:absolute; z-index:1000; left:0; top:100%; margin-top:4px;
-  min-width:280px; max-width:360px; padding:16px 20px;
+  position:absolute; z-index:1000; left:calc(100% + 8px); top:-8px;
+  max-width:320px; padding:14px 18px;
   background:var(--bg-card);
   backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
   border-radius:var(--radius);
@@ -279,10 +279,8 @@
   transition:opacity .2s, transform .2s;
 }
 .item-name-cell:hover .item-tooltip { opacity:1; transform:translateY(0); }
-.item-tooltip-title { font-size:16px; font-weight:600; color:var(--text-title); margin-bottom:8px; }
-.item-tooltip-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:13px; color:var(--text); }
-.item-tooltip-label { color:var(--text-secondary); }
-.item-tooltip-desc { margin-top:8px; padding-top:8px; border-top:1px solid rgba(128,128,128,.15); font-size:13px; color:var(--text-secondary); line-height:1.5; }
+.item-tooltip-title { font-size:15px; font-weight:600; color:var(--text-title); margin-bottom:6px; }
+.item-tooltip-desc { font-size:13px; color:var(--text-secondary); line-height:1.5; }
 </style>
 <script>
 let currentPage = 1;
@@ -779,16 +777,10 @@ async function loadItems(page = 1, lowStock = false) {
           <td>${item.id}</td>
           <td class="item-name-cell">
             <a href="/items/${item.id}">${escapeHtml(item.name)}</a>
-            <div class="item-tooltip">
+            ${item.description ? `<div class="item-tooltip">
               <div class="item-tooltip-title">${escapeHtml(item.name)}</div>
-              <div class="item-tooltip-row"><span class="item-tooltip-label">分类</span><span>${escapeHtml(item.category || '-')}</span></div>
-              <div class="item-tooltip-row"><span class="item-tooltip-label">位置</span><span>${escapeHtml(item.location || '-')}</span></div>
-              <div class="item-tooltip-row"><span class="item-tooltip-label">总库存</span><span>${item.total_quantity}</span></div>
-              <div class="item-tooltip-row"><span class="item-tooltip-label">可用</span><span>${item.available_quantity}</span></div>
-              <div class="item-tooltip-row"><span class="item-tooltip-label">单价</span><span>¥${item.value.toFixed(2)}</span></div>
-              <div class="item-tooltip-row"><span class="item-tooltip-label">状态</span><span class="status-badge ${item.status === '可用' ? 'available' : item.status === '租借中' ? 'lent' : 'damaged'}">${item.status}</span></div>
-              ${item.description ? `<div class="item-tooltip-desc">${escapeHtml(item.description)}</div>` : ''}
-            </div>
+              <div class="item-tooltip-desc">${escapeHtml(item.description)}</div>
+            </div>` : ''}
           </td>
           <td>${item.category || '-'}</td>
           <td>${item.location || '-'}</td>
