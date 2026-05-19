@@ -266,10 +266,10 @@
 .import-summary-duplicate { color:#FF9500; }
 .import-summary-error { color:#FF3B30; }
 .text-error { color:#FF3B30; }
-.item-name-cell { position:relative; }
+.item-name-cell a { position:relative; display:inline-block; }
 .item-tooltip {
-  position:absolute; z-index:1000; left:calc(100% + 8px); top:-8px;
-  max-width:280px; padding:10px 14px;
+  position:absolute; z-index:1000; left:100%; top:0; margin-left:6px;
+  width:max-content; max-width:260px; padding:6px 10px;
   background:var(--bg-card);
   backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
   border-radius:var(--radius);
@@ -278,8 +278,8 @@
   pointer-events:none; opacity:0; transform:translateY(4px);
   transition:opacity .2s, transform .2s;
 }
-.item-name-cell:hover .item-tooltip { opacity:1; transform:translateY(0); }
-.item-tooltip-desc { font-size:13px; color:var(--text); line-height:1.6; }
+.item-name-cell a:hover .item-tooltip { opacity:1; transform:translateY(0); }
+.item-tooltip-desc { font-size:13px; color:var(--text); line-height:1.4; white-space:normal; }
 </style>
 <script>
 let currentPage = 1;
@@ -774,9 +774,8 @@ async function loadItems(page = 1, lowStock = false) {
               onchange="toggleCartItem(this)">
           </td>` : ''}
           <td>${item.id}</td>
-          <td class="item-name-cell">
-            <a href="/items/${item.id}">${escapeHtml(item.name)}</a>
-            ${item.description ? `<div class="item-tooltip"><div class="item-tooltip-desc">${escapeHtml(item.description)}</div></div>` : ''}
+          <td>
+            <a href="/items/${item.id}">${escapeHtml(item.name)}${item.description ? `<div class="item-tooltip"><div class="item-tooltip-desc">${escapeHtml(item.description)}</div></div>` : ''}</a>
           </td>
           <td>${item.category || '-'}</td>
           <td>${item.location || '-'}</td>
