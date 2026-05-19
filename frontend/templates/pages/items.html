@@ -763,7 +763,7 @@ async function loadItems(page = 1, lowStock = false) {
           <td><a href="/items/${item.id}">${escapeHtml(item.name)}</a></td>
           <td>${item.category || '-'}</td>
           <td>${item.location || '-'}</td>
-          <td class="text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.description || '')}">${item.description || '-'}</td>
+          <td class="text-muted">${item.description || '-'}</td>
           <td>${item.total_quantity}</td>
           <td><strong class="${item.available_quantity <= item.low_stock_threshold ? 'low-stock-warn' : ''}">${item.available_quantity}</strong>${item.available_quantity <= item.low_stock_threshold ? ' ⚠' : ''}</td>
           <td><span class="status-badge ${item.status === '可用' ? 'available' : item.status === '租借中' ? 'lent' : 'damaged'}">${item.status}</span></td>
