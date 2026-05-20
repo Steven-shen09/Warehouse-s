@@ -532,3 +532,79 @@ def download_template(
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=import_template.csv"},
         )
+
+
+@router.get("/export")
+def export_items(
+    fmt: str = Query("csv", alias="format"),
+    keyword: str = "",
+    category: str = "",
+    status: str = "",
+    location: str = "",
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """导出物品数据（不分页，支持筛选）"""
+    where = "WHERE 1=1"
+    params = []
+    if keyword:
+        where += " AND (name LIKE ? OR description LIKE ?)"
+        params.extend([f"%{keyword}%", f"%{keyword}%"])
+    if category:
+        where += " AND category = ?"
+        params.append(category)
+    if status:
+        where += " AND status = ?"
+        params.append(status)
+    if location:
+        where += " AND location = ?"
+        params.append(location)
+
+    items = conn.execute(
+        f"SELECT * FROM items {where} ORDER BY id DESC", params
+    ).fetchall()
+
+    result = []
+    for item in items:
+        item_dict = dict(item)
+        item_dict["available_quantity"] = get_available_quantity(conn, item["id"])
+        result.append(item_dict)
+
+    headers_row = ["ID", "名称", "分类", "描述", "位置", "总库存", "可用库存", "状态", "单价"]
+
+    if fmt == "xlsx":
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "物品数据"
+        ws.append(headers_row)
+        for item in result:
+            ws.append([
+                item["id"], item["name"], item["category"], item["description"],
+                item["location"], item["total_quantity"], item["available_quantity"],
+                item["status"], item["value"],
+            ])
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return Response(
+            content=output.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=items_export.xlsx"},
+        )
+    else:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(headers_row)
+        for item in result:
+            writer.writerow([
+                item["id"], item["name"], item["category"], item["description"],
+                item["location"], item["total_quantity"], item["available_quantity"],
+                item["status"], item["value"],
+            ])
+        content = output.getvalue()
+        return Response(
+            content="﻿" + content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=items_export.csv"},
+        )
