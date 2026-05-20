@@ -190,6 +190,8 @@ async def warehouses_page(request: Request):
     user = await get_optional_user(request)
     if not user:
         return RedirectResponse(url="/login")
+    if user["role"] not in ("admin", "approver"):
+        return RedirectResponse(url="/dashboard")
     return _render(request, "pages/warehouses.html", {"current_user": user, "active_page": "warehouses"})
 
 
@@ -198,6 +200,8 @@ async def transfers_page(request: Request):
     user = await get_optional_user(request)
     if not user:
         return RedirectResponse(url="/login")
+    if user["role"] not in ("admin", "approver"):
+        return RedirectResponse(url="/dashboard")
     return _render(request, "pages/transfers.html", {"current_user": user, "active_page": "transfers"})
 
 
@@ -206,6 +210,8 @@ async def inventory_counts_page(request: Request):
     user = await get_optional_user(request)
     if not user:
         return RedirectResponse(url="/login")
+    if user["role"] not in ("admin", "approver"):
+        return RedirectResponse(url="/dashboard")
     return _render(request, "pages/inventory_counts.html", {"current_user": user, "active_page": "inventory-counts"})
 
 
