@@ -5,9 +5,14 @@
 <div class="flex-between mb-16">
   <h2>调拨管理</h2>
   {% if current_user.role in ('admin', 'approver') %}
-  <button class="btn btn-primary" onclick="openTransferModal()">
-    <i class="bi bi-plus-lg"></i> 新建调拨
-  </button>
+  <div style="display:flex;gap:8px;">
+    <button class="btn btn-outline" onclick="openTransferImportModal()">
+      <i class="bi bi-upload"></i> 导入调拨
+    </button>
+    <button class="btn btn-primary" onclick="openTransferModal()">
+      <i class="bi bi-plus-lg"></i> 新建调拨
+    </button>
+  </div>
   {% endif %}
 </div>
 
@@ -89,9 +94,129 @@
     </div>
   </div>
 </div>
+
+<!-- 调拨详情模态框 -->
+<div class="modal-overlay" id="transfer-detail-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>调拨详情</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('transfer-detail-modal')">&times;</button>
+    </div>
+    <div class="modal-body" id="transfer-detail-content">
+    </div>
+  </div>
+</div>
+
+<!-- 导入调拨模态框 -->
+<div class="modal-overlay" id="transfer-import-modal">
+  <div class="modal" style="max-width:800px;">
+    <div class="modal-header">
+      <h3>导入调拨</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeTransferImportModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- 步骤指示器 -->
+      <div class="import-steps" id="transfer-import-steps">
+        <div class="import-step active" data-step="1">
+          <span class="import-step-num">1</span>
+          <span class="import-step-label">选择文件</span>
+        </div>
+        <div class="import-step-connector"></div>
+        <div class="import-step" data-step="2">
+          <span class="import-step-num">2</span>
+          <span class="import-step-label">预览确认</span>
+        </div>
+        <div class="import-step-connector"></div>
+        <div class="import-step" data-step="3">
+          <span class="import-step-num">3</span>
+          <span class="import-step-label">完成</span>
+        </div>
+      </div>
+
+      <!-- 步骤 1：选择文件 -->
+      <div id="transfer-import-step1-content">
+        <div class="import-dropzone" id="transfer-import-dropzone" onclick="document.getElementById('transfer-import-file-input').click()">
+          <div class="import-dropzone-icon"><i class="bi bi-file-earmark-arrow-up" style="font-size:32px;color:var(--primary);"></i></div>
+          <p>拖拽文件到此处，或点击选择文件</p>
+          <p class="text-muted" style="font-size:13px;">支持 CSV (.csv) / Excel (.xlsx) 格式，最大 5MB</p>
+          <input type="file" id="transfer-import-file-input" accept=".csv,.xlsx,.xls" style="display:none;" onchange="handleTransferFileSelected(this.files[0])">
+        </div>
+        <div id="transfer-import-selected-file" style="display:none;margin-top:12px;">
+          <span id="transfer-import-selected-filename"></span>
+          <button class="btn btn-sm btn-outline" onclick="resetTransferImportStep1()">重新选择</button>
+        </div>
+        <div style="margin-top:12px;">
+          <a href="javascript:void(0)" onclick="downloadTransferTemplate()" class="text-muted" style="font-size:13px;"><i class="bi bi-download"></i> 下载导入模板 (CSV)</a>
+        </div>
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">
+          <button class="btn btn-outline" onclick="closeTransferImportModal()">取消</button>
+          <button class="btn btn-primary" id="transfer-import-upload-btn" disabled onclick="uploadTransferFileForPreview()">上传并预览</button>
+        </div>
+      </div>
+
+      <!-- 步骤 2：预览确认 -->
+      <div id="transfer-import-step2-content" style="display:none;">
+        <div id="transfer-import-preview-summary" class="mb-16"></div>
+        <div class="import-preview-table-wrapper" style="max-height:360px;overflow:auto;">
+          <table class="table" id="transfer-import-preview-table">
+            <thead><tr>
+              <th class="col-check">选择</th>
+              <th>#</th>
+              <th>物品名称</th>
+              <th>源仓库</th>
+              <th>目标仓库</th>
+              <th>数量</th>
+              <th>原因</th>
+              <th>状态</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
+          <label style="font-size:14px;cursor:pointer;">
+            <input type="checkbox" id="transfer-import-select-all" onchange="toggleAllTransferImportRows()" checked> 全选/取消
+          </label>
+        </div>
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">
+          <button class="btn btn-outline" onclick="resetTransferImportStep1()">重新上传</button>
+          <button class="btn btn-outline" onclick="closeTransferImportModal()">取消</button>
+          <button class="btn btn-primary" id="transfer-import-confirm-btn" onclick="confirmTransferImport()">确认导入</button>
+        </div>
+      </div>
+
+      <!-- 步骤 3：完成 -->
+      <div id="transfer-import-step3-content" style="display:none;text-align:center;padding:32px 0;">
+        <div id="transfer-import-result-icon" style="font-size:48px;margin-bottom:16px;"></div>
+        <h4 id="transfer-import-result-message" style="margin-bottom:16px;"></h4>
+        <div id="transfer-import-result-detail" class="text-muted" style="margin-bottom:24px;"></div>
+        <button class="btn btn-primary" onclick="finishTransferImport()">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<style>
+.import-steps { display:flex; align-items:center; justify-content:center; margin-bottom:24px; }
+.import-step { display:flex; flex-direction:column; align-items:center; gap:4px; opacity:0.4; }
+.import-step.active { opacity:1; }
+.import-step-num { width:28px; height:28px; border-radius:50%; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+.import-step-label { font-size:12px; color:var(--text-secondary); }
+.import-step-connector { width:48px; height:2px; background:var(--border-color, rgba(128,128,128,.2)); margin:0 8px; margin-bottom:16px; }
+.import-dropzone { border:2px dashed var(--border-color, rgba(128,128,128,.3)); border-radius:var(--radius); padding:32px; text-align:center; cursor:pointer; transition:all .2s; }
+.import-dropzone:hover, .import-dropzone.drag-over { border-color:var(--primary); background:rgba(91,140,255,.06); }
+.import-preview-table-wrapper { border-radius:var(--radius); border:1px solid var(--border-color, rgba(128,128,128,.15)); }
+.import-row-error { background:rgba(255,59,48,.08); }
+.import-summary-ok { color:#34C759; }
+.import-summary-error { color:#FF3B30; }
+.text-error { color:#FF3B30; }
+.transfer-detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.transfer-detail-item { }
+.transfer-detail-label { font-size:12px; color:var(--text-secondary); margin-bottom:4px; }
+.transfer-detail-value { font-size:15px; font-weight:600; }
+.transfer-detail-full { grid-column:1 / -1; }
+</style>
 <script>
 let currentPage = 1;
 let _rejectCallback = null;
@@ -139,6 +264,72 @@ async function approveTransfer(id) {
   const resp = await api(`/api/v1/transfers/${id}/approve`, { method: 'PUT' });
   if (resp.ok) { showToast('已通过'); loadTransfers(currentPage); }
   else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
+}
+
+// ── 调拨详情 ──
+function showTransferDetail(transfer) {
+  const docNo = transfer.document_no || 'DB-' + transfer.id;
+  const itemName = escapeHtml(transfer.item_name || transfer.item?.name || '-');
+  const fromName = escapeHtml(transfer.from_warehouse_name || transfer.from_warehouse?.name || '-');
+  const toName = escapeHtml(transfer.to_warehouse_name || transfer.to_warehouse?.name || '-');
+  const reason = escapeHtml(transfer.reason || '无');
+  const createdBy = escapeHtml(transfer.created_by_name || transfer.created_by?.display_name || transfer.created_by?.username || '-');
+  const createdAt = transfer.created_at || '-';
+  const approvedBy = escapeHtml(transfer.approved_by_name || transfer.approved_by?.display_name || transfer.approved_by?.username || '');
+  const approvedAt = transfer.updated_at || '';
+  const hasApproval = transfer.status === 'approved' || transfer.status === 'rejected';
+
+  document.getElementById('transfer-detail-content').innerHTML = `
+    <div class="transfer-detail-grid">
+      <div class="transfer-detail-item">
+        <div class="transfer-detail-label">调拨单号</div>
+        <div class="transfer-detail-value">${docNo}</div>
+      </div>
+      <div class="transfer-detail-item">
+        <div class="transfer-detail-label">状态</div>
+        <div class="transfer-detail-value">${statusBadge(transfer.status)}</div>
+      </div>
+      <div class="transfer-detail-item">
+        <div class="transfer-detail-label">物品名称</div>
+        <div class="transfer-detail-value">${itemName}</div>
+      </div>
+      <div class="transfer-detail-item">
+        <div class="transfer-detail-label">调拨数量</div>
+        <div class="transfer-detail-value">${transfer.quantity}</div>
+      </div>
+      <div class="transfer-detail-item">
+        <div class="transfer-detail-label">源仓库</div>
+        <div class="transfer-detail-value">${fromName}</div>
+      </div>
+      <div class="transfer-detail-item">
+        <div class="transfer-detail-label">目标仓库</div>
+        <div class="transfer-detail-value">${toName}</div>
+      </div>
+      <div class="transfer-detail-item transfer-detail-full">
+        <div class="transfer-detail-label">调拨原因</div>
+        <div class="transfer-detail-value">${reason}</div>
+      </div>
+      <div class="transfer-detail-item">
+        <div class="transfer-detail-label">创建人</div>
+        <div class="transfer-detail-value">${createdBy}</div>
+      </div>
+      <div class="transfer-detail-item">
+        <div class="transfer-detail-label">创建时间</div>
+        <div class="transfer-detail-value">${createdAt}</div>
+      </div>
+      ${hasApproval ? `
+      <div class="transfer-detail-item">
+        <div class="transfer-detail-label">审核人</div>
+        <div class="transfer-detail-value">${approvedBy || '-'}</div>
+      </div>
+      <div class="transfer-detail-item">
+        <div class="transfer-detail-label">审核时间</div>
+        <div class="transfer-detail-value">${approvedAt || '-'}</div>
+      </div>
+      ` : ''}
+    </div>
+  `;
+  openModal('transfer-detail-modal');
 }
 
 // ── 加载辅助数据 ──
@@ -260,9 +451,12 @@ async function loadTransfers(page = 1) {
         <th>时间</th>
         <th>操作</th>
       </tr></thead>
-      <tbody>${data.transfers.map(t => `
-        <tr>
-          <td>${t.id}</td>
+      <tbody>${data.transfers.map(t => {
+        // 将 transfer 对象序列化为 JSON 字符串，传给 onclick
+        const transferJson = JSON.stringify(t).replace(/'/g, "&#39;").replace(/"/g, '&quot;');
+        return `
+        <tr style="cursor:pointer;" onclick="showTransferDetail(JSON.parse('${transferJson}'))">
+          <td>${escapeHtml(t.document_no || 'DB-' + t.id)}</td>
           <td>${escapeHtml(t.item_name || t.item?.name || '-')}</td>
           <td>
             <span>${escapeHtml(t.from_warehouse_name || t.from_warehouse?.name || '-')}</span>
@@ -274,7 +468,7 @@ async function loadTransfers(page = 1) {
           <td class="text-muted">${escapeHtml(t.reason || '-')}</td>
           <td>${escapeHtml(t.created_by_name || t.created_by?.display_name || t.created_by?.username || '-')}</td>
           <td>${t.created_at || '-'}</td>
-          <td>
+          <td onclick="event.stopPropagation()">
             ${isAdmin && t.status === 'pending' ? `
             <div class="btn-group">
               <button class="btn btn-success btn-sm" onclick="approveTransfer(${t.id})">通过</button>
@@ -282,11 +476,233 @@ async function loadTransfers(page = 1) {
             </div>
             ` : '<span class="text-muted" style="font-size:13px;">--</span>'}
           </td>
-        </tr>`).join('')}</tbody>
+        </tr>`;
+      }).join('')}</tbody>
     </table>
     ${renderPagination(data.total, 20, currentPage)}
   `;
 }
+
+// ═══════════════════════════════════════════
+// ── 调拨批量导入 ──
+// ═══════════════════════════════════════════
+let transferImportPreviewData = null;
+let transferImportSelectedFile = null;
+
+function openTransferImportModal() {
+  transferImportPreviewData = null;
+  transferImportSelectedFile = null;
+  resetTransferImportStep1();
+  document.getElementById('transfer-import-file-input').value = '';
+  showTransferImportStep(1);
+  openModal('transfer-import-modal');
+}
+
+function closeTransferImportModal() {
+  closeModal('transfer-import-modal');
+}
+
+function resetTransferImportStep1() {
+  transferImportPreviewData = null;
+  transferImportSelectedFile = null;
+  document.getElementById('transfer-import-file-input').value = '';
+  document.getElementById('transfer-import-selected-file').style.display = 'none';
+  document.getElementById('transfer-import-upload-btn').disabled = true;
+  document.getElementById('transfer-import-dropzone').style.display = '';
+  showTransferImportStep(1);
+}
+
+function showTransferImportStep(step) {
+  document.getElementById('transfer-import-step1-content').style.display = step === 1 ? '' : 'none';
+  document.getElementById('transfer-import-step2-content').style.display = step === 2 ? '' : 'none';
+  document.getElementById('transfer-import-step3-content').style.display = step === 3 ? '' : 'none';
+
+  document.querySelectorAll('#transfer-import-steps .import-step').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.step) <= step);
+  });
+}
+
+function handleTransferFileSelected(file) {
+  if (!file) return;
+  transferImportSelectedFile = file;
+  document.getElementById('transfer-import-selected-filename').textContent = file.name;
+  document.getElementById('transfer-import-selected-file').style.display = '';
+  document.getElementById('transfer-import-dropzone').style.display = 'none';
+  document.getElementById('transfer-import-upload-btn').disabled = false;
+}
+
+// 拖拽支持
+(function initTransferDropzone() {
+  document.addEventListener('DOMContentLoaded', () => {
+    const dz = document.getElementById('transfer-import-dropzone');
+    if (!dz) return;
+    dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => { dz.classList.remove('drag-over'); });
+    dz.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dz.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        document.getElementById('transfer-import-file-input').files = e.dataTransfer.files;
+        handleTransferFileSelected(file);
+      }
+    });
+  });
+})();
+
+async function uploadTransferFileForPreview() {
+  if (!transferImportSelectedFile) return;
+
+  const btn = document.getElementById('transfer-import-upload-btn');
+  btn.disabled = true;
+  btn.textContent = '解析中...';
+
+  const formData = new FormData();
+  formData.append('file', transferImportSelectedFile);
+
+  const resp = await fetch('/api/v1/transfers/import/preview', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${AppState.token}` },
+    body: formData,
+  });
+
+  btn.disabled = false;
+  btn.textContent = '上传并预览';
+
+  if (!resp.ok) {
+    const err = await resp.json();
+    showToast(err.detail || '文件解析失败', 'error');
+    return;
+  }
+
+  transferImportPreviewData = await resp.json();
+  renderTransferImportPreview();
+  showTransferImportStep(2);
+}
+
+function renderTransferImportPreview() {
+  const data = transferImportPreviewData;
+  if (!data) return;
+
+  // 摘要
+  const s = data.summary;
+  document.getElementById('transfer-import-preview-summary').innerHTML =
+    `解析结果：共 <strong>${s.total}</strong> 行，` +
+    `<span class="import-summary-ok"><i class="bi bi-check-circle-fill"></i> ${s.ok} 条可导入</span>` +
+    (s.error > 0 ? `，<span class="import-summary-error"><i class="bi bi-x-circle-fill"></i> ${s.error} 条错误</span>` : '');
+
+  // 表格
+  const tbody = document.querySelector('#transfer-import-preview-table tbody');
+  tbody.innerHTML = data.rows.map(row => {
+    const checked = row.status === 'ok' ? 'checked' : '';
+    const disabled = row.status === 'error' ? 'disabled' : '';
+    const rowClass = row.status === 'error' ? 'import-row-error' : '';
+    const statusHtml = row.status === 'ok'
+      ? '<span class="status-badge available">正常</span>'
+      : `<span class="status-badge damaged" title="${escapeHtml(row.message)}"><i class="bi bi-x-circle-fill"></i> 错误</span><br><small class="text-error">${escapeHtml(row.message)}</small>`;
+
+    return `
+      <tr class="${rowClass}">
+        <td class="col-check">
+          <input type="checkbox" class="transfer-import-row-checkbox" data-index="${row.index}"
+            ${checked} ${disabled} onchange="onTransferImportRowToggle()">
+        </td>
+        <td>${row.index}</td>
+        <td>${escapeHtml(row.data['物品名称'] || '')}</td>
+        <td>${escapeHtml(row.data['源仓库'] || '')}</td>
+        <td>${escapeHtml(row.data['目标仓库'] || '')}</td>
+        <td>${escapeHtml(row.data['数量'] || '1')}</td>
+        <td>${escapeHtml(row.data['原因'] || '')}</td>
+        <td>${statusHtml}</td>
+      </tr>
+    `;
+  }).join('');
+
+  document.getElementById('transfer-import-select-all').checked = true;
+}
+
+function onTransferImportRowToggle() {
+  const allCbs = document.querySelectorAll('.transfer-import-row-checkbox:not([disabled])');
+  const checkedCbs = document.querySelectorAll('.transfer-import-row-checkbox:not([disabled]):checked');
+  document.getElementById('transfer-import-select-all').checked = allCbs.length === checkedCbs.length;
+}
+
+function toggleAllTransferImportRows() {
+  const selectAll = document.getElementById('transfer-import-select-all').checked;
+  document.querySelectorAll('.transfer-import-row-checkbox:not([disabled])').forEach(cb => {
+    cb.checked = selectAll;
+  });
+}
+
+async function confirmTransferImport() {
+  const checkedRows = document.querySelectorAll('.transfer-import-row-checkbox:checked');
+  if (checkedRows.length === 0) {
+    showToast('请至少选择一行', 'warning');
+    return;
+  }
+
+  const selections = [];
+  checkedRows.forEach(cb => {
+    selections.push({ index: parseInt(cb.dataset.index) });
+  });
+
+  const btn = document.getElementById('transfer-import-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = '导入中...';
+
+  const formData = new FormData();
+  formData.append('file', transferImportSelectedFile);
+  formData.append('selections', JSON.stringify(selections));
+
+  const resp = await fetch('/api/v1/transfers/import/confirm', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${AppState.token}` },
+    body: formData,
+  });
+
+  btn.disabled = false;
+  btn.textContent = '确认导入';
+
+  if (!resp.ok) {
+    const err = await resp.json();
+    document.getElementById('transfer-import-result-icon').innerHTML = '<i class="bi bi-x-circle-fill" style="color:#FF3B30;"></i>';
+    document.getElementById('transfer-import-result-message').textContent = '导入失败';
+    document.getElementById('transfer-import-result-detail').textContent = err.detail || '未知错误';
+    showTransferImportStep(3);
+    return;
+  }
+
+  const result = await resp.json();
+  document.getElementById('transfer-import-result-icon').innerHTML = '<i class="bi bi-check-circle-fill" style="color:#34C759;"></i>';
+  document.getElementById('transfer-import-result-message').textContent = '导入成功！';
+  document.getElementById('transfer-import-result-detail').innerHTML =
+    `成功创建 <strong>${result.imported}</strong> 条调拨申请` +
+    (result.skipped > 0 ? `，跳过 <strong>${result.skipped}</strong> 条` : '');
+  showTransferImportStep(3);
+}
+
+function finishTransferImport() {
+  closeTransferImportModal();
+  loadTransfers(currentPage);
+}
+
+async function downloadTransferTemplate() {
+  const resp = await fetch('/api/v1/transfers/import/template', {
+    headers: { 'Authorization': `Bearer ${AppState.token}` },
+  });
+  if (!resp.ok) return;
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'transfer_import_template.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════
 
 // ── 初始化 ──
 document.addEventListener('DOMContentLoaded', () => {
