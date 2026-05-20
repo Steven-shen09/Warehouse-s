@@ -1,4 +1,5 @@
 """物品管理路由"""
+from typing import Optional
 import csv
 import io
 import os
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/api/v1/items", tags=["物品管理"])
 
 
 # ── 导入模板列名映射 ──
-IMPORT_COLUMNS = ["物品名称", "分类", "描述", "存放位置", "总数量", "单价(元)", "预警阈值"]
+IMPORT_COLUMNS = ["物品名称", "分类", "描述", "总数量", "单价(元)", "预警阈值"]
 
 
 def parse_uploaded_file(file_content: bytes, filename: str) -> list[dict]:
@@ -151,7 +152,7 @@ def list_items(
     category: str = "",
     status: str = "",
     low_stock: int = 0,
-    warehouse_id: int = 0,
+    warehouse_id: Optional[int] = Query(default=None),
     current_user: dict = Depends(get_current_user),
     conn=Depends(get_db),
 ):
@@ -167,7 +168,7 @@ def list_items(
     if status:
         where += " AND status = ?"
         params.append(status)
-    if warehouse_id:
+    if warehouse_id is not None and warehouse_id:
         where += " AND id IN (SELECT item_id FROM warehouse_stocks WHERE warehouse_id = ? AND quantity > 0)"
         params.append(warehouse_id)
 
@@ -224,7 +225,7 @@ def export_items(
     keyword: str = "",
     category: str = "",
     status: str = "",
-    warehouse_id: int = 0,
+    warehouse_id: Optional[int] = Query(default=None),
     current_user: dict = Depends(require_role("admin", "approver")),
     conn=Depends(get_db),
 ):
@@ -240,7 +241,7 @@ def export_items(
     if status:
         where += " AND status = ?"
         params.append(status)
-    if warehouse_id:
+    if warehouse_id is not None and warehouse_id:
         where += " AND id IN (SELECT item_id FROM warehouse_stocks WHERE warehouse_id = ? AND quantity > 0)"
         params.append(warehouse_id)
 

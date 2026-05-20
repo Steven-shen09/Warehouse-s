@@ -762,7 +762,7 @@ async function loadItems(page = 1, lowStock = false) {
   const category = document.getElementById('category-filter').value;
   const status = document.getElementById('status-filter').value;
   const warehouseId = document.getElementById('warehouse-filter').value;
-  const params = new URLSearchParams({ page, page_size: 15, keyword, category, status, warehouse_id: warehouseId });
+  const params = new URLSearchParams({ page, page_size: 15, keyword, category, status }); if (warehouseId) params.set('warehouse_id', warehouseId);
   if (lowStock) params.set('low_stock', '1');
 
   const resp = await api(`/api/v1/items/?${params}`);
