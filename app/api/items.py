@@ -151,7 +151,7 @@ def list_items(
     category: str = "",
     status: str = "",
     low_stock: int = 0,
-    location: str = "",
+    warehouse_id: int = 0,
     current_user: dict = Depends(get_current_user),
     conn=Depends(get_db),
 ):
@@ -167,9 +167,9 @@ def list_items(
     if status:
         where += " AND status = ?"
         params.append(status)
-    if location:
-        where += " AND location = ?"
-        params.append(location)
+    if warehouse_id:
+        where += " AND id IN (SELECT item_id FROM warehouse_stocks WHERE warehouse_id = ? AND quantity > 0)"
+        params.append(warehouse_id)
 
     if low_stock:
         items = conn.execute(
@@ -218,23 +218,13 @@ def get_categories(
     return {"categories": [r["category"] for r in rows]}
 
 
-@router.get("/locations")
-def get_locations(
-    current_user: dict = Depends(get_current_user),
-    conn=Depends(get_db),
-):
-    """获取所有位置列表"""
-    rows = conn.execute("SELECT DISTINCT location FROM items WHERE location != '' ORDER BY location").fetchall()
-    return {"locations": [r["location"] for r in rows]}
-
-
 @router.get("/export")
 def export_items(
     fmt: str = Query("csv", alias="format"),
     keyword: str = "",
     category: str = "",
     status: str = "",
-    location: str = "",
+    warehouse_id: int = 0,
     current_user: dict = Depends(require_role("admin", "approver")),
     conn=Depends(get_db),
 ):
@@ -250,9 +240,9 @@ def export_items(
     if status:
         where += " AND status = ?"
         params.append(status)
-    if location:
-        where += " AND location = ?"
-        params.append(location)
+    if warehouse_id:
+        where += " AND id IN (SELECT item_id FROM warehouse_stocks WHERE warehouse_id = ? AND quantity > 0)"
+        params.append(warehouse_id)
 
     items = conn.execute(
         f"SELECT * FROM items {where} ORDER BY id DESC", params
@@ -332,11 +322,30 @@ def create_item(
 ):
     """新增物品"""
     conn.execute(
-        """INSERT INTO items (name, category, description, location, total_quantity, value, low_stock_threshold, image_url)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (body.name, body.category, body.description, body.location,
+        """INSERT INTO items (name, category, description, total_quantity, value, low_stock_threshold, image_url)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (body.name, body.category, body.description,
          body.total_quantity, body.value, body.low_stock_threshold, body.image_url),
     )
+    item_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    # 如果指定了仓库，写入 warehouse_stocks
+    if body.warehouse_id:
+        wh = conn.execute("SELECT id FROM warehouses WHERE id = ?", (body.warehouse_id,)).fetchone()
+        if wh:
+            conn.execute(
+                "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, ?, ?)",
+                (item_id, body.warehouse_id, body.total_quantity),
+            )
+    else:
+        # 默认分配到默认仓库
+        default_wh = conn.execute("SELECT id FROM warehouses ORDER BY id LIMIT 1").fetchone()
+        if default_wh:
+            conn.execute(
+                "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, ?, ?)",
+                (item_id, default_wh["id"], body.total_quantity),
+            )
+
     conn.commit()
     return {"message": "物品创建成功"}
 
@@ -354,7 +363,7 @@ def update_item(
         raise HTTPException(status_code=404, detail="物品不存在")
 
     updates = {}
-    for field in ["name", "category", "description", "location", "total_quantity", "value", "low_stock_threshold", "image_url"]:
+    for field in ["name", "category", "description", "total_quantity", "value", "low_stock_threshold", "image_url"]:
         val = getattr(body, field)
         if val is not None:
             updates[field] = val

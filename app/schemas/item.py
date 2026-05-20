@@ -8,7 +8,7 @@ class ItemCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="物品名称")
     category: str = Field(default="", description="分类")
     description: str = Field(default="", description="描述")
-    location: str = Field(default="", description="存放位置")
+    warehouse_id: Optional[int] = Field(default=None, description="存放仓库ID")
     total_quantity: int = Field(default=1, ge=1, description="总库存数量")
     value: float = Field(default=0.0, ge=0, description="物品单价")
     low_stock_threshold: int = Field(default=2, ge=0, description="低库存预警阈值")
@@ -20,7 +20,7 @@ class ItemUpdate(BaseModel):
     name: Optional[str] = Field(default=None, max_length=100)
     category: Optional[str] = None
     description: Optional[str] = None
-    location: Optional[str] = None
+    warehouse_id: Optional[int] = None
     total_quantity: Optional[int] = Field(default=None, ge=1)
     value: Optional[float] = Field(default=None, ge=0)
     low_stock_threshold: Optional[int] = Field(default=None, ge=0)

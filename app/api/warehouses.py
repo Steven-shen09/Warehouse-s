@@ -60,6 +60,30 @@ def update_warehouse(
     return {"message": "仓库信息更新成功"}
 
 
+@router.get("/{warehouse_id}/items")
+def get_warehouse_items(
+    warehouse_id: int,
+    current_user: dict = Depends(get_current_user),
+    conn=Depends(get_db),
+):
+    """获取仓库内所有物品"""
+    wh = conn.execute("SELECT id, name FROM warehouses WHERE id = ?", (warehouse_id,)).fetchone()
+    if not wh:
+        raise HTTPException(status_code=404, detail="仓库不存在")
+
+    rows = conn.execute(
+        """SELECT i.id, i.name, i.category, i.description, i.status, i.value,
+                  ws.quantity AS stock_quantity
+           FROM warehouse_stocks ws
+           JOIN items i ON ws.item_id = i.id
+           WHERE ws.warehouse_id = ? AND ws.quantity > 0
+           ORDER BY i.name""",
+        (warehouse_id,),
+    ).fetchall()
+
+    return {"warehouse": dict(wh), "items": [dict(r) for r in rows]}
+
+
 @router.delete("/{warehouse_id}")
 def delete_warehouse(
     warehouse_id: int,

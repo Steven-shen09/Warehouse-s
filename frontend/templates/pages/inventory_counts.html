@@ -274,6 +274,7 @@ function renderPagination(total, pageSize, currentPage) {
 async function loadCountList(page) {
   if (page === undefined || page === null) page = 1;
   currentCountPage = page;
+  const isStaff = AppState.isAdmin || AppState.isApprover;
   const status = document.getElementById('status-filter').value;
   const params = new URLSearchParams({ page, page_size: 20 });
   if (status) params.set('status', status);
@@ -646,7 +647,7 @@ async function createCount(e) {
     const data = await resp.json();
     closeModal('create-modal');
     showToast(data.message || '盘点已创建');
-    const newId = data.id || (data.count && data.count.id);
+    const newId = data.count_id || (data.count && data.count.id);
     if (newId) {
       showCountDetail(newId);
     } else {
