@@ -1,0 +1,551 @@
+{% extends "base.html" %}
+{% block title %}盘点管理 - Warehouse-s{% endblock %}
+
+{% block content %}
+<!-- ====== 列表视图 ====== -->
+<div id="count-list-view">
+  <div class="flex-between mb-16">
+    <h2>盘点管理</h2>
+    {% if current_user.role in ('admin', 'approver') %}
+    <button class="btn btn-primary" onclick="openCreateModal()">
+      <i class="bi bi-plus-lg"></i> 新建盘点
+    </button>
+    {% endif %}
+  </div>
+
+  <!-- 筛选栏 -->
+  <div class="filter-bar">
+    <select id="status-filter" class="form-select" onchange="loadCountList(1)">
+      <option value="">全部状态</option>
+      <option value="进行中">进行中</option>
+      <option value="已完成">已完成</option>
+      <option value="已确认">已确认</option>
+    </select>
+  </div>
+
+  <!-- 盘点列表 -->
+  <div id="count-list-container">
+    <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+  </div>
+</div>
+
+<!-- ====== 详情视图 ====== -->
+<div id="count-detail-view" style="display:none;">
+  <div class="flex-between mb-16">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="btn btn-outline" onclick="showCountList()">
+        <i class="bi bi-arrow-left"></i> 返回
+      </button>
+      <h2 id="detail-title">盘点详情</h2>
+    </div>
+    <div id="detail-actions" style="display:flex;gap:8px;"></div>
+  </div>
+
+  <!-- 盘点基本信息 -->
+  <div class="stats-grid" style="margin-bottom:20px;" id="detail-info"></div>
+
+  <!-- 盘点明细 -->
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+    <h3 style="margin:0;">盘点明细</h3>
+    <span class="text-muted" id="detail-item-count" style="font-size:14px;"></span>
+  </div>
+  <div id="detail-items-container">
+    <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+  </div>
+</div>
+
+<!-- 新建盘点模态框 -->
+<div class="modal-overlay" id="create-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>新建盘点</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('create-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form onsubmit="createCount(event)">
+        <div class="form-group">
+          <label class="form-label">盘点名称 *</label>
+          <input type="text" id="create-name" class="form-input" required placeholder="例如：2025年Q1季度盘点">
+        </div>
+        <div class="form-group">
+          <label class="form-label">选择仓库 *</label>
+          <select id="create-warehouse" class="form-select" required>
+            <option value="">请选择仓库</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;">创建盘点</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 确认弹窗（完成盘点 / 确认差异） -->
+<div class="modal-overlay" id="confirm-dialog">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="confirm-dialog-title">确认操作</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('confirm-dialog')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-dialog-message" class="text-muted"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('confirm-dialog')">取消</button>
+      <button class="btn btn-success" id="confirm-dialog-btn">确认</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.text-error { color: var(--danger) !important; }
+.text-success-color { color: var(--success, #34C759) !important; }
+.inventory-diff-positive { color: var(--danger); font-weight: 600; }
+.inventory-diff-negative { color: var(--success, #34C759); font-weight: 600; }
+</style>
+<script>
+let currentCountPage = 1;
+let currentDetailId = null;
+let _confirmDialogCallback = null;
+
+// ── HTML 转义 ──
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── 视图切换 ──
+function showCountList() {
+  document.getElementById('count-list-view').style.display = '';
+  document.getElementById('count-detail-view').style.display = 'none';
+  currentDetailId = null;
+  loadCountList(currentCountPage);
+}
+
+function showCountDetail(id) {
+  document.getElementById('count-list-view').style.display = 'none';
+  document.getElementById('count-detail-view').style.display = '';
+  currentDetailId = id;
+  loadCountDetail(id);
+}
+
+// ── 确认弹窗 ──
+function showConfirmDialog(title, message, onConfirm) {
+  document.getElementById('confirm-dialog-title').textContent = title;
+  document.getElementById('confirm-dialog-message').textContent = message;
+  _confirmDialogCallback = onConfirm;
+  openModal('confirm-dialog');
+}
+
+document.getElementById('confirm-dialog-btn').addEventListener('click', () => {
+  if (_confirmDialogCallback) {
+    closeModal('confirm-dialog');
+    _confirmDialogCallback();
+    _confirmDialogCallback = null;
+  }
+});
+
+// ── 状态徽章 ──
+function statusBadgeHtml(status) {
+  const clsMap = {
+    '进行中': 'pending',
+    '已完成': 'available',
+    '已确认': 'returned',
+  };
+  const cls = clsMap[status] || '';
+  return `<span class="status-badge ${cls}">${status}</span>`;
+}
+
+// ── 分页 ──
+function renderPagination(total, pageSize, currentPage) {
+  const pages = Math.ceil(total / pageSize);
+  if (pages <= 1) return '';
+  let html = '<div class="pagination">';
+  html += `<button onclick="loadCountList(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>上一页</button>`;
+  for (let i = 1; i <= pages; i++) {
+    html += `<button class="${i === currentPage ? 'active' : ''}" onclick="loadCountList(${i})">${i}</button>`;
+  }
+  html += `<button onclick="loadCountList(${currentPage + 1})" ${currentPage === pages ? 'disabled' : ''}>下一页</button>`;
+  html += '</div>';
+  return html;
+}
+
+// ── 加载盘点列表 ──
+async function loadCountList(page) {
+  if (page === undefined || page === null) page = 1;
+  currentCountPage = page;
+  const status = document.getElementById('status-filter').value;
+  const params = new URLSearchParams({ page, page_size: 20 });
+  if (status) params.set('status', status);
+
+  const resp = await api(`/api/v1/inventory-counts/?${params}`);
+  const container = document.getElementById('count-list-container');
+
+  if (!resp.ok) {
+    container.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+    return;
+  }
+
+  const data = await resp.json();
+  const counts = data.counts || data.items || [];
+  const total = data.total || 0;
+
+  if (counts.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-clipboard-data"></i></div><p>暂无盘点记录</p></div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="table">
+      <thead><tr>
+        <th>ID</th>
+        <th>盘点名称</th>
+        <th>仓库</th>
+        <th>状态</th>
+        <th>创建人</th>
+        <th>创建时间</th>
+        <th>更新时间</th>
+      </tr></thead>
+      <tbody>${counts.map(c => `
+        <tr style="cursor:pointer;" onclick="showCountDetail(${c.id})">
+          <td>${c.id}</td>
+          <td><strong>${escapeHtml(c.name || '-')}</strong></td>
+          <td>${escapeHtml(c.warehouse_name || c.warehouse?.name || '-')}</td>
+          <td>${statusBadgeHtml(c.status)}</td>
+          <td>${escapeHtml(c.created_by_name || c.created_by?.display_name || '-')}</td>
+          <td>${c.created_at || '-'}</td>
+          <td>${c.updated_at || '-'}</td>
+        </tr>`).join('')}</tbody>
+    </table>
+    ${renderPagination(total, 20, currentCountPage)}
+  `;
+}
+
+// ── 加载盘点详情 ──
+async function loadCountDetail(id) {
+  const resp = await api(`/api/v1/inventory-counts/${id}`);
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    showToast(err.detail || '加载详情失败', 'error');
+    showCountList();
+    return;
+  }
+
+  const data = await resp.json();
+  const count = data.count || data;
+  const items = data.items || [];
+  const isAdmin = AppState.isAdmin;
+  const isStaff = isAdmin || AppState.isApprover;
+  const canEdit = count.status === '进行中' && isStaff;
+  const canComplete = count.status === '进行中' && isStaff;
+  const canConfirm = count.status === '已完成' && isAdmin;
+
+  // 标题
+  document.getElementById('detail-title').textContent = count.name || '盘点详情';
+
+  // 基本信息统计卡片
+  const warehouseName = count.warehouse_name || count.warehouse?.name || '-';
+  const creatorName = count.created_by_name || count.created_by?.display_name || '-';
+  document.getElementById('detail-info').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-value" style="font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(warehouseName)}</div>
+      <div class="stat-label">仓库</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="font-size:18px;">${statusBadgeHtml(count.status)}</div>
+      <div class="stat-label">状态</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${items.length}</div>
+      <div class="stat-label">明细条目</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(creatorName)}</div>
+      <div class="stat-label">创建人</div>
+    </div>
+  `;
+
+  document.getElementById('detail-item-count').textContent = `共 ${items.length} 件物品`;
+
+  // 操作按钮
+  let actionsHtml = '';
+  if (canComplete) {
+    actionsHtml += `<button class="btn btn-primary" onclick="saveAllItems()"><i class="bi bi-save"></i> 全部保存</button>`;
+  }
+  if (canComplete) {
+    actionsHtml += `<button class="btn btn-success" onclick="completeCount(${count.id})"><i class="bi bi-check-circle"></i> 完成盘点</button>`;
+  }
+  if (canConfirm) {
+    actionsHtml += `<button class="btn btn-success" onclick="confirmCount(${count.id})"><i class="bi bi-check-all"></i> 确认差异</button>`;
+  }
+  document.getElementById('detail-actions').innerHTML = actionsHtml;
+
+  // 明细表格
+  renderDetailTable(items, canEdit);
+}
+
+function renderDetailTable(items, canEdit) {
+  const container = document.getElementById('detail-items-container');
+  if (items.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-inbox"></i></div><p>暂无盘点明细</p></div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="table">
+      <thead><tr>
+        <th>物品名称</th>
+        <th>系统库存</th>
+        <th>实盘数量</th>
+        <th>差异</th>
+        <th>备注</th>
+        ${canEdit ? '<th>操作</th>' : ''}
+      </tr></thead>
+      <tbody>${items.map(item => {
+        const actualQty = (item.actual_quantity !== null && item.actual_quantity !== undefined) ? item.actual_quantity : '';
+        const diff = (item.difference !== null && item.difference !== undefined) ? item.difference : null;
+        let diffDisplay, diffClass;
+        if (diff === null || diff === undefined) {
+          diffDisplay = '-';
+          diffClass = '';
+        } else if (diff > 0) {
+          diffDisplay = `+${diff}`;
+          diffClass = 'inventory-diff-positive';
+        } else if (diff < 0) {
+          diffDisplay = `${diff}`;
+          diffClass = 'inventory-diff-negative';
+        } else {
+          diffDisplay = '0';
+          diffClass = '';
+        }
+
+        return `
+        <tr>
+          <td>${escapeHtml(item.item_name)}</td>
+          <td>${item.expected_quantity}</td>
+          <td>
+            ${canEdit ? `<input type="number" id="qty-${item.id}" class="form-input" style="width:100px;" value="${actualQty}" min="0" oninput="updateDiff(${item.id}, ${item.expected_quantity})" placeholder="数量">` : (actualQty !== '' ? actualQty : '-')}
+          </td>
+          <td><span id="diff-${item.id}" class="${diffClass}">${diffDisplay}</span></td>
+          <td>
+            ${canEdit ? `<input type="text" id="notes-${item.id}" class="form-input" value="${escapeHtml(item.notes || '')}" placeholder="备注" style="min-width:120px;">` : escapeHtml(item.notes || '-')}
+          </td>
+          ${canEdit ? `<td><button class="btn btn-outline btn-sm" data-item-id="${item.id}" data-expected="${item.expected_quantity}" onclick="saveItemRow(${item.id})"><i class="bi bi-save"></i> 保存</button></td>` : ''}
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  `;
+}
+
+// ── 自动计算差异 ──
+function updateDiff(itemId, expectedQty) {
+  const qtyInput = document.getElementById(`qty-${itemId}`);
+  const diffSpan = document.getElementById(`diff-${itemId}`);
+  if (!qtyInput || !diffSpan) return;
+  const val = qtyInput.value.trim();
+  if (val === '') {
+    diffSpan.textContent = '-';
+    diffSpan.className = '';
+    return;
+  }
+  const actual = parseInt(val, 10);
+  if (isNaN(actual)) {
+    diffSpan.textContent = '-';
+    diffSpan.className = '';
+    return;
+  }
+  const diff = actual - expectedQty;
+  if (diff > 0) {
+    diffSpan.textContent = `+${diff}`;
+    diffSpan.className = 'inventory-diff-positive';
+  } else if (diff < 0) {
+    diffSpan.textContent = `${diff}`;
+    diffSpan.className = 'inventory-diff-negative';
+  } else {
+    diffSpan.textContent = '0';
+    diffSpan.className = '';
+  }
+}
+
+// ── 逐行保存 ──
+async function saveItemRow(itemId) {
+  if (!currentDetailId) return;
+  const qtyInput = document.getElementById(`qty-${itemId}`);
+  const notesInput = document.getElementById(`notes-${itemId}`);
+  const qtyVal = qtyInput ? qtyInput.value.trim() : '';
+  const actualQuantity = qtyVal !== '' ? parseInt(qtyVal, 10) : null;
+
+  if (qtyVal !== '' && isNaN(actualQuantity)) {
+    showToast('请输入有效的数字', 'error');
+    return;
+  }
+
+  const body = {
+    actual_quantity: actualQuantity,
+    notes: notesInput ? notesInput.value : '',
+  };
+
+  const resp = await api(`/api/v1/inventory-counts/${currentDetailId}/items/${itemId}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+
+  if (resp.ok) {
+    const d = await resp.json().catch(() => ({}));
+    showToast(d.message || '已保存');
+  } else {
+    const d = await resp.json().catch(() => ({}));
+    showToast(d.detail || '保存失败', 'error');
+  }
+}
+
+// ── 全部保存 ──
+async function saveAllItems() {
+  if (!currentDetailId) return;
+  const rows = document.querySelectorAll('#detail-items-container tbody tr');
+  let saved = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    const saveBtn = row.querySelector('button[data-item-id]');
+    if (!saveBtn) continue;
+    const itemId = parseInt(saveBtn.dataset.itemId, 10);
+    const qtyInput = document.getElementById(`qty-${itemId}`);
+    const notesInput = document.getElementById(`notes-${itemId}`);
+    const qtyVal = qtyInput ? qtyInput.value.trim() : '';
+    const actualQuantity = qtyVal !== '' ? parseInt(qtyVal, 10) : null;
+
+    if (qtyVal !== '' && isNaN(actualQuantity)) continue;
+
+    const body = {
+      actual_quantity: actualQuantity,
+      notes: notesInput ? notesInput.value : '',
+    };
+
+    const resp = await api(`/api/v1/inventory-counts/${currentDetailId}/items/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+
+    if (resp.ok) {
+      saved++;
+    } else {
+      failed++;
+    }
+  }
+
+  if (saved === 0 && failed === 0) {
+    showToast('没有需要保存的数据', 'warning');
+  } else if (failed === 0) {
+    showToast(`全部 ${saved} 条保存成功`);
+  } else {
+    showToast(`保存完成：${saved} 成功，${failed} 失败`, 'warning');
+  }
+  loadCountDetail(currentDetailId);
+}
+
+// ── 完成盘点 ──
+function completeCount(id) {
+  showConfirmDialog(
+    '确认完成盘点',
+    '确定完成该盘点吗？完成后将不可再修改盘点明细。',
+    async () => {
+      const resp = await api(`/api/v1/inventory-counts/${id}/complete`, { method: 'PUT' });
+      if (resp.ok) {
+        const d = await resp.json().catch(() => ({}));
+        showToast(d.message || '盘点已完成');
+        loadCountDetail(id);
+      } else {
+        const d = await resp.json().catch(() => ({}));
+        showToast(d.detail || '操作失败', 'error');
+      }
+    }
+  );
+}
+
+// ── 确认差异 ──
+function confirmCount(id) {
+  showConfirmDialog(
+    '确认差异',
+    '确定确认该盘点的差异吗？确认后将更新库存数据，此操作不可撤销。',
+    async () => {
+      const resp = await api(`/api/v1/inventory-counts/${id}/confirm`, { method: 'PUT' });
+      if (resp.ok) {
+        const d = await resp.json().catch(() => ({}));
+        showToast(d.message || '差异已确认');
+        loadCountDetail(id);
+      } else {
+        const d = await resp.json().catch(() => ({}));
+        showToast(d.detail || '操作失败', 'error');
+      }
+    }
+  );
+}
+
+// ── 新建盘点 ──
+async function openCreateModal() {
+  const resp = await api('/api/v1/warehouses/');
+  const select = document.getElementById('create-warehouse');
+  select.innerHTML = '<option value="">请选择仓库</option>';
+  if (resp.ok) {
+    const data = await resp.json();
+    const warehouses = data.warehouses || data.items || data || [];
+    const list = Array.isArray(warehouses) ? warehouses : [];
+    list.forEach(w => {
+      const opt = document.createElement('option');
+      opt.value = w.id;
+      opt.textContent = w.name || w.warehouse_name || `仓库 #${w.id}`;
+      select.appendChild(opt);
+    });
+    if (list.length === 0) {
+      const opt = document.createElement('option');
+      opt.disabled = true;
+      opt.textContent = '暂无可用仓库';
+      select.appendChild(opt);
+    }
+  }
+  document.getElementById('create-name').value = '';
+  openModal('create-modal');
+}
+
+async function createCount(e) {
+  e.preventDefault();
+  const warehouseId = parseInt(document.getElementById('create-warehouse').value, 10);
+  const name = document.getElementById('create-name').value.trim();
+
+  if (!warehouseId || isNaN(warehouseId)) {
+    showToast('请选择仓库', 'error');
+    return;
+  }
+  if (!name) {
+    showToast('请输入盘点名称', 'error');
+    return;
+  }
+
+  const resp = await api('/api/v1/inventory-counts/', {
+    method: 'POST',
+    body: JSON.stringify({ warehouse_id: warehouseId, name }),
+  });
+
+  if (resp.ok) {
+    const data = await resp.json();
+    closeModal('create-modal');
+    showToast(data.message || '盘点已创建');
+    const newId = data.id || (data.count && data.count.id);
+    if (newId) {
+      showCountDetail(newId);
+    } else {
+      loadCountList(1);
+    }
+  } else {
+    const data = await resp.json().catch(() => ({}));
+    showToast(data.detail || '创建失败', 'error');
+  }
+}
+
+// ── 页面初始化 ──
+document.addEventListener('DOMContentLoaded', () => {
+  loadCountList(1);
+});
+</script>
+{% endblock %}

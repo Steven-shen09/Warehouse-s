@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}仓库管理 - Warehouse-s{% endblock %}
+
+{% block content %}
+<div class="flex-between mb-16">
+  <h2>仓库管理</h2>
+  {% if current_user.role == 'admin' %}
+  <button class="btn btn-primary" onclick="openWarehouseForm()">
+    <i class="bi bi-plus-lg"></i> 新增仓库
+  </button>
+  {% endif %}
+</div>
+
+<div id="warehouses-table-container">
+  <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+</div>
+
+<!-- 新增/编辑仓库模态框 -->
+<div class="modal-overlay" id="warehouse-form-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="warehouse-form-title">新增仓库</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('warehouse-form-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="warehouse-form" onsubmit="saveWarehouse(event)">
+        <input type="hidden" id="warehouse-id">
+        <div class="form-group">
+          <label class="form-label">仓库名称 *</label>
+          <input type="text" id="warehouse-name" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">仓库地址 *</label>
+          <input type="text" id="warehouse-location" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">描述</label>
+          <textarea id="warehouse-description" class="form-textarea" placeholder="仓库描述信息（可选）"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">保 存</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 删除确认模态框 -->
+<div class="modal-overlay" id="delete-warehouse-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>确认删除</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('delete-warehouse-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="delete-warehouse-message" class="text-muted"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('delete-warehouse-modal')">取消</button>
+      <button class="btn btn-danger" id="delete-warehouse-btn">确认删除</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 仓库数据映射表，供 deleteWarehouse(id) 按 ID 查找名称
+let warehousesMap = {};
+let _deleteWarehouseCallback = null;
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── 打开新增仓库模态框（重置表单） ──
+function openWarehouseForm() {
+  document.getElementById('warehouse-form').reset();
+  document.getElementById('warehouse-id').value = '';
+  document.getElementById('warehouse-form-title').textContent = '新增仓库';
+  openModal('warehouse-form-modal');
+}
+
+// ── 加载仓库列表 ──
+async function loadWarehouses() {
+  const container = document.getElementById('warehouses-table-container');
+  container.innerHTML = '<div class="text-center text-muted" style="padding:48px;">加载中...</div>';
+
+  const resp = await api('/api/v1/warehouses/');
+  if (!resp.ok) {
+    container.innerHTML = '<div class="empty-state">加载失败</div>';
+    return;
+  }
+
+  const data = await resp.json();
+  const warehouses = data.warehouses || [];
+
+  // 更新映射表
+  warehousesMap = {};
+  warehouses.forEach(wh => { warehousesMap[wh.id] = wh; });
+
+  if (warehouses.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-building"></i></div><p>暂无仓库</p></div>';
+    return;
+  }
+
+  const isAdmin = AppState.isAdmin;
+
+  container.innerHTML = `
+    <table class="table">
+      <thead><tr>
+        <th>ID</th>
+        <th>名称</th>
+        <th>地址</th>
+        <th>描述</th>
+        ${isAdmin ? '<th>操作</th>' : ''}
+      </tr></thead>
+      <tbody>${warehouses.map(wh => `
+        <tr>
+          <td>${wh.id}</td>
+          <td>${escapeHtml(wh.name)}</td>
+          <td>${escapeHtml(wh.location)}</td>
+          <td class="text-muted">${escapeHtml(wh.description || '-')}</td>
+          ${isAdmin ? `<td>
+            <div class="btn-group">
+              <button class="btn btn-outline btn-sm" onclick='editWarehouse(${JSON.stringify(wh).replace(/'/g, "&#39;")})'>
+                <i class="bi bi-pencil"></i> 编辑
+              </button>
+              <button class="btn btn-danger btn-sm" onclick="deleteWarehouse(${wh.id})">
+                <i class="bi bi-trash"></i> 删除
+              </button>
+            </div>
+          </td>` : ''}
+        </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+// ── 编辑仓库（回填模态框） ──
+function editWarehouse(wh) {
+  document.getElementById('warehouse-form-title').textContent = '编辑仓库';
+  document.getElementById('warehouse-id').value = wh.id;
+  document.getElementById('warehouse-name').value = wh.name;
+  document.getElementById('warehouse-location').value = wh.location;
+  document.getElementById('warehouse-description').value = wh.description || '';
+  openModal('warehouse-form-modal');
+}
+
+// ── 保存仓库（新增/编辑） ──
+async function saveWarehouse(e) {
+  e.preventDefault();
+  const id = document.getElementById('warehouse-id').value;
+  const body = {
+    name: document.getElementById('warehouse-name').value,
+    location: document.getElementById('warehouse-location').value,
+    description: document.getElementById('warehouse-description').value,
+  };
+
+  const method = id ? 'PUT' : 'POST';
+  const url = id ? `/api/v1/warehouses/${id}` : '/api/v1/warehouses/';
+  const resp = await api(url, { method, body: JSON.stringify(body) });
+
+  if (resp.ok) {
+    closeModal('warehouse-form-modal');
+    document.getElementById('warehouse-form').reset();
+    document.getElementById('warehouse-id').value = '';
+    document.getElementById('warehouse-form-title').textContent = '新增仓库';
+    showToast(id ? '仓库已更新' : '仓库已创建');
+    loadWarehouses();
+  } else {
+    const data = await resp.json();
+    showToast(data.detail || '操作失败', 'error');
+  }
+}
+
+// ── 显示删除确认弹窗 ──
+function showDeleteWarehouseDialog(warehouseName, onConfirm) {
+  document.getElementById('delete-warehouse-message').textContent =
+    `确定删除仓库「${warehouseName}」吗？此操作不可撤销。`;
+  _deleteWarehouseCallback = onConfirm;
+  openModal('delete-warehouse-modal');
+}
+
+// ── 删除仓库 ──
+function deleteWarehouse(id) {
+  const wh = warehousesMap[id];
+  const name = wh ? wh.name : `ID: ${id}`;
+  showDeleteWarehouseDialog(name, async () => {
+    const resp = await api(`/api/v1/warehouses/${id}`, { method: 'DELETE' });
+    if (resp.ok) {
+      showToast('仓库已删除');
+      loadWarehouses();
+    } else {
+      const data = await resp.json();
+      showToast(data.detail || '删除失败', 'error');
+    }
+  });
+}
+
+// ── 确认删除按钮事件 ──
+document.getElementById('delete-warehouse-btn').addEventListener('click', () => {
+  if (_deleteWarehouseCallback) {
+    closeModal('delete-warehouse-modal');
+    _deleteWarehouseCallback();
+    _deleteWarehouseCallback = null;
+  }
+});
+
+// ── 点击模态框遮罩关闭 ──
+document.getElementById('warehouse-form-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal('warehouse-form-modal');
+});
+document.getElementById('delete-warehouse-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal('delete-warehouse-modal');
+});
+
+// ── 页面加载时获取仓库列表 ──
+document.addEventListener('DOMContentLoaded', () => loadWarehouses());
+</script>
+{% endblock %}
