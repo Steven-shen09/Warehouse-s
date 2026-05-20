@@ -305,6 +305,7 @@ async function loadCountList(page) {
         <th>创建人</th>
         <th>创建时间</th>
         <th>更新时间</th>
+        ${isStaff ? '<th>操作</th>' : ''}
       </tr></thead>
       <tbody>${counts.map(c => `
         <tr style="cursor:pointer;" onclick="showCountDetail(${c.id})">
@@ -315,10 +316,23 @@ async function loadCountList(page) {
           <td>${escapeHtml(c.created_by_name || c.created_by?.display_name || '-')}</td>
           <td>${c.created_at || '-'}</td>
           <td>${c.updated_at || '-'}</td>
+          ${isStaff ? `<td>${c.status === '进行中' ? `<button class="btn btn-danger btn-sm" onclick="deleteCount(${c.id});event.stopPropagation()" title="删除"><i class="bi bi-trash"></i></button>` : ''}</td>` : ''}
         </tr>`).join('')}</tbody>
     </table>
     ${renderPagination(total, 20, currentCountPage)}
   `;
+}
+
+async function deleteCount(id) {
+  if (!confirm('确定删除该盘点单吗？')) return;
+  const resp = await api(`/api/v1/inventory-counts/${id}`, { method: 'DELETE' });
+  if (resp.ok) {
+    showToast('盘点单已删除');
+    loadCountList(currentCountPage);
+  } else {
+    const d = await resp.json();
+    showToast(d.detail || '删除失败', 'error');
+  }
 }
 
 // ── 加载盘点详情 ──

@@ -80,6 +80,32 @@ def create_count(
     return {"message": "盘点已创建", "count_id": count_id, "item_count": len(stocks)}
 
 
+@router.delete("/{count_id}")
+def delete_count(
+    count_id: int,
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """删除盘点单（仅限进行中且无实盘数据）"""
+    c = conn.execute("SELECT id, status FROM inventory_counts WHERE id = ?", (count_id,)).fetchone()
+    if not c:
+        raise HTTPException(status_code=404, detail="盘点不存在")
+    if c["status"] != "进行中":
+        raise HTTPException(status_code=400, detail="仅进行中的盘点可删除")
+
+    counted = conn.execute(
+        "SELECT COUNT(*) FROM inventory_count_items WHERE count_id = ? AND actual_quantity IS NOT NULL",
+        (count_id,),
+    ).fetchone()[0]
+    if counted > 0:
+        raise HTTPException(status_code=400, detail="已录入实盘数据，无法删除")
+
+    conn.execute("DELETE FROM inventory_count_items WHERE count_id = ?", (count_id,))
+    conn.execute("DELETE FROM inventory_counts WHERE id = ?", (count_id,))
+    conn.commit()
+    return {"message": "盘点单已删除"}
+
+
 @router.get("/{count_id}")
 def get_count(
     count_id: int,
