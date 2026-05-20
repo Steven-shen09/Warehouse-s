@@ -1,9 +1,16 @@
 """调拨管理路由"""
-from fastapi import APIRouter, Depends, HTTPException
+import csv
+import io
+import os
+import json
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 from app.api.deps import get_db, get_current_user, require_role
 from app.schemas.warehouse import TransferCreate
 
 router = APIRouter(prefix="/api/v1/transfers", tags=["调拨管理"])
+
+# 调拨导入列名
+TRANSFER_IMPORT_COLUMNS = ["物品名称", "源仓库", "目标仓库", "数量", "原因"]
 
 
 def _generate_doc_no(conn) -> str:
@@ -184,4 +191,200 @@ def _update_item_total(conn, item_id: int):
     conn.execute(
         "UPDATE items SET total_quantity = ?, updated_at = datetime('now','localtime') WHERE id = ?",
         (total, item_id),
+    )
+
+
+# ── 调拨批量导入 ──
+
+def _parse_transfer_file(file_content: bytes, filename: str) -> list[dict]:
+    """解析上传的调拨导入文件"""
+    rows = []
+    ext = os.path.splitext(filename)[1].lower()
+    if ext == ".csv":
+        content = io.StringIO(file_content.decode("utf-8-sig"))
+        reader = csv.DictReader(content)
+        for row in reader:
+            rows.append(row)
+    elif ext in (".xlsx", ".xls"):
+        from openpyxl import load_workbook
+        wb = load_workbook(io.BytesIO(file_content), read_only=True)
+        ws = wb.active
+        headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if all(v is None for v in row):
+                continue
+            row_dict = {}
+            for i, header in enumerate(headers):
+                row_dict[header] = str(row[i]) if row[i] is not None else ""
+            rows.append(row_dict)
+        wb.close()
+    else:
+        raise HTTPException(status_code=400, detail="不支持的文件格式")
+    return rows
+
+
+def _validate_transfer_row(conn, row: dict, index: int) -> dict:
+    """验证单行调拨数据"""
+    name = row.get("物品名称", "").strip()
+    from_wh = row.get("源仓库", "").strip()
+    to_wh = row.get("目标仓库", "").strip()
+    qty_str = row.get("数量", "1").strip()
+    reason = row.get("原因", "").strip()
+
+    if not name:
+        return {"index": index, "data": row, "status": "error", "message": "物品名称不能为空"}
+    if not from_wh:
+        return {"index": index, "data": row, "status": "error", "message": "源仓库不能为空"}
+    if not to_wh:
+        return {"index": index, "data": row, "status": "error", "message": "目标仓库不能为空"}
+    if from_wh == to_wh:
+        return {"index": index, "data": row, "status": "error", "message": "源仓库和目标仓库不能相同"}
+
+    try:
+        qty = int(qty_str) if qty_str else 1
+        if qty < 1:
+            raise ValueError
+    except ValueError:
+        return {"index": index, "data": row, "status": "error", "message": f"数量必须为大于等于1的整数（当前：{qty_str}）"}
+
+    item = conn.execute("SELECT id, name FROM items WHERE name = ?", (name,)).fetchone()
+    if not item:
+        return {"index": index, "data": row, "status": "error", "message": f"物品「{name}」不存在"}
+
+    fw = conn.execute("SELECT id, name FROM warehouses WHERE name = ?", (from_wh,)).fetchone()
+    if not fw:
+        return {"index": index, "data": row, "status": "error", "message": f"源仓库「{from_wh}」不存在"}
+
+    tw = conn.execute("SELECT id, name FROM warehouses WHERE name = ?", (to_wh,)).fetchone()
+    if not tw:
+        return {"index": index, "data": row, "status": "error", "message": f"目标仓库「{to_wh}」不存在"}
+
+    stock = conn.execute(
+        "SELECT quantity FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?",
+        (item["id"], fw["id"]),
+    ).fetchone()
+    available = stock["quantity"] if stock else 0
+    if available < qty:
+        return {
+            "index": index, "data": row, "status": "error",
+            "message": f"源仓库库存不足（{from_wh} 中「{name}」库存：{available}，需要：{qty}）",
+        }
+
+    return {
+        "index": index, "data": row, "status": "ok", "message": None,
+        "resolved": {"item_id": item["id"], "item_name": item["name"],
+                     "from_warehouse_id": fw["id"], "from_warehouse_name": fw["name"],
+                     "to_warehouse_id": tw["id"], "to_warehouse_name": tw["name"],
+                     "quantity": qty, "reason": reason},
+    }
+
+
+@router.post("/import/preview")
+def transfer_import_preview(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """上传调拨文件并预览"""
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in (".csv", ".xlsx", ".xls"):
+        raise HTTPException(status_code=400, detail="仅支持 CSV 和 Excel 文件")
+
+    file_content = file.file.read()
+    if len(file_content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 5MB")
+
+    try:
+        rows = _parse_transfer_file(file_content, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"文件解析失败：{str(e)}")
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="文件中没有数据行")
+    if len(rows) > 200:
+        raise HTTPException(status_code=400, detail="单次导入最多 200 行")
+
+    result = [_validate_transfer_row(conn, row, i + 1) for i, row in enumerate(rows)]
+    summary = {
+        "total": len(result),
+        "ok": sum(1 for r in result if r["status"] == "ok"),
+        "error": sum(1 for r in result if r["status"] == "error"),
+    }
+    return {"rows": result, "summary": summary}
+
+
+@router.post("/import/confirm")
+def transfer_import_confirm(
+    file: UploadFile = File(...),
+    selections: str = Form(default=""),
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """确认导入调拨单（事务保护）"""
+    try:
+        selected = json.loads(selections)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="选择数据格式错误")
+    if not selected:
+        raise HTTPException(status_code=400, detail="没有选择任何行")
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in (".csv", ".xlsx", ".xls"):
+        raise HTTPException(status_code=400, detail="仅支持 CSV 和 Excel 文件")
+
+    file_content = file.file.read()
+    if len(file_content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 5MB")
+
+    try:
+        rows = _parse_transfer_file(file_content, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"文件解析失败：{str(e)}")
+
+    validated = [_validate_transfer_row(conn, row, i + 1) for i, row in enumerate(rows)]
+    errors = [r for r in validated if r["status"] == "error"]
+    if errors:
+        msgs = "; ".join(f"第{r['index']}行: {r['message']}" for r in errors)
+        raise HTTPException(status_code=400, detail=f"数据验证失败：{msgs}")
+
+    selection_set = {s["index"] for s in selected}
+    created = 0
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for row_data in validated:
+            if row_data["index"] not in selection_set:
+                continue
+            res = row_data["resolved"]
+            doc_no = _generate_doc_no(conn)
+            conn.execute(
+                """INSERT INTO transfers (item_id, from_warehouse_id, to_warehouse_id, quantity, reason, document_no, created_by, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, '待审核')""",
+                (res["item_id"], res["from_warehouse_id"], res["to_warehouse_id"],
+                 res["quantity"], res["reason"], doc_no, current_user["id"]),
+            )
+            created += 1
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="导入失败，已回滚")
+
+    skipped = len(validated) - created
+    return {"message": f"成功创建 {created} 条调拨申请", "imported": created, "skipped": skipped}
+
+
+@router.get("/import/template")
+def transfer_import_template(
+    current_user: dict = Depends(get_current_user),
+):
+    """下载调拨导入模板"""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(TRANSFER_IMPORT_COLUMNS)
+    writer.writerow(["示例：投影仪", "默认仓库", "A区主仓库", "3", "调拨原因示例"])
+    content = output.getvalue()
+    return Response(
+        content="﻿" + content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=transfer_import_template.csv"},
     )
