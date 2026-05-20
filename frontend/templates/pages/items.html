@@ -406,10 +406,10 @@ function renderImportPreview() {
             ${checked} ${disabled} onchange="onImportRowToggle()">
         </td>
         <td>${row.index}</td>
-        <td>${escapeHtml(row.data['物品名称'] || '')}</td>
+        <td>${escapeHtml(row.data['名称'] || '')}</td>
         <td>${escapeHtml(row.data['分类'] || '')}</td>
-        <td>${escapeHtml(row.data['总数量'] || '1')}</td>
-        <td>${escapeHtml(row.data['单价(元)'] || '0')}</td>
+        <td>${escapeHtml(row.data['总库存'] || '1')}</td>
+        <td>${escapeHtml(row.data['单价'] || '0')}</td>
         <td>${statusHtml}</td>
       </tr>
     `;

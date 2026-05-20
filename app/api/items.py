@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/v1/items", tags=["物品管理"])
 
 
 # ── 导入模板列名映射 ──
-IMPORT_COLUMNS = ["物品名称", "分类", "描述", "存放仓库", "总数量", "单价(元)", "预警阈值"]
+IMPORT_COLUMNS = ["名称", "分类", "描述", "存放仓库", "总库存", "单价", "预警阈值"]
 
 
 def parse_uploaded_file(file_content: bytes, filename: str) -> list[dict]:
@@ -48,7 +48,7 @@ def validate_and_check_duplicates(conn, rows: list[dict]) -> list[dict]:
     """逐行验证并检查同名重复，返回预览行列表"""
     result = []
     for i, row in enumerate(rows):
-        name = row.get("物品名称", "").strip()
+        name = row.get("名称", "").strip()
         index = i + 1
 
         # 验证名称
@@ -57,7 +57,7 @@ def validate_and_check_duplicates(conn, rows: list[dict]) -> list[dict]:
                 "index": index,
                 "data": row,
                 "status": "error",
-                "message": "物品名称不能为空",
+                "message": "名称不能为空",
                 "duplicate_item": None,
             })
             continue
@@ -66,13 +66,13 @@ def validate_and_check_duplicates(conn, rows: list[dict]) -> list[dict]:
                 "index": index,
                 "data": row,
                 "status": "error",
-                "message": f"物品名称不能超过100字符（当前{len(name)}字符）",
+                "message": f"名称不能超过100字符（当前{len(name)}字符）",
                 "duplicate_item": None,
             })
             continue
 
         # 验证数量
-        qty_str = row.get("总数量", "1").strip()
+        qty_str = row.get("总库存", "1").strip()
         try:
             qty = int(qty_str) if qty_str else 1
             if qty < 1:
@@ -88,7 +88,7 @@ def validate_and_check_duplicates(conn, rows: list[dict]) -> list[dict]:
             continue
 
         # 验证单价
-        value_str = row.get("单价(元)", "0").strip()
+        value_str = row.get("单价", "0").strip()
         try:
             value = float(value_str) if value_str else 0.0
             if value < 0:
@@ -542,12 +542,12 @@ def import_confirm(
 
             sel = selection_map[idx]
             data = row_data["data"]
-            name = data.get("物品名称", "").strip()
+            name = data.get("名称", "").strip()
             category = data.get("分类", "").strip()
             description = data.get("描述", "").strip()
             wh_name = data.get("存放仓库", "").strip()
-            total_quantity = int(data.get("总数量", "1").strip() or "1")
-            value = float(data.get("单价(元)", "0").strip() or "0")
+            total_quantity = int(data.get("总库存", "1").strip() or "1")
+            value = float(data.get("单价", "0").strip() or "0")
             low_stock_threshold = int(data.get("预警阈值", "2").strip() or "2")
 
             # 解析仓库
@@ -626,7 +626,7 @@ def download_template(
         ws.title = "物品导入模板"
         ws.append(IMPORT_COLUMNS)
         # 添加示例行
-        ws.append(["示例：笔记本电脑", "电子设备", "ThinkPad X1", "默认仓库", "5", "4500", "2"])
+        ws.append(["示例：笔记本电脑", "电子设备", "ThinkPad X1", "默认仓库", "5", "4500.00", "2"])
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
