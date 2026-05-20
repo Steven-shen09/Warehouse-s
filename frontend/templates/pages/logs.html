@@ -46,7 +46,7 @@ async function loadLogs(page = 1) {
 
   const data = await resp.json();
   if (data.items.length === 0) {
-    container.innerHTML = '<div class="empty-state"><div class="icon">📜</div><p>暂无操作日志</p></div>';
+    container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-clock-history"></i></div><p>暂无操作日志</p></div>';
     return;
   }
 

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from app.adapters.sms_adapter import AliyunSMSAdapter
 from app.adapters.null_adapter import NullSMSAdapter
 from app.config import settings
+from app.services.inventory_service import update_item_status
 
 
 def _get_sms_adapter():
@@ -51,7 +52,7 @@ def check_overdue_records(conn: sqlite3.Connection) -> list:
     """
     today = datetime.now().strftime("%Y-%m-%d")
     rows = conn.execute(
-        """SELECT id FROM records
+        """SELECT id, item_id FROM records
            WHERE status = '借出中' AND expected_return_date < ?""",
         (today,),
     ).fetchall()
@@ -59,6 +60,7 @@ def check_overdue_records(conn: sqlite3.Connection) -> list:
     for row in rows:
         conn.execute("UPDATE records SET status = '逾期', updated_at = datetime('now','localtime') WHERE id = ?",
                      (row["id"],))
+        update_item_status(conn, row["item_id"])
 
     if rows:
         conn.commit()

@@ -179,7 +179,7 @@ async function loadApprovals(page = 1) {
 
   const data = await resp.json();
   if (data.documents.length === 0) {
-    container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>暂无待审核记录</p></div>';
+    container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-clipboard-check"></i></div><p>暂无待审核记录</p></div>';
     return;
   }
 

@@ -136,7 +136,7 @@ Warehouse-s/
 │   │       └── logs.html          # 操作日志
 │   └── static/
 │       ├── css/
-│       │   ├── style.css              # Flat Design 设计系统 + 暗色模式
+│       │   ├── style.css              # Apple VisionOS Liquid Glass 设计系统 + 暗色模式
 │       │   ├── bootstrap-icons.css    # Bootstrap Icons（本地托管）
 │       │   └── fonts/
 │       │       ├── bootstrap-icons.woff2
@@ -391,7 +391,7 @@ items ──< records
 | Alpine.js 3.14 | 客户端状态管理 | 本地 `/static/js/alpine.min.js` |
 | Bootstrap Icons 1.11 | 图标 | 本地 `/static/css/bootstrap-icons.css` |
 | System Fonts | 字体 | 系统字体栈（`-apple-system, sans-serif` 等） |
-| Flat Design CSS | 设计系统 + 暗色模式 | 自定义 style.css |
+| Apple VisionOS Liquid Glass CSS | 设计系统 + 暗色模式 | 自定义 style.css |
 
 前端 JS 全局对象 `AppState` 管理认证状态和主题切换，`api()` 函数封装了带 JWT 的 fetch 请求。
 
@@ -486,7 +486,7 @@ uvicorn run:app --host 0.0.0.0 --port 8000 --workers 4
 │                    表现层 (Frontend)                   │
 │  login.html  dashboard.html  items.html  records.html │
 │  approvals.html  users.html  logs.html               │
-│  Jinja2 + HTMX + Alpine.js + Flat Design CSS         │
+│  Jinja2 + HTMX + Alpine.js + Apple VisionOS Liquid Glass CSS │
 └────────────────────────┬────────────────────────────┘
                          │ HTTP / JWT
 ┌────────────────────────▼────────────────────────────┐

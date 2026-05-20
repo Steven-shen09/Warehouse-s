@@ -7,11 +7,15 @@
 <div class="stats-grid" id="stats-grid">
   <div class="stat-card"><div class="stat-value" id="stat-total-items">--</div><div class="stat-label">物品总数</div></div>
   <div class="stat-card"><div class="stat-value" id="stat-available">--</div><div class="stat-label">可用物品</div></div>
-  <div class="stat-card"><div class="stat-value" id="stat-borrowed">--</div><div class="stat-label">借出中</div></div>
-  <div class="stat-card"><div class="stat-value" id="stat-pending">--</div><div class="stat-label">待审核</div></div>
-  <div class="stat-card"><div class="stat-value" id="stat-overdue">--</div><div class="stat-label">逾期记录</div></div>
+  <div class="stat-card clickable" onclick="location.href='/records?status=借出中'"><div class="stat-value" id="stat-borrowed">--</div><div class="stat-label">借出中</div></div>
+{% if current_user.role in ('admin', 'approver') %}
+  <div class="stat-card clickable" onclick="location.href='/approvals'"><div class="stat-value" id="stat-pending">--</div><div class="stat-label">待审核</div></div>
+{% else %}
+  <div class="stat-card clickable" onclick="location.href='/records?status=待审核'"><div class="stat-value" id="stat-pending">--</div><div class="stat-label">待审核</div></div>
+{% endif %}
+  <div class="stat-card clickable" onclick="location.href='/records?status=逾期'"><div class="stat-value" id="stat-overdue">--</div><div class="stat-label">逾期记录</div></div>
   <div class="stat-card"><div class="stat-value" id="stat-returned-today">--</div><div class="stat-label">今日归还</div></div>
-  <div class="stat-card"><div class="stat-value" id="stat-low-stock">--</div><div class="stat-label">低库存预警</div></div>
+  <div class="stat-card clickable" id="stat-card-low-stock" onclick="location.href='/items?low_stock=1'"><div class="stat-value" id="stat-low-stock">--</div><div class="stat-label">低库存预警</div></div>
   <div class="stat-card"><div class="stat-value" id="stat-timeout">--</div><div class="stat-label">审核超时</div></div>
 </div>
 
@@ -36,7 +40,7 @@ async function loadStats() {
     document.getElementById('stat-pending').textContent = data.total_pending_approval;
     document.getElementById('stat-overdue').textContent = data.total_overdue;
     document.getElementById('stat-returned-today').textContent = data.total_returned_today;
-    document.getElementById('stat-low-stock').textContent = data.low_stock_items;
+    document.getElementById('stat-low-stock').textContent = data.low_stock_count;
     document.getElementById('stat-timeout').textContent = data.approval_timeout_count;
   }
 }
@@ -47,7 +51,7 @@ async function loadRecentRecords() {
     const data = await resp.json();
     const container = document.getElementById('recent-records');
     if (data.items.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>暂无租借记录</p></div>';
+      container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-journal-text"></i></div><p>暂无租借记录</p></div>';
       return;
     }
     container.innerHTML = `

@@ -198,11 +198,6 @@ async function loadRecords(page = 1) {
     const allReturnable = items.every(r => r.status === '借出中' || r.status === '逾期');
     const anyReturnable = items.some(r => r.status === '借出中' || r.status === '逾期');
 
-    const statusSummary = items.map(r => {
-      const cls = r.status === '借出中' ? 'lent' : r.status === '已归还' ? 'returned' : r.status === '逾期' ? 'overdue' : r.status === '待审核' ? 'pending' : 'rejected';
-      return `<span class="status-badge ${cls}">${r.status}</span>`;
-    }).join(' ');
-
     html += `<div class="doc-group">
       <div class="doc-group-header" onclick="toggleDocGroup(this)">
         <div class="doc-group-meta">
@@ -210,7 +205,7 @@ async function loadRecords(page = 1) {
           <span>借用人: ${escapeHtml(firstItem.borrower_name)}</span>
           <span>${itemCount} 件物品</span>
           <span>${firstItem.borrow_date} ~ ${firstItem.expected_return_date}</span>
-          <span>${statusSummary}</span>
+
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           ${isStaff && anyReturnable ? `<button class="btn btn-success btn-sm" onclick="event.stopPropagation();returnByDocument('${docNo || firstItem.id}')">全部归还</button>` : ''}
@@ -253,6 +248,11 @@ async function loadRecords(page = 1) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get('status');
+  if (status) {
+    document.getElementById('status-filter').value = status;
+  }
   loadRecords();
 });
 </script>

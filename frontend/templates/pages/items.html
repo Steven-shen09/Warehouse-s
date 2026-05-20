@@ -493,7 +493,7 @@ async function exportItems() {
   const category = document.getElementById('category-filter').value;
   const status = document.getElementById('status-filter').value;
   const warehouseId = document.getElementById('warehouse-filter').value;
-  const params = new URLSearchParams({ keyword, category, status, warehouse_id: warehouseId, format: 'csv' });
+  const params = new URLSearchParams({ keyword, category, status, format: 'csv' }); if (warehouseId) params.set('warehouse_id', warehouseId);
   const resp = await fetch(`/api/v1/items/export?${params}`, {
     headers: { 'Authorization': `Bearer ${AppState.token}` },
   });

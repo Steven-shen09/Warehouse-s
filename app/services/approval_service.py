@@ -3,6 +3,7 @@ import sqlite3
 from app.state_machine.transitions import can_transition
 from app.state_machine.events import APPROVE, REJECT
 from app.services.audit_service import log
+from app.services.inventory_service import update_item_status
 from app.utils.helpers import now_str
 
 
@@ -32,6 +33,8 @@ def approve(
            WHERE id = ?""",
         (record_id,),
     )
+
+    update_item_status(conn, record["item_id"])
 
     # 记录审核
     conn.execute(
@@ -75,6 +78,8 @@ def reject(
         "UPDATE records SET status = '已拒绝', updated_at = datetime('now','localtime') WHERE id = ?",
         (record_id,),
     )
+
+    update_item_status(conn, record["item_id"])
 
     # 记录审核
     conn.execute(
@@ -158,6 +163,7 @@ def approve_by_document(
                 "UPDATE records SET status = '借出中', updated_at = datetime('now','localtime') WHERE id = ?",
                 (record["id"],)
             )
+            update_item_status(conn, record["item_id"])
             conn.execute(
                 "INSERT INTO approvals (record_id, approver_id, action, comment) VALUES (?, ?, 'approved', ?)",
                 (record["id"], approver_id, comment)
@@ -206,6 +212,7 @@ def reject_by_document(
                 "UPDATE records SET status = '已拒绝', updated_at = datetime('now','localtime') WHERE id = ?",
                 (record["id"],)
             )
+            update_item_status(conn, record["item_id"])
             conn.execute(
                 "INSERT INTO approvals (record_id, approver_id, action, comment) VALUES (?, ?, 'rejected', ?)",
                 (record["id"], approver_id, comment)

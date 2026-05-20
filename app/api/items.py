@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/v1/items", tags=["物品管理"])
 
 
 # ── 导入模板列名映射 ──
-IMPORT_COLUMNS = ["物品名称", "分类", "描述", "总数量", "单价(元)", "预警阈值"]
+IMPORT_COLUMNS = ["物品名称", "分类", "描述", "存放仓库", "总数量", "单价(元)", "预警阈值"]
 
 
 def parse_uploaded_file(file_content: bytes, filename: str) -> list[dict]:
@@ -260,7 +260,7 @@ def export_items(
         item_dict["warehouse_stocks_str"] = "; ".join(f"{s['warehouse_name']}×{s['quantity']}" for s in stocks) if stocks else "-"
         result.append(item_dict)
 
-    headers_row = ["ID", "名称", "分类", "描述", "位置", "总库存", "可用库存", "状态", "单价", "仓库库存分布"]
+    headers_row = ["ID", "名称", "分类", "描述", "总库存", "可用库存", "状态", "单价", "仓库库存分布"]
 
     if fmt == "xlsx":
         from openpyxl import Workbook
@@ -271,7 +271,7 @@ def export_items(
         for item in result:
             ws.append([
                 item["id"], item["name"], item["category"], item["description"],
-                item["location"], item["total_quantity"], item["available_quantity"],
+                item["total_quantity"], item["available_quantity"],
                 item["status"], item["value"], item["warehouse_stocks_str"],
             ])
         output = io.BytesIO()
@@ -289,7 +289,7 @@ def export_items(
         for item in result:
             writer.writerow([
                 item["id"], item["name"], item["category"], item["description"],
-                item["location"], item["total_quantity"], item["available_quantity"],
+                item["total_quantity"], item["available_quantity"],
                 item["status"], item["value"], item["warehouse_stocks_str"],
             ])
         content = output.getvalue()
@@ -545,10 +545,21 @@ def import_confirm(
             name = data.get("物品名称", "").strip()
             category = data.get("分类", "").strip()
             description = data.get("描述", "").strip()
-            location = data.get("存放位置", "").strip()
+            wh_name = data.get("存放仓库", "").strip()
             total_quantity = int(data.get("总数量", "1").strip() or "1")
             value = float(data.get("单价(元)", "0").strip() or "0")
             low_stock_threshold = int(data.get("预警阈值", "2").strip() or "2")
+
+            # 解析仓库
+            wh_id = None
+            if wh_name:
+                wh = conn.execute("SELECT id FROM warehouses WHERE name = ?", (wh_name,)).fetchone()
+                if wh:
+                    wh_id = wh["id"]
+            if not wh_id:
+                default_wh = conn.execute("SELECT id FROM warehouses ORDER BY id LIMIT 1").fetchone()
+                if default_wh:
+                    wh_id = default_wh["id"]
 
             if sel.get("action") == "add_to_existing":
                 # 校验：该行必须是服务端确认的重复行
@@ -565,14 +576,23 @@ def import_confirm(
                     "UPDATE items SET total_quantity = total_quantity + ?, updated_at = datetime('now','localtime') WHERE id = ?",
                     (total_quantity, sel["item_id"]),
                 )
+                if wh_id:
+                    existing_stock = conn.execute("SELECT id FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?", (sel["item_id"], wh_id)).fetchone()
+                    if existing_stock:
+                        conn.execute("UPDATE warehouse_stocks SET quantity = quantity + ? WHERE item_id = ? AND warehouse_id = ?", (total_quantity, sel["item_id"], wh_id))
+                    else:
+                        conn.execute("INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, ?, ?)", (sel["item_id"], wh_id, total_quantity))
                 updated += 1
             else:
                 # 创建新物品
                 conn.execute(
-                    """INSERT INTO items (name, category, description, location, total_quantity, value, low_stock_threshold)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (name, category, description, location, total_quantity, value, low_stock_threshold),
+                    """INSERT INTO items (name, category, description, total_quantity, value, low_stock_threshold)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (name, category, description, total_quantity, value, low_stock_threshold),
                 )
+                new_item_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                if wh_id:
+                    conn.execute("INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, ?, ?)", (new_item_id, wh_id, total_quantity))
                 imported += 1
 
         conn.commit()
@@ -606,7 +626,7 @@ def download_template(
         ws.title = "物品导入模板"
         ws.append(IMPORT_COLUMNS)
         # 添加示例行
-        ws.append(["示例：笔记本电脑", "电子设备", "ThinkPad X1", "A-101", "5", "4500", "2"])
+        ws.append(["示例：笔记本电脑", "电子设备", "ThinkPad X1", "默认仓库", "5", "4500", "2"])
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)

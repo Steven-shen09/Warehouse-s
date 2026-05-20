@@ -2,6 +2,40 @@
 
 此文件为 Claude Code 在 Warehouse-s 项目中工作时提供指引。
 
+## 强制工作流（最高优先级，不可跳过）
+
+**触发规则基于操作类型（客观事实），不基于主观判断（"简单/复杂"）。**
+
+### 开工前强制自检
+
+**每次收到代码修改请求，回复的第一句话必须是：**
+
+```
+🔍 任务类型：[新功能 / Bug / UI / 数据 / 重构]
+📋 适用流程：[对应 CLAUDE.md 工作流]
+✅ 前置条件：[已调用的 skill 名称]
+```
+
+**三项缺一不可。未完成自检前，禁止调用 Edit / Write / Bash 修改文件。**
+
+| 触发条件 | 必须调用 | 说明 |
+|----------|---------|------|
+| 调用 `Edit` 或 `Write` | `brainstorming`（首次该任务） | 修改代码前先过方案 |
+| 调用 `EnterPlanMode` | `brainstorming`（如果还没调） | 规划前必须先探索 |
+| 用户提到 bug/报错/异常 | `systematic-debugging` | 复现→最小化→假设→测量→修复→回归测试 |
+| 涉及 CSS/HTML/模板/Jinja2 | `brainstorming` + `frontend-design` | 结果必须符合 Apple Liquid Glass 设计规范（见 memory: apple_liquid_glass_design） |
+| 新增文件/函数/路由/API | `writing-plans` 或 `/plan` | 先出方案再动手 |
+| 提交代码前 | `security-review` | 检查 JWT、RBAC、密码哈希、SQL 注入、XSS |
+
+**流程顺序**：
+```
+触发条件匹配 → 调用对应技能 → 确认方案 → 开始改代码
+```
+
+**违反任何一条，立即停止，回到触发条件匹配步骤。**
+
+---
+
 > **设计优先参考**: [`warehouse.txt`](./warehouse.txt) — 物品租借系统方案文档，任何设计、修改、新增功能前必须先阅读此文档。
 
 ## 项目概述
@@ -42,37 +76,47 @@
 - 所有前端资源本地托管，**不引入任何外部 CDN 依赖**。
 - 版本号规则：每次推送 GitHub 时版本号 +0.1（v1.1 → v1.2 → v1.3 ...）。
 
-## 设计系统 — Apple Liquid Glass
+## 设计系统 — Apple VisionOS Liquid Glass
 
 > 完整设计规范见 [`design-system/MASTER.md`](./design-system/MASTER.md)
-> 风格：玻璃拟态 · 半透明毛玻璃 · 蓝紫渐变 · 液态高光 · 24px大圆角
+> 风格：液态玻璃 · 光学折射 · 空间层次 · 动态环境光 · 漂浮布局
 
-### 配色（Apple Liquid Glass）
+### 配色（Apple VisionOS Liquid Glass）
 
 CSS 变量定义在 `frontend/static/css/style.css :root` 中：
 
-| 用途 | 变量 | 色值 |
-|------|------|------|
-| 主色（Apple蓝） | `--primary` | `#5B8CFF` |
-| 主色深 | `--primary-dark` | `#4A7AF0` |
-| 点缀色（冰川紫） | `--accent` | `#8B7CFF` |
-| 成功 | `--success` | `#34C759` |
-| 危险 | `--danger` | `#FF453A` |
-| 警告 | `--warning` | `#FF9F0A` |
-| 信息 | `--info` | `#64D2FF` |
-| 页面背景 | `--bg` | `#F4F8FF` |
-| 卡片背景 | `--bg-card` | `rgba(255,255,255,0.45)` |
-| 侧边栏背景 | `--bg-sidebar` | `rgba(255,255,255,0.25)` |
-| 圆角 | `--radius` | `24px` |
-| 阴影 | `--shadow` | `0 4px 20px rgba(120,160,255,0.10)` |
+| 用途 | 变量 | 亮色值 | 暗色值 |
+|------|------|--------|--------|
+| 主色（Apple蓝） | `--primary` | `#5B8CFF` | 同 |
+| 点缀色（冰川紫） | `--accent` | `#8B7CFF` | 同 |
+| 页面背景 | `--bg` | `#F4F8FF` | `#0a0e1a` |
+| 卡片背景 | `--bg-card` | `rgba(255,255,255,.18)` | `rgba(20,28,60,.35)` |
+| 标题文字 | `--text-title` | `#111827` | `rgba(255,255,255,.92)` |
+| 正文 | `--text` | `rgba(17,24,39,.88)` | `rgba(255,255,255,.88)` |
+| 次级文字 | `--text-secondary` | `rgba(31,41,55,.56)` | `rgba(255,255,255,.72)` |
+| 圆角 | `--radius` | `24px` | 同 |
+| 阴影 | `--shadow` | `0 4px 20px rgba(120,160,255,.10), inset 0 1px 0 rgba(255,255,255,.35)` | - |
 
-核心视觉效果：
-- **玻璃拟态**：卡片/面板使用 `backdrop-filter: blur(20px~30px)` + 半透明背景
-- **边缘高光**：卡片顶部 1px 白色渐变线（模拟液态折射）
-- **流动背景**：5层径向渐变光晕，20s 循环流动
-- **悬浮动效**：hover 上浮 + 阴影增强 + 液态高光出现
+### 字号层级
 
-暗色模式通过 `[data-theme="dark"]` 选择器切换，底色 `#0a0e1a`（深蓝黑）。
+| 层级 | 元素 | 字号/字重 |
+|------|------|----------|
+| 页面大标题 | `.main-content h2` | 34px / 700 → 蓝紫渐变 |
+| 数据数字 | `.stat-value` | 42px / 700 → 蓝紫渐变 |
+| 区块标题 | `.card-title` | 20px / 600 |
+| 按钮/表格/输入框 | `.btn` `.table` `.form-input` | 15px / 500-600 |
+| 侧边栏/标签 | `.sidebar a` `.stat-label` | 14px / 500 |
+| 次级文字 | - | 13px / 400 |
+
+### 玻璃效果
+
+- **分层 blur**：卡片 16px / 导航栏 24px / 侧边栏 30px / 模态框 40px
+- **全边框折射高光**：`mask-composite: exclude` 技术，1px 渐变边框模拟光学折射
+- **液态扫光**：hover 时 skewX(-20deg) 斜切光带扫描（1.2s）
+- **噪点纹理**：SVG `feTurbulence` fractalNoise，opacity 0.025
+- **阴影内发光**：所有阴影含 `inset 0 1px 0 rgba(255,255,255,.x)` 模拟玻璃微反射
+- **背景光晕**：5层径向渐变 (200% size) + 20s 流动动画
+- **卡片悬浮**：hover → `translateY(-4px) scale(1.01)` + 50px 蓝色调阴影
 
 ### 组件使用规范
 
