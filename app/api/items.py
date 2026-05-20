@@ -175,11 +175,13 @@ def list_items(
         items = conn.execute(
             f"SELECT * FROM items {where} ORDER BY id DESC", params
         ).fetchall()
+        from app.services.inventory_service import get_warehouse_stocks
         result = []
         for item in items:
             item_dict = dict(item)
             avail = get_available_quantity(conn, item["id"])
             item_dict["available_quantity"] = avail
+            item_dict["warehouse_stocks"] = get_warehouse_stocks(conn, item["id"])
             if avail <= item["low_stock_threshold"]:
                 result.append(item_dict)
         total = len(result)
@@ -195,10 +197,12 @@ def list_items(
         params + [page_size, offset],
     ).fetchall()
 
+    from app.services.inventory_service import get_warehouse_stocks
     result = []
     for item in items:
         item_dict = dict(item)
         item_dict["available_quantity"] = get_available_quantity(conn, item["id"])
+        item_dict["warehouse_stocks"] = get_warehouse_stocks(conn, item["id"])
         result.append(item_dict)
 
     return {"items": result, "total": total, "page": page, "page_size": page_size}
@@ -254,13 +258,18 @@ def export_items(
         f"SELECT * FROM items {where} ORDER BY id DESC", params
     ).fetchall()
 
+    from app.services.inventory_service import get_warehouse_stocks
+
     result = []
     for item in items:
         item_dict = dict(item)
         item_dict["available_quantity"] = get_available_quantity(conn, item["id"])
+        stocks = get_warehouse_stocks(conn, item["id"])
+        item_dict["warehouse_stocks"] = stocks
+        item_dict["warehouse_stocks_str"] = "; ".join(f"{s['warehouse_name']}×{s['quantity']}" for s in stocks) if stocks else "-"
         result.append(item_dict)
 
-    headers_row = ["ID", "名称", "分类", "描述", "位置", "总库存", "可用库存", "状态", "单价"]
+    headers_row = ["ID", "名称", "分类", "描述", "位置", "总库存", "可用库存", "状态", "单价", "仓库库存分布"]
 
     if fmt == "xlsx":
         from openpyxl import Workbook
@@ -272,7 +281,7 @@ def export_items(
             ws.append([
                 item["id"], item["name"], item["category"], item["description"],
                 item["location"], item["total_quantity"], item["available_quantity"],
-                item["status"], item["value"],
+                item["status"], item["value"], item["warehouse_stocks_str"],
             ])
         output = io.BytesIO()
         wb.save(output)
@@ -290,7 +299,7 @@ def export_items(
             writer.writerow([
                 item["id"], item["name"], item["category"], item["description"],
                 item["location"], item["total_quantity"], item["available_quantity"],
-                item["status"], item["value"],
+                item["status"], item["value"], item["warehouse_stocks_str"],
             ])
         content = output.getvalue()
         return Response(
