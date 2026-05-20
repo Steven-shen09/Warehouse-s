@@ -185,6 +185,30 @@ async def logs_page(request: Request):
     return _render(request, "pages/logs.html", {"current_user": user, "active_page": "logs"})
 
 
+@router.get("/warehouses", response_class=HTMLResponse)
+async def warehouses_page(request: Request):
+    user = await get_optional_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
+    return _render(request, "pages/warehouses.html", {"current_user": user, "active_page": "warehouses"})
+
+
+@router.get("/transfers", response_class=HTMLResponse)
+async def transfers_page(request: Request):
+    user = await get_optional_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
+    return _render(request, "pages/transfers.html", {"current_user": user, "active_page": "transfers"})
+
+
+@router.get("/inventory-counts", response_class=HTMLResponse)
+async def inventory_counts_page(request: Request):
+    user = await get_optional_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
+    return _render(request, "pages/inventory_counts.html", {"current_user": user, "active_page": "inventory-counts"})
+
+
 @router.get("/about", response_class=HTMLResponse)
 async def about_page(request: Request):
     user = await get_optional_user(request)

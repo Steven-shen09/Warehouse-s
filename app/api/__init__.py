@@ -1,6 +1,6 @@
 """API 路由注册"""
 from fastapi import FastAPI
-from app.api import auth, users, items, records, approvals, stats, audit_logs, frontend
+from app.api import auth, users, items, records, approvals, stats, audit_logs, warehouses, transfers, inventory_counts, frontend
 
 
 def register_routes(app: FastAPI):
@@ -12,5 +12,8 @@ def register_routes(app: FastAPI):
     app.include_router(approvals.router)
     app.include_router(stats.router)
     app.include_router(audit_logs.router)
+    app.include_router(warehouses.router)
+    app.include_router(transfers.router)
+    app.include_router(inventory_counts.router)
     # 前端页面路由（最后注册，避免覆盖 API 路径）
     app.include_router(frontend.router)
