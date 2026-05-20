@@ -9,7 +9,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Warehouse-s 物品租借系统",
         description="物品全生命周期管理、租借审批、归还追踪",
-        version="0.1.0",
+        version="1.4.0",
     )
 
     # 初始化数据库
