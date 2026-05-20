@@ -111,6 +111,65 @@ def _create_tables(conn: sqlite3.Connection):
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
 
+        -- 仓库表
+        CREATE TABLE IF NOT EXISTS warehouses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            location TEXT DEFAULT '',
+            description TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+
+        -- 分仓库存表
+        CREATE TABLE IF NOT EXISTS warehouse_stocks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id INTEGER NOT NULL REFERENCES items(id),
+            warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+            quantity INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(item_id, warehouse_id)
+        );
+
+        -- 调拨记录表
+        CREATE TABLE IF NOT EXISTS transfers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id INTEGER NOT NULL REFERENCES items(id),
+            from_warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+            to_warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+            quantity INTEGER NOT NULL,
+            reason TEXT DEFAULT '',
+            status TEXT NOT NULL CHECK(status IN ('待审核', '已通过', '已驳回')) DEFAULT '待审核',
+            document_no TEXT DEFAULT NULL,
+            created_by INTEGER NOT NULL REFERENCES users(id),
+            approved_by INTEGER REFERENCES users(id),
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+
+        -- 盘点记录表
+        CREATE TABLE IF NOT EXISTS inventory_counts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
+            name TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('进行中', '已完成', '已确认')) DEFAULT '进行中',
+            created_by INTEGER NOT NULL REFERENCES users(id),
+            completed_at TEXT DEFAULT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+
+        -- 盘点明细表
+        CREATE TABLE IF NOT EXISTS inventory_count_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            count_id INTEGER NOT NULL REFERENCES inventory_counts(id),
+            item_id INTEGER NOT NULL REFERENCES items(id),
+            expected_quantity INTEGER NOT NULL DEFAULT 0,
+            actual_quantity INTEGER DEFAULT NULL,
+            difference INTEGER DEFAULT NULL,
+            notes TEXT DEFAULT '',
+            counted_at TEXT DEFAULT NULL
+        );
+
         -- 索引
         CREATE INDEX IF NOT EXISTS idx_records_status ON records(status);
         CREATE INDEX IF NOT EXISTS idx_records_item_id ON records(item_id);
@@ -126,6 +185,26 @@ def _create_tables(conn: sqlite3.Connection):
         pass  # 字段已存在
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_records_document_no ON records(document_no)")
+
+    # 迁移：创建默认仓库并迁移现有物品库存
+    _migrate_warehouse_data(conn)
+
+
+def _migrate_warehouse_data(conn: sqlite3.Connection):
+    """创建默认仓库，将现有物品库存迁移到 warehouse_stocks"""
+    existing_wh = conn.execute("SELECT COUNT(*) FROM warehouses").fetchone()[0]
+    if existing_wh > 0:
+        return
+
+    conn.execute(
+        "INSERT INTO warehouses (id, name, location, description) VALUES (1, '默认仓库', '', '系统自动创建的默认仓库')"
+    )
+    items = conn.execute("SELECT id, total_quantity FROM items").fetchall()
+    for item in items:
+        conn.execute(
+            "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, 1, ?)",
+            (item["id"], item["total_quantity"]),
+        )
 
 
 def _seed_data(conn: sqlite3.Connection):
@@ -160,3 +239,22 @@ def _seed_data(conn: sqlite3.Connection):
         "INSERT INTO items (name, category, description, location, total_quantity, value) VALUES (?, ?, ?, ?, ?, ?)",
         items,
     )
+
+    # 种子数据：确保默认仓库存在
+    existing_wh = conn.execute("SELECT COUNT(*) FROM warehouses").fetchone()[0]
+    if existing_wh == 0:
+        conn.execute(
+            "INSERT INTO warehouses (id, name, location, description) VALUES (1, '默认仓库', '', '系统自动创建的默认仓库')"
+        )
+
+    # 将种子物品库存分配到默认仓库
+    seed_items = conn.execute("SELECT id, total_quantity FROM items").fetchall()
+    for item in seed_items:
+        existing_stock = conn.execute(
+            "SELECT id FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = 1", (item["id"],)
+        ).fetchone()
+        if not existing_stock:
+            conn.execute(
+                "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, 1, ?)",
+                (item["id"], item["total_quantity"]),
+            )
