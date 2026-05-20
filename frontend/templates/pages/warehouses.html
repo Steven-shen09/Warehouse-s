@@ -2,17 +2,36 @@
 {% block title %}仓库管理 - Warehouse-s{% endblock %}
 
 {% block content %}
-<div class="flex-between mb-16">
-  <h2>仓库管理</h2>
-  {% if current_user.role == 'admin' %}
-  <button class="btn btn-primary" onclick="openWarehouseForm()">
-    <i class="bi bi-plus-lg"></i> 新增仓库
-  </button>
-  {% endif %}
+<!-- ====== 列表视图 ====== -->
+<div id="warehouse-list-view">
+  <div class="flex-between mb-16">
+    <h2>仓库管理</h2>
+    {% if current_user.role == 'admin' %}
+    <button class="btn btn-primary" onclick="openWarehouseForm()">
+      <i class="bi bi-plus-lg"></i> 新增仓库
+    </button>
+    {% endif %}
+  </div>
+
+  <div id="warehouses-table-container">
+    <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+  </div>
 </div>
 
-<div id="warehouses-table-container">
-  <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+<!-- ====== 详情视图 ====== -->
+<div id="warehouse-detail-view" style="display:none;">
+  <div class="flex-between mb-16">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="btn btn-outline" onclick="showWarehouseList()">
+        <i class="bi bi-arrow-left"></i> 返回
+      </button>
+      <h2 id="warehouse-detail-name">仓库物品</h2>
+    </div>
+  </div>
+
+  <div id="warehouse-items-table-container">
+    <div class="text-center text-muted" style="padding:48px;">加载中...</div>
+  </div>
 </div>
 
 <!-- 新增/编辑仓库模态框 -->
@@ -71,6 +90,87 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// ── 状态徽章 ──
+function statusBadge(status) {
+  const s = (status || '').toString().toLowerCase();
+  const clsMap = {
+    'available': 'available',
+    '可用': 'available',
+    'lent': 'lent',
+    '已借出': 'lent',
+    'borrowed': 'lent',
+    'damaged': 'damaged',
+    '损坏': 'damaged',
+    'returned': 'returned',
+    '已归还': 'returned',
+    'overdue': 'overdue',
+    '逾期': 'overdue',
+    'pending': 'pending',
+    '待处理': 'pending',
+    'rejected': 'rejected',
+    'maintenance': 'damaged',
+    '维修中': 'damaged',
+  };
+  const cls = clsMap[s] || '';
+  return `<span class="status-badge ${cls}">${escapeHtml(status)}</span>`;
+}
+
+// ── 切换到列表视图 ──
+function showWarehouseList() {
+  document.getElementById('warehouse-list-view').style.display = '';
+  document.getElementById('warehouse-detail-view').style.display = 'none';
+  loadWarehouses();
+}
+
+// ── 切换到仓库详情视图 ──
+async function showWarehouseDetail(warehouseId) {
+  const wh = warehousesMap[warehouseId];
+  const whName = wh ? wh.name : `仓库 #${warehouseId}`;
+
+  // 切换到详情视图
+  document.getElementById('warehouse-list-view').style.display = 'none';
+  document.getElementById('warehouse-detail-view').style.display = '';
+  document.getElementById('warehouse-detail-name').textContent = whName;
+
+  const container = document.getElementById('warehouse-items-table-container');
+  container.innerHTML = '<div class="text-center text-muted" style="padding:48px;">加载中...</div>';
+
+  const resp = await api(`/api/v1/warehouses/${warehouseId}/items`);
+  if (!resp.ok) {
+    container.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+    return;
+  }
+
+  const data = await resp.json();
+  const items = data.items || [];
+
+  if (items.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-inbox"></i></div><p>该仓库暂无物品</p></div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="table">
+      <thead><tr>
+        <th>ID</th>
+        <th>名称</th>
+        <th>分类</th>
+        <th>库存数量</th>
+        <th>状态</th>
+        <th>单价</th>
+      </tr></thead>
+      <tbody>${items.map(item => `
+        <tr>
+          <td>${item.id}</td>
+          <td><strong>${escapeHtml(item.name)}</strong></td>
+          <td>${escapeHtml(item.category || '-')}</td>
+          <td>${item.stock_quantity ?? '-'}</td>
+          <td>${statusBadge(item.status)}</td>
+          <td>${item.value != null ? '¥' + Number(item.value).toFixed(2) : '-'}</td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+}
+
 // ── 打开新增仓库模态框（重置表单） ──
 function openWarehouseForm() {
   document.getElementById('warehouse-form').reset();
@@ -114,13 +214,13 @@ async function loadWarehouses() {
         ${isAdmin ? '<th>操作</th>' : ''}
       </tr></thead>
       <tbody>${warehouses.map(wh => `
-        <tr>
+        <tr onclick="showWarehouseDetail(${wh.id})" style="cursor:pointer;">
           <td>${wh.id}</td>
           <td>${escapeHtml(wh.name)}</td>
           <td>${escapeHtml(wh.location)}</td>
           <td class="text-muted">${escapeHtml(wh.description || '-')}</td>
           ${isAdmin ? `<td>
-            <div class="btn-group">
+            <div class="btn-group" onclick="event.stopPropagation()">
               <button class="btn btn-outline btn-sm" onclick='editWarehouse(${JSON.stringify(wh).replace(/'/g, "&#39;")})'>
                 <i class="bi bi-pencil"></i> 编辑
               </button>

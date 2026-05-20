@@ -33,8 +33,8 @@
         <option value="租借中">租借中</option>
         <option value="损坏">损坏</option>
       </select>
-      <select id="location-filter" class="form-select" onchange="loadItems()">
-        <option value="">全部位置</option>
+      <select id="warehouse-filter" class="form-select" onchange="loadItems()">
+        <option value="">全部仓库</option>
       </select>
     </div>
 
@@ -106,8 +106,10 @@
           <textarea id="item-description" class="form-textarea"></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">存放位置</label>
-          <input type="text" id="item-location" class="form-input" placeholder="如：A-101">
+          <label class="form-label">存放仓库</label>
+          <select id="item-warehouse" class="form-select">
+            <option value="">请选择仓库</option>
+          </select>
         </div>
         <div style="display:flex;gap:12px;">
           <div class="form-group" style="flex:1;">
@@ -269,6 +271,9 @@
 .import-summary-duplicate { color:#FF9500; }
 .import-summary-error { color:#FF3B30; }
 .text-error { color:#FF3B30; }
+.warehouse-stock-row td { padding:8px 18px; background:rgba(91,140,255,.04); border-bottom:1px solid var(--border-light); }
+.warehouse-stock-row .stock-item { display:inline-flex; align-items:center; gap:6px; margin-right:16px; font-size:13px; color:var(--text-secondary); }
+.warehouse-stock-row .stock-item i { font-size:14px; color:var(--primary); }
 </style>
 <script>
 let currentPage = 1;
@@ -487,8 +492,8 @@ async function exportItems() {
   const keyword = document.getElementById('search-input').value;
   const category = document.getElementById('category-filter').value;
   const status = document.getElementById('status-filter').value;
-  const location = document.getElementById('location-filter').value;
-  const params = new URLSearchParams({ keyword, category, status, location, format: 'csv' });
+  const warehouseId = document.getElementById('warehouse-filter').value;
+  const params = new URLSearchParams({ keyword, category, status, warehouse_id: warehouseId, format: 'csv' });
   const resp = await fetch(`/api/v1/items/export?${params}`, {
     headers: { 'Authorization': `Bearer ${AppState.token}` },
   });
@@ -730,16 +735,24 @@ async function loadCategories() {
   }
 }
 
-async function loadLocations() {
-  const resp = await api('/api/v1/items/locations');
+async function loadWarehousesForFilter() {
+  const resp = await api('/api/v1/warehouses/');
   if (resp.ok) {
     const data = await resp.json();
-    const select = document.getElementById('location-filter');
-    data.locations.forEach(loc => {
-      const opt = document.createElement('option');
-      opt.value = loc; opt.textContent = loc;
-      select.appendChild(opt);
+    const filterSelect = document.getElementById('warehouse-filter');
+    const formSelect = document.getElementById('item-warehouse');
+    data.warehouses.forEach(w => {
+      const opt1 = document.createElement('option');
+      opt1.value = w.id; opt1.textContent = w.name;
+      filterSelect.appendChild(opt1);
     });
+    if (formSelect) {
+      data.warehouses.forEach(w => {
+        const opt2 = document.createElement('option');
+        opt2.value = w.id; opt2.textContent = w.name;
+        formSelect.appendChild(opt2);
+      });
+    }
   }
 }
 
@@ -748,8 +761,8 @@ async function loadItems(page = 1, lowStock = false) {
   const keyword = document.getElementById('search-input').value;
   const category = document.getElementById('category-filter').value;
   const status = document.getElementById('status-filter').value;
-  const location = document.getElementById('location-filter').value;
-  const params = new URLSearchParams({ page, page_size: 15, keyword, category, status, location });
+  const warehouseId = document.getElementById('warehouse-filter').value;
+  const params = new URLSearchParams({ page, page_size: 15, keyword, category, status, warehouse_id: warehouseId });
   if (lowStock) params.set('low_stock', '1');
 
   const resp = await api(`/api/v1/items/?${params}`);
@@ -769,11 +782,17 @@ async function loadItems(page = 1, lowStock = false) {
     <table class="table">
       <thead><tr>
         ${isUser ? '<th class="col-check">选择</th>' : ''}
-        <th>ID</th><th>名称</th><th>分类</th><th>位置</th><th>描述</th><th>总库存</th><th>可用</th><th>状态</th><th>单价</th>
+        <th>ID</th><th>名称</th><th>分类</th><th>描述</th><th>总库存</th><th>可用</th><th>状态</th><th>单价</th>
         ${isAdmin ? '<th>操作</th>' : ''}
       </tr></thead>
-      <tbody>${data.items.map(item => `
-        <tr>
+      <tbody>${data.items.map(item => {
+        const stocks = item.warehouse_stocks || [];
+        const stockHtml = stocks.length > 0
+          ? stocks.map(s => `<span class="stock-item"><i class="bi bi-building"></i> ${escapeHtml(s.warehouse_name)} ×${s.quantity}</span>`).join('')
+          : '<span class="text-muted">未分配仓库</span>';
+        const hasStocks = stocks.length > 0;
+        return `
+        <tr id="item-row-${item.id}" class="item-main-row" style="cursor:${hasStocks ? 'pointer' : 'default'};" onclick="${hasStocks ? `toggleWarehouseStock(${item.id})` : ''}">
           ${isUser ? `<td class="col-check">
             <input type="checkbox" class="cart-checkbox"
               data-item-id="${item.id}"
@@ -781,25 +800,26 @@ async function loadItems(page = 1, lowStock = false) {
               data-item-price="${item.value}"
               data-item-max="${item.available_quantity}"
               ${item.status !== '可用' || item.available_quantity <= 0 ? 'disabled' : ''}
-              onchange="toggleCartItem(this)">
+              onchange="toggleCartItem(this)" onclick="event.stopPropagation()">
           </td>` : ''}
           <td>${item.id}</td>
-          <td><a href="/items/${item.id}">${escapeHtml(item.name)}</a></td>
+          <td><a href="/items/${item.id}" onclick="event.stopPropagation()">${escapeHtml(item.name)}</a></td>
           <td>${item.category || '-'}</td>
-          <td>${item.location || '-'}</td>
           <td class="text-muted">${item.description || '-'}</td>
-          <td>${item.total_quantity}</td>
+          <td>${item.total_quantity} ${hasStocks ? '<i class="bi bi-chevron-down" style="font-size:11px;color:var(--text-secondary);margin-left:4px;"></i>' : ''}</td>
           <td><strong class="${item.available_quantity <= item.low_stock_threshold ? 'low-stock-warn' : ''}">${item.available_quantity}</strong>${item.available_quantity <= item.low_stock_threshold ? ' ⚠' : ''}</td>
           <td><span class="status-badge ${item.status === '可用' ? 'available' : item.status === '租借中' ? 'lent' : 'damaged'}">${item.status}</span></td>
           <td>¥${item.value.toFixed(2)}</td>
           ${isAdmin ? `<td>
             <div class="btn-group">
-              <button class="btn btn-outline btn-sm" onclick='editItem(${JSON.stringify(item)})'>编辑</button>
-              ${item.status === '损坏' ? `<button class="btn btn-success btn-sm" onclick="markAvailable(${item.id})">修复</button>` : `<button class="btn btn-warning btn-sm" onclick="markDamaged(${item.id})">损坏</button>`}
-              <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})">删除</button>
+              <button class="btn btn-outline btn-sm" onclick='editItem(${JSON.stringify(item)});event.stopPropagation()'>编辑</button>
+              ${item.status === '损坏' ? `<button class="btn btn-success btn-sm" onclick="markAvailable(${item.id});event.stopPropagation()">修复</button>` : `<button class="btn btn-warning btn-sm" onclick="markDamaged(${item.id});event.stopPropagation()">损坏</button>`}
+              <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id});event.stopPropagation()">删除</button>
             </div>
           </td>` : ''}
-        </tr>`).join('')}</tbody>
+        </tr>
+        ${hasStocks ? `<tr id="item-stock-${item.id}" class="warehouse-stock-row" style="display:none;"><td colspan="9">${stockHtml}</td></tr>` : ''}
+      `;}).join('')}</tbody>
     </table>
     ${renderPagination(data.total, data.page_size, currentPage)}
   `;
@@ -825,7 +845,8 @@ function editItem(item) {
   document.getElementById('item-name').value = item.name;
   document.getElementById('item-category').value = item.category || '';
   document.getElementById('item-description').value = item.description || '';
-  document.getElementById('item-location').value = item.location || '';
+  const stocks = item.warehouse_stocks || [];
+  document.getElementById('item-warehouse').value = stocks.length > 0 ? stocks[0].warehouse_id : '';
   document.getElementById('item-quantity').value = item.total_quantity;
   document.getElementById('item-value').value = item.value;
   document.getElementById('item-threshold').value = item.low_stock_threshold;
@@ -839,7 +860,7 @@ async function saveItem(e) {
     name: document.getElementById('item-name').value,
     category: document.getElementById('item-category').value,
     description: document.getElementById('item-description').value,
-    location: document.getElementById('item-location').value,
+    warehouse_id: document.getElementById('item-warehouse').value ? parseInt(document.getElementById('item-warehouse').value) : null,
     total_quantity: parseInt(document.getElementById('item-quantity').value),
     value: parseFloat(document.getElementById('item-value').value),
     low_stock_threshold: parseInt(document.getElementById('item-threshold').value),
@@ -881,9 +902,22 @@ async function deleteItem(id) {
   else { const d = await resp.json(); showToast(d.detail, 'error'); }
 }
 
+function toggleWarehouseStock(itemId) {
+  const row = document.getElementById('item-stock-' + itemId);
+  if (!row) return;
+  const icon = document.querySelector('#item-row-' + itemId + ' .bi-chevron-down, #item-row-' + itemId + ' .bi-chevron-up');
+  if (row.style.display === 'none') {
+    row.style.display = '';
+    if (icon) { icon.classList.remove('bi-chevron-down'); icon.classList.add('bi-chevron-up'); }
+  } else {
+    row.style.display = 'none';
+    if (icon) { icon.classList.remove('bi-chevron-up'); icon.classList.add('bi-chevron-down'); }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   loadCategories();
-  loadLocations();
+  loadWarehousesForFilter();
   const params = new URLSearchParams(window.location.search);
   const lowStock = params.get('low_stock') === '1';
   loadItems(1, lowStock);
