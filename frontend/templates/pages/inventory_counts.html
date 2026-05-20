@@ -95,6 +95,94 @@
     </div>
   </div>
 </div>
+
+<!-- 导入实盘模态框 -->
+<div class="modal-overlay" id="count-import-modal">
+  <div class="modal" style="max-width:900px;">
+    <div class="modal-header">
+      <h3>导入实盘数据</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeCountImportModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- 步骤指示器 -->
+      <div class="import-steps" id="count-import-steps">
+        <div class="import-step active" data-step="1">
+          <span class="import-step-num">1</span>
+          <span class="import-step-label">选择文件</span>
+        </div>
+        <div class="import-step-connector"></div>
+        <div class="import-step" data-step="2">
+          <span class="import-step-num">2</span>
+          <span class="import-step-label">预览确认</span>
+        </div>
+        <div class="import-step-connector"></div>
+        <div class="import-step" data-step="3">
+          <span class="import-step-num">3</span>
+          <span class="import-step-label">完成</span>
+        </div>
+      </div>
+
+      <!-- 步骤 1：选择文件 -->
+      <div id="count-import-step1-content">
+        <div class="import-dropzone" id="count-import-dropzone" onclick="document.getElementById('count-import-file-input').click()">
+          <div class="import-dropzone-icon"><i class="bi bi-file-earmark-arrow-up" style="font-size:32px;color:var(--primary);"></i></div>
+          <p>拖拽文件到此处，或点击选择文件</p>
+          <p class="text-muted" style="font-size:13px;">支持 CSV (.csv) / Excel (.xlsx) 格式，最大 5MB</p>
+          <input type="file" id="count-import-file-input" accept=".csv,.xlsx,.xls" style="display:none;" onchange="handleCountFileSelected(this.files[0])">
+        </div>
+        <div id="count-import-selected-file" style="display:none;margin-top:12px;">
+          <span id="count-import-selected-filename"></span>
+          <button class="btn btn-sm btn-outline" onclick="resetCountImportStep1()">重新选择</button>
+        </div>
+        <div style="margin-top:12px;">
+          <a href="javascript:void(0)" onclick="downloadCountTemplate()" class="text-muted" style="font-size:13px;"><i class="bi bi-download"></i> 下载导入模板</a>
+        </div>
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">
+          <button class="btn btn-outline" onclick="closeCountImportModal()">取消</button>
+          <button class="btn btn-primary" id="count-import-upload-btn" disabled onclick="uploadCountFileForPreview()">上传并预览</button>
+        </div>
+      </div>
+
+      <!-- 步骤 2：预览确认 -->
+      <div id="count-import-step2-content" style="display:none;">
+        <div id="count-import-preview-summary" class="mb-16"></div>
+        <div class="import-preview-table-wrapper" style="max-height:360px;overflow:auto;">
+          <table class="table" id="count-import-preview-table">
+            <thead><tr>
+              <th class="col-check">选择</th>
+              <th>#</th>
+              <th>物品名称</th>
+              <th>系统库存</th>
+              <th>实盘数量</th>
+              <th>差异</th>
+              <th>备注</th>
+              <th>状态</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
+          <label style="font-size:14px;cursor:pointer;">
+            <input type="checkbox" id="count-import-select-all" onchange="toggleAllCountImportRows()" checked> 全选/取消
+          </label>
+        </div>
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">
+          <button class="btn btn-outline" onclick="resetCountImportStep1()">重新上传</button>
+          <button class="btn btn-outline" onclick="closeCountImportModal()">取消</button>
+          <button class="btn btn-primary" id="count-import-confirm-btn" onclick="confirmCountImport()">确认导入</button>
+        </div>
+      </div>
+
+      <!-- 步骤 3：完成 -->
+      <div id="count-import-step3-content" style="display:none;text-align:center;padding:32px 0;">
+        <div id="count-import-result-icon" style="font-size:48px;margin-bottom:16px;"></div>
+        <h4 id="count-import-result-message" style="margin-bottom:16px;"></h4>
+        <div id="count-import-result-detail" class="text-muted" style="margin-bottom:24px;"></div>
+        <button class="btn btn-primary" onclick="finishCountImport()">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -103,6 +191,18 @@
 .text-success-color { color: var(--success, #34C759) !important; }
 .inventory-diff-positive { color: var(--danger); font-weight: 600; }
 .inventory-diff-negative { color: var(--success, #34C759); font-weight: 600; }
+.import-steps { display:flex; align-items:center; justify-content:center; margin-bottom:24px; }
+.import-step { display:flex; flex-direction:column; align-items:center; gap:4px; opacity:0.4; }
+.import-step.active { opacity:1; }
+.import-step-num { width:28px; height:28px; border-radius:50%; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+.import-step-label { font-size:12px; color:var(--text-secondary); }
+.import-step-connector { width:48px; height:2px; background:var(--border-color, rgba(128,128,128,.2)); margin:0 8px; margin-bottom:16px; }
+.import-dropzone { border:2px dashed var(--border-color, rgba(128,128,128,.3)); border-radius:var(--radius); padding:32px; text-align:center; cursor:pointer; transition:all .2s; }
+.import-dropzone:hover, .import-dropzone.drag-over { border-color:var(--primary); background:rgba(91,140,255,.06); }
+.import-preview-table-wrapper { border-radius:var(--radius); border:1px solid var(--border-color, rgba(128,128,128,.15)); }
+.import-row-error { background:rgba(255,59,48,.08); }
+.import-summary-ok { color:#34C759; }
+.import-summary-error { color:#FF3B30; }
 </style>
 <script>
 let currentCountPage = 1;
@@ -271,6 +371,7 @@ async function loadCountDetail(id) {
   let actionsHtml = '';
   if (canComplete) {
     actionsHtml += `<button class="btn btn-primary" onclick="saveAllItems()"><i class="bi bi-save"></i> 全部保存</button>`;
+    actionsHtml += `<button class="btn btn-outline" onclick="openCountImportModal()"><i class="bi bi-upload"></i> 导入实盘</button>`;
   }
   if (canComplete) {
     actionsHtml += `<button class="btn btn-success" onclick="completeCount(${count.id})"><i class="bi bi-check-circle"></i> 完成盘点</button>`;
@@ -543,9 +644,253 @@ async function createCount(e) {
   }
 }
 
+// ═══════════════════════════════════════════
+// ── 盘点批量导入实盘 ──
+// ═══════════════════════════════════════════
+let countImportPreviewData = null;
+let countImportSelectedFile = null;
+
+function openCountImportModal() {
+  if (!currentDetailId) {
+    showToast('请先打开盘点详情', 'warning');
+    return;
+  }
+  countImportPreviewData = null;
+  countImportSelectedFile = null;
+  resetCountImportStep1();
+  document.getElementById('count-import-file-input').value = '';
+  showCountImportStep(1);
+  openModal('count-import-modal');
+}
+
+function closeCountImportModal() {
+  closeModal('count-import-modal');
+}
+
+function resetCountImportStep1() {
+  countImportPreviewData = null;
+  countImportSelectedFile = null;
+  document.getElementById('count-import-file-input').value = '';
+  document.getElementById('count-import-selected-file').style.display = 'none';
+  document.getElementById('count-import-upload-btn').disabled = true;
+  document.getElementById('count-import-dropzone').style.display = '';
+  showCountImportStep(1);
+}
+
+function showCountImportStep(step) {
+  document.getElementById('count-import-step1-content').style.display = step === 1 ? '' : 'none';
+  document.getElementById('count-import-step2-content').style.display = step === 2 ? '' : 'none';
+  document.getElementById('count-import-step3-content').style.display = step === 3 ? '' : 'none';
+
+  document.querySelectorAll('#count-import-steps .import-step').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.step) <= step);
+  });
+}
+
+function handleCountFileSelected(file) {
+  if (!file) return;
+  countImportSelectedFile = file;
+  document.getElementById('count-import-selected-filename').textContent = file.name;
+  document.getElementById('count-import-selected-file').style.display = '';
+  document.getElementById('count-import-dropzone').style.display = 'none';
+  document.getElementById('count-import-upload-btn').disabled = false;
+}
+
+async function uploadCountFileForPreview() {
+  if (!countImportSelectedFile || !currentDetailId) return;
+
+  const btn = document.getElementById('count-import-upload-btn');
+  btn.disabled = true;
+  btn.textContent = '解析中...';
+
+  const formData = new FormData();
+  formData.append('file', countImportSelectedFile);
+
+  const resp = await fetch(`/api/v1/inventory-counts/${currentDetailId}/import/preview`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${AppState.token}` },
+    body: formData,
+  });
+
+  btn.disabled = false;
+  btn.textContent = '上传并预览';
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    showToast(err.detail || '文件解析失败', 'error');
+    return;
+  }
+
+  countImportPreviewData = await resp.json();
+  renderCountImportPreview();
+  showCountImportStep(2);
+}
+
+function renderCountImportPreview() {
+  const data = countImportPreviewData;
+  if (!data) return;
+
+  // 摘要
+  const s = data.summary;
+  document.getElementById('count-import-preview-summary').innerHTML =
+    `解析结果：共 <strong>${s.total}</strong> 行，` +
+    `<span class="import-summary-ok"><i class="bi bi-check-circle-fill"></i> ${s.ok} 条可导入</span>` +
+    (s.error > 0 ? `，<span class="import-summary-error"><i class="bi bi-x-circle-fill"></i> ${s.error} 条错误</span>` : '');
+
+  // 表格
+  const tbody = document.querySelector('#count-import-preview-table tbody');
+  tbody.innerHTML = data.rows.map(row => {
+    const checked = row.status === 'ok' ? 'checked' : '';
+    const disabled = row.status === 'error' ? 'disabled' : '';
+    const rowClass = row.status === 'error' ? 'import-row-error' : '';
+
+    const itemName = escapeHtml(row.data['物品名称'] || '');
+    const expectedQty = row.expected_quantity !== undefined ? row.expected_quantity : (row.data['系统库存'] !== undefined ? row.data['系统库存'] : '-');
+    const actualQtyRaw = row.data['实盘数量'] !== undefined ? row.data['实盘数量'] : '';
+    const actualQty = actualQtyRaw !== '' && actualQtyRaw !== null && actualQtyRaw !== undefined ? actualQtyRaw : '';
+    const notes = escapeHtml(row.data['备注'] || '');
+
+    // 计算差异
+    let diffDisplay = '-';
+    if (actualQty !== '' && expectedQty !== '-' && expectedQty !== null && expectedQty !== undefined) {
+      const act = parseInt(actualQty, 10);
+      const exp = parseInt(expectedQty, 10);
+      if (!isNaN(act) && !isNaN(exp)) {
+        const diff = act - exp;
+        if (diff > 0) diffDisplay = `+${diff}`;
+        else if (diff < 0) diffDisplay = `${diff}`;
+        else diffDisplay = '0';
+      }
+    }
+
+    const statusHtml = row.status === 'ok'
+      ? '<span class="status-badge available">正常</span>'
+      : `<span class="status-badge damaged" title="${escapeHtml(row.message)}"><i class="bi bi-x-circle-fill"></i> 错误</span><br><small class="text-error">${escapeHtml(row.message)}</small>`;
+
+    return `
+      <tr class="${rowClass}">
+        <td class="col-check">
+          <input type="checkbox" class="count-import-row-checkbox" data-index="${row.index}"
+            ${checked} ${disabled} onchange="onCountImportRowToggle()">
+        </td>
+        <td>${row.index}</td>
+        <td>${itemName}</td>
+        <td>${expectedQty}</td>
+        <td>${actualQty}</td>
+        <td>${diffDisplay}</td>
+        <td>${notes}</td>
+        <td>${statusHtml}</td>
+      </tr>
+    `;
+  }).join('');
+
+  document.getElementById('count-import-select-all').checked = true;
+}
+
+function onCountImportRowToggle() {
+  const allCbs = document.querySelectorAll('.count-import-row-checkbox:not([disabled])');
+  const checkedCbs = document.querySelectorAll('.count-import-row-checkbox:not([disabled]):checked');
+  document.getElementById('count-import-select-all').checked = allCbs.length === checkedCbs.length;
+}
+
+function toggleAllCountImportRows() {
+  const selectAll = document.getElementById('count-import-select-all').checked;
+  document.querySelectorAll('.count-import-row-checkbox:not([disabled])').forEach(cb => {
+    cb.checked = selectAll;
+  });
+}
+
+async function confirmCountImport() {
+  if (!currentDetailId) return;
+
+  const checkedRows = document.querySelectorAll('.count-import-row-checkbox:checked');
+  if (checkedRows.length === 0) {
+    showToast('请至少选择一行', 'warning');
+    return;
+  }
+
+  const selections = [];
+  checkedRows.forEach(cb => {
+    selections.push({ index: parseInt(cb.dataset.index) });
+  });
+
+  const btn = document.getElementById('count-import-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = '导入中...';
+
+  const formData = new FormData();
+  formData.append('file', countImportSelectedFile);
+  formData.append('selections', JSON.stringify(selections));
+
+  const resp = await fetch(`/api/v1/inventory-counts/${currentDetailId}/import/confirm`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${AppState.token}` },
+    body: formData,
+  });
+
+  btn.disabled = false;
+  btn.textContent = '确认导入';
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    document.getElementById('count-import-result-icon').innerHTML = '<i class="bi bi-x-circle-fill" style="color:#FF3B30;"></i>';
+    document.getElementById('count-import-result-message').textContent = '导入失败';
+    document.getElementById('count-import-result-detail').textContent = err.detail || '未知错误';
+    showCountImportStep(3);
+    return;
+  }
+
+  const result = await resp.json();
+  document.getElementById('count-import-result-icon').innerHTML = '<i class="bi bi-check-circle-fill" style="color:#34C759;"></i>';
+  document.getElementById('count-import-result-message').textContent = '导入成功！';
+  document.getElementById('count-import-result-detail').innerHTML =
+    `成功导入 <strong>${result.imported}</strong> 条实盘数据` +
+    (result.skipped > 0 ? `，跳过 <strong>${result.skipped}</strong> 条` : '');
+  showCountImportStep(3);
+}
+
+function finishCountImport() {
+  closeCountImportModal();
+  if (currentDetailId) {
+    loadCountDetail(currentDetailId);
+  }
+}
+
+async function downloadCountTemplate() {
+  const resp = await fetch('/api/v1/inventory-counts/import/template', {
+    headers: { 'Authorization': `Bearer ${AppState.token}` },
+  });
+  if (!resp.ok) return;
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'inventory_count_import_template.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ── 页面初始化 ──
 document.addEventListener('DOMContentLoaded', () => {
   loadCountList(1);
+
+  // 拖拽支持
+  const dz = document.getElementById('count-import-dropzone');
+  if (dz) {
+    dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => { dz.classList.remove('drag-over'); });
+    dz.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dz.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        document.getElementById('count-import-file-input').files = e.dataTransfer.files;
+        handleCountFileSelected(file);
+      }
+    });
+  }
 });
 </script>
 {% endblock %}
