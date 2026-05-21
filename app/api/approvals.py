@@ -33,11 +33,15 @@ def approval_stats(
     today_processed = conn.execute(
         "SELECT COUNT(*) FROM approvals WHERE date(created_at) = date('now','localtime')"
     ).fetchone()[0]
+    to_return = conn.execute(
+        "SELECT COUNT(*) FROM records WHERE status IN ('借出中', '逾期')"
+    ).fetchone()[0]
     return {
         "total_pending": total_pending,
         "transfer_pending": transfer_pending,
         "total_overtime": total_overtime,
         "today_processed": today_processed,
+        "to_return": to_return,
     }
 
 

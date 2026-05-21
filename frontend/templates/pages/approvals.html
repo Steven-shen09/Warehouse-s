@@ -7,6 +7,7 @@
 <div class="stats-grid" style="margin-bottom:20px;">
   <div class="stat-card"><div class="stat-value" id="stat-pending">--</div><div class="stat-label">租借待审</div></div>
   <div class="stat-card"><div class="stat-value" id="stat-transfer">--</div><div class="stat-label">调拨待审</div></div>
+  <div class="stat-card" style="cursor:pointer;" onclick="window.location.href='/records?status=逾期'" title="点击查看逾期记录"><div class="stat-value" id="stat-to-return">--</div><div class="stat-label">待归还</div></div>
   <div class="stat-card"><div class="stat-value" id="stat-overtime">--</div><div class="stat-label">已超时</div></div>
   <div class="stat-card"><div class="stat-value" id="stat-today">--</div><div class="stat-label">今日处理</div></div>
 </div>
@@ -106,6 +107,7 @@ async function loadStats() {
   const d = await r.json();
   document.getElementById('stat-pending').textContent = d.total_pending;
   document.getElementById('stat-transfer').textContent = d.transfer_pending || 0;
+  document.getElementById('stat-to-return').textContent = d.to_return || 0;
   document.getElementById('stat-overtime').textContent = d.total_overtime;
   document.getElementById('stat-today').textContent = d.today_processed;
 }
