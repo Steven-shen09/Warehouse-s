@@ -5,11 +5,28 @@
 <h2 class="mb-16">审核管理</h2>
 
 <div class="stats-grid" style="margin-bottom:20px;">
-  <div class="stat-card"><div class="stat-value" id="stat-pending">--</div><div class="stat-label">待审核</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-pending">--</div><div class="stat-label">租借待审</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-transfer-pending">--</div><div class="stat-label">调拨待审</div></div>
   <div class="stat-card"><div class="stat-value" id="stat-overtime">--</div><div class="stat-label">已超时</div></div>
   <div class="stat-card"><div class="stat-value" id="stat-today">--</div><div class="stat-label">今日处理</div></div>
 </div>
 
+<!-- 类型筛选 -->
+<div class="filter-bar">
+  <select id="approval-type" class="form-select" onchange="loadApprovals(1)">
+    <option value="all">全部待审核</option>
+    <option value="records">物品租借</option>
+    <option value="transfers">仓库调拨</option>
+  </select>
+</div>
+
+<div class="filter-bar" style="margin-bottom:16px;">
+  <select id="approval-type" class="form-select" onchange="loadApprovals(1)">
+    <option value="all">全部待审核</option>
+    <option value="records">物品租借</option>
+    <option value="transfers">仓库调拨</option>
+  </select>
+</div>
 <div id="approvals-table-container">
   <div class="text-center text-muted" style="padding:48px;">加载中...</div>
 </div>
@@ -90,7 +107,7 @@ document.getElementById('reject-btn').addEventListener('click', () => {
   if (_rejectCallback) { closeModal('reject-modal'); _rejectCallback(reason); _rejectCallback = null; }
 });
 
-// ── 单物品审核 ──
+// ── 租借单物品审核 ──
 function doApproveWithConfirm(id) {
   showConfirmDialog('确认审核通过', '确定通过该物品的租借申请吗？', () => doApprove(id));
 }
@@ -105,16 +122,81 @@ async function doReject(id, reason) {
   else { const d = await resp.json(); showToast(d.detail, 'error'); }
 }
 
+async function doApprove(id) {
+  const resp = await api(`/api/v1/approvals/${id}/approve`, { method: 'PUT', body: JSON.stringify({ comment: '' }) });
+  if (resp.ok) { showToast('已通过'); loadApprovals(approvalPage); loadStats(); }
+  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+}
+
+// ── 调拨单物品审核 ──
+async function approveTransferItem(id) {
+  showConfirmDialog('确认审核通过', '确定通过该调拨物品吗？', async () => {
+    const resp = await api(`/api/v1/transfers/${id}/approve`, { method: 'PUT' });
+    if (resp.ok) { showToast('已通过'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
+  });
+}
+
+function showRejectTransferDialog(id, itemName) {
+  showRejectDialog('驳回调拨', `确定驳回调拨物品 "${escapeHtml(itemName)}" 吗？`, async (reason) => {
+    const resp = await api(`/api/v1/transfers/${id}/reject`, { method: 'PUT', body: JSON.stringify({ reason }) });
+    if (resp.ok) { showToast('已驳回'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await resp.json(); showToast(d.detail || '驳回失败', 'error'); }
+  });
+}
+
+// ── 调拨整单审核 ──
+async function approveTransferDocument(docNo) {
+  showConfirmDialog(
+    '确认全部通过',
+    `确定通过调拨单 ${escapeHtml(docNo)} 下的所有物品吗？`,
+    async () => {
+      const resp = await api(`/api/v1/transfers/by-document/${encodeURIComponent(docNo)}/approve`, { method: 'PUT' });
+      if (resp.ok) {
+        const d = await resp.json();
+        showToast(d.message || '已全部通过');
+        loadApprovals(approvalPage);
+        loadStats();
+      } else {
+        const d = await resp.json();
+        showToast(d.detail || '操作失败', 'error');
+      }
+    }
+  );
+}
+
+async function rejectTransferDocument(docNo) {
+  showRejectDialog(
+    '全部驳回',
+    `确定驳回调拨单 ${escapeHtml(docNo)} 下的所有物品吗？`,
+    async (reason) => {
+      const resp = await api(`/api/v1/transfers/by-document/${encodeURIComponent(docNo)}/reject`, { method: 'PUT', body: JSON.stringify({ reason }) });
+      if (resp.ok) {
+        const d = await resp.json();
+        showToast(d.message || '已全部驳回');
+        loadApprovals(approvalPage);
+        loadStats();
+      } else {
+        const d = await resp.json();
+        showToast(d.detail || '操作失败', 'error');
+      }
+    }
+  );
+}
+
+// ── 统计 ──
 async function loadStats() {
   const resp = await api('/api/v1/approvals/stats');
   if (resp.ok) {
     const d = await resp.json();
-    document.getElementById('stat-pending').textContent = d.total_pending;
-    document.getElementById('stat-overtime').textContent = d.total_overtime;
-    document.getElementById('stat-today').textContent = d.today_processed;
+    document.getElementById('stat-pending').textContent = d.total_pending ?? '--';
+    document.getElementById('stat-transfer-pending').textContent = d.transfer_pending ?? '--';
+    document.getElementById('stat-overtime').textContent = d.total_overtime ?? '--';
+    document.getElementById('stat-today').textContent = d.today_processed ?? '--';
   }
 }
 
+// ── 单据分组折叠 ──
 function toggleDocGroup(header) {
   const body = header.nextElementSibling;
   const toggle = header.querySelector('.doc-group-toggle');
@@ -129,6 +211,7 @@ function toggleDocGroup(header) {
   }
 }
 
+// ── 租借整单审核 ──
 async function approveByDocument(docNo) {
   showConfirmDialog(
     '确认全部通过',
@@ -171,79 +254,518 @@ async function rejectByDocument(docNo) {
   );
 }
 
+// ── 租借单据组渲染 ──
+function renderRecordDocGroup(doc) {
+  const hasDocNo = doc.document_no !== null;
+  const label = hasDocNo ? `单据号: ${doc.document_no}` : '单条记录';
+  const docKey = hasDocNo ? doc.document_no : doc.record_ids[0];
+  const overtimeStyle = doc.is_overtime ? ' style="border-left:3px solid var(--danger);"' : '';
+
+  return `
+  <div class="doc-group"${overtimeStyle}>
+    <div class="doc-group-header" onclick="toggleDocGroup(this)">
+      <div class="doc-group-meta">
+        <strong>${escapeHtml(label)}</strong>
+        <span>借用人: ${escapeHtml(doc.borrower_name)}</span>
+        <span>${doc.item_count} 件物品</span>
+        <span>${escapeHtml(doc.borrow_date)} ~ ${escapeHtml(doc.expected_return_date)}</span>
+        <span>${escapeHtml(doc.reason || '')}</span>
+        <span>审核截止: ${escapeHtml(doc.earliest_deadline || '-')}</span>
+        ${doc.is_overtime ? '<span class="status-badge overdue">超时</span>' : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveByDocument('${escapeHtml(String(docKey))}')">全部通过</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();rejectByDocument('${escapeHtml(String(docKey))}')">全部驳回</button>
+        <span class="doc-group-toggle">▼</span>
+      </div>
+    </div>
+    <div class="doc-group-body">
+      <table class="table">
+        <thead><tr><th>记录ID</th><th>物品</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>事由</th><th>审核截止</th><th>操作</th></tr></thead>
+        <tbody>${doc.items.map(r => `
+          <tr>
+            <td>${r.id}</td><td>${escapeHtml(r.item_name)}</td>
+            <td>${r.quantity}</td><td>${escapeHtml(r.borrow_date)}</td><td>${escapeHtml(r.expected_return_date)}</td>
+            <td>${escapeHtml(r.reason || '-')}</td>
+            <td>${escapeHtml(r.approval_deadline || '-')} ${r.is_overtime ? '<span class="status-badge overdue">超时</span>' : ''}</td>
+            <td>
+              <div class="btn-group">
+                <button class="btn btn-success btn-sm" onclick="doApproveWithConfirm(${r.id})">通过</button>
+                <button class="btn btn-danger btn-sm" onclick="showRejectDialogForId(${r.id})">驳回</button>
+              </div>
+            </td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ── 调拨单据组渲染 ──
+function renderTransferDocGroup(g) {
+  return `
+  <div class="doc-group">
+    <div class="doc-group-header" onclick="toggleDocGroup(this)">
+      <div class="doc-group-meta">
+        <strong>${escapeHtml(g.document_no)}</strong>
+        <span class="status-badge pending">仓库调拨</span>
+        <span><i class="bi bi-building"></i> ${escapeHtml(g.from_warehouse_name)} <i class="bi bi-arrow-right"></i> ${escapeHtml(g.to_warehouse_name)}</span>
+        <span>${g.count} 件物品</span>
+        <span>创建人: ${escapeHtml(g.created_by_name)}</span>
+        <span>${escapeHtml(g.created_at || '')}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveTransferDocument('${escapeHtml(g.document_no)}')">全部通过</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();rejectTransferDocument('${escapeHtml(g.document_no)}')">全部驳回</button>
+        <span class="doc-group-toggle">▼</span>
+      </div>
+    </div>
+    <div class="doc-group-body">
+      <table class="table">
+        <thead><tr><th>物品</th><th>数量</th><th>操作</th></tr></thead>
+        <tbody>${(g.items || []).map(t => `
+          <tr>
+            <td>${escapeHtml(t.item_name || '-')}</td>
+            <td>${t.quantity}</td>
+            <td>
+              <div class="btn-group">
+                <button class="btn btn-success btn-sm" onclick="approveTransferItem(${t.id})">通过</button>
+                <button class="btn btn-danger btn-sm" onclick="showRejectTransferDialog(${t.id}, '${escapeHtml(t.item_name || '#' + t.id)}')">驳回</button>
+              </div>
+            </td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ── 渲染分页 ──
+function renderPagination(total, pageSize, current) {
+  const pages = Math.ceil(total / pageSize);
+  if (pages <= 1) return '';
+  let html = '<div class="pagination">';
+  html += `<button onclick="loadApprovals(${current - 1})" ${current === 1 ? 'disabled' : ''}>上一页</button>`;
+  for (let i = 1; i <= pages; i++) {
+    html += `<button class="${i === current ? 'active' : ''}" onclick="loadApprovals(${i})">${i}</button>`;
+  }
+  html += `<button onclick="loadApprovals(${current + 1})" ${current === pages ? 'disabled' : ''}>下一页</button>`;
+  html += '</div>';
+  return html;
+}
+
+// ── 主加载函数 ──
 async function loadApprovals(page = 1) {
   approvalPage = page;
-  const resp = await api(`/api/v1/approvals/pending-grouped?page=${page}&page_size=15`);
+  const type = document.getElementById('approval-type').value;
   const container = document.getElementById('approvals-table-container');
-  if (!resp.ok) { container.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
 
-  const data = await resp.json();
-  if (data.documents.length === 0) {
+  let recData = null, trData = null;
+  if (type !== 'transfers') {
+    const resp = await api('/api/v1/approvals/pending-grouped?page=' + page + '&page_size=15');
+    if (resp.ok) recData = await resp.json();
+  }
+  if (type !== 'records') {
+    const resp2 = await api('/api/v1/approvals/pending-transfers?page=' + page + '&page_size=15');
+    if (resp2.ok) trData = await resp2.json();
+  }
+
+  const recDocs = recData ? recData.documents || [] : [];
+  const trDocs = trData ? trData.groups || [] : [];
+  const allDocs = recDocs.concat(trDocs);
+
+  if (allDocs.length === 0) {
     container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-clipboard-check"></i></div><p>暂无待审核记录</p></div>';
     return;
   }
 
-  container.innerHTML = data.documents.map(doc => {
+  let html = '';
+  for (const doc of recDocs) {
     const hasDocNo = doc.document_no !== null;
-    const label = hasDocNo ? `单据号: ${doc.document_no}` : '单条记录';
+    const label = hasDocNo ? '单据号: ' + doc.document_no : '单条记录';
     const docKey = hasDocNo ? doc.document_no : doc.record_ids[0];
-    const overtimeStyle = doc.is_overtime ? ' style="border-left:3px solid var(--danger);"' : '';
-
-    return `
-    <div class="doc-group"${overtimeStyle}>
-      <div class="doc-group-header" onclick="toggleDocGroup(this)">
-        <div class="doc-group-meta">
-          <strong>${label}</strong>
-          <span>借用人: ${escapeHtml(doc.borrower_name)}</span>
-          <span>${doc.item_count} 件物品</span>
-          <span>${doc.borrow_date} ~ ${doc.expected_return_date}</span>
-          <span>${doc.reason || ''}</span>
-          <span>审核截止: ${doc.earliest_deadline || '-'}</span>
-          ${doc.is_overtime ? '<span class="status-badge overdue">超时</span>' : ''}
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveByDocument('${docKey}')">全部通过</button>
-          <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();rejectByDocument('${docKey}')">全部驳回</button>
-          <span class="doc-group-toggle">▼</span>
-        </div>
-      </div>
-      <div class="doc-group-body">
-        <table class="table">
-          <thead><tr><th>记录ID</th><th>物品</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>事由</th><th>审核截止</th><th>操作</th></tr></thead>
-          <tbody>${doc.items.map(r => `
-            <tr>
-              <td>${r.id}</td><td>${r.item_name}</td>
-              <td>${r.quantity}</td><td>${r.borrow_date}</td><td>${r.expected_return_date}</td>
-              <td>${r.reason || '-'}</td>
-              <td>${r.approval_deadline || '-'} ${r.is_overtime ? '<span class="status-badge overdue">超时</span>' : ''}</td>
-              <td>
-                <div class="btn-group">
-                  <button class="btn btn-success btn-sm" onclick="doApproveWithConfirm(${r.id})">通过</button>
-                  <button class="btn btn-danger btn-sm" onclick="showRejectDialogForId(${r.id})">驳回</button>
-                </div>
-              </td>
-            </tr>`).join('')}</tbody>
-        </table>
-      </div>
-    </div>`;
-  }).join('');
-
-  const pages = Math.ceil(data.total / 15);
-  if (pages > 1) {
-    let pagHtml = '<div class="pagination">';
-    pagHtml += `<button onclick="loadApprovals(${page-1})" ${page===1?'disabled':''}>上一页</button>`;
-    for (let i = 1; i <= pages; i++) {
-      pagHtml += `<button class="${i===page?'active':''}" onclick="loadApprovals(${i})">${i}</button>`;
+    const os = doc.is_overtime ? ' style="border-left:3px solid var(--danger);"' : '';
+    html += '<div class="doc-group"' + os + '><div class="doc-group-header" onclick="toggleDocGroup(this)"><div class="doc-group-meta">';
+    html += '<strong>' + label + '</strong>';
+    html += '<span class="status-badge approved" style="font-size:11px;">物品租借</span>';
+    html += '<span>借用人: ' + escapeHtml(doc.borrower_name || '') + '</span>';
+    html += '<span>' + doc.item_count + ' 件物品</span>';
+    html += '<span>' + (doc.borrow_date || '') + ' ~ ' + (doc.expected_return_date || '') + '</span>';
+    if (doc.is_overtime) html += '<span class="status-badge overdue">超时</span>';
+    html += '<span>审核截止: ' + (doc.earliest_deadline || '-') + '</span>';
+    html += '</div><div style="display:flex;align-items:center;gap:8px;">';
+    html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveByDocument('' + docKey + '')">全部通过</button>';
+    html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();rejectByDocument('' + docKey + '')">全部驳回</button>';
+    html += '<span class="doc-group-toggle">▼</span></div></div>';
+    html += '<div class="doc-group-body"><table class="table"><thead><tr><th>ID</th><th>物品</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>操作</th></tr></thead><tbody>';
+    for (const r of doc.items) {
+      html += '<tr><td>' + r.id + '</td><td>' + escapeHtml(r.item_name || '') + '</td><td>' + r.quantity + '</td><td>' + (r.borrow_date || '') + '</td><td>' + (r.expected_return_date || '') + '</td>';
+      html += '<td><div class="btn-group"><button class="btn btn-success btn-sm" onclick="doApproveWithConfirm(' + r.id + ')">通过</button><button class="btn btn-danger btn-sm" onclick="showRejectDialogForId(' + r.id + ')">驳回</button></div></td></tr>';
     }
-    pagHtml += `<button onclick="loadApprovals(${page+1})" ${page===pages?'disabled':''}>下一页</button></div>`;
-    container.innerHTML += pagHtml;
+    html += '</tbody></table></div></div>';
+  }
+
+  for (const g of trDocs) {
+    html += '<div class="doc-group"><div class="doc-group-header" onclick="toggleDocGroup(this)"><div class="doc-group-meta">';
+    html += '<strong>' + escapeHtml(g.document_no || '') + '</strong>';
+    html += '<span class="status-badge pending" style="font-size:11px;">仓库调拨</span>';
+    html += '<span><i class="bi bi-building"></i> ' + escapeHtml(g.from_warehouse_name || '') + ' <i class="bi bi-arrow-right"></i> ' + escapeHtml(g.to_warehouse_name || '') + '</span>';
+    html += '<span>' + (g.count || g.items.length) + ' 件物品</span>';
+    html += '<span>' + escapeHtml(g.created_by_name || '') + '</span>';
+    html += '<span>' + (g.created_at || '') + '</span>';
+    html += '</div><div style="display:flex;align-items:center;gap:8px;">';
+    html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveTransferDocument('' + escapeHtml(g.document_no || '') + '')">全部通过</button>';
+    html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();showRejectTransferDialog('' + escapeHtml(g.document_no || '') + '')">全部驳回</button>';
+    html += '<span class="doc-group-toggle">▼</span></div></div>';
+    html += '<div class="doc-group-body"><table class="table"><thead><tr><th>ID</th><th>物品</th><th>源→目标</th><th>数量</th><th>操作</th></tr></thead><tbody>';
+    for (const t of g.items) {
+      html += '<tr><td>' + t.id + '</td><td>' + escapeHtml(t.item_name || '') + '</td>';
+      html += '<td>' + escapeHtml(t.from_warehouse_name || '') + ' <i class="bi bi-arrow-right"></i> ' + escapeHtml(t.to_warehouse_name || '') + '</td>';
+      html += '<td>' + t.quantity + '</td>';
+      html += '<td><div class="btn-group"><button class="btn btn-success btn-sm" onclick="doApproveTransfer(' + t.id + ')">通过</button><button class="btn btn-danger btn-sm" onclick="showRejectTransferForId(' + t.id + ')">驳回</button></div></td></tr>';
+    }
+    html += '</tbody></table></div></div>';
+  }
+
+  container.innerHTML = html;
+  const totalItems = recDocs.length + trDocs.length;
+  const pages = Math.ceil(totalItems / 15);
+  if (pages > 1) {
+    let pg = '<div class="pagination">';
+    pg += '<button onclick="loadApprovals(' + (page-1) + ')" ' + (page===1?'disabled':'') + '>上一页</button>';
+    for (let i = 1; i <= pages; i++) pg += '<button class="' + (i===page?'active':'') + '" onclick="loadApprovals(' + i + ')">' + i + '</button>';
+    pg += '<button onclick="loadApprovals(' + (page+1) + ')" ' + (page===pages?'disabled':'') + '>下一页</button></div>';
+    container.innerHTML += pg;
   }
 }
+
+// ── 调拨审核操作 ──
+async function doApproveTransfer(id) {
+  const resp = await api('/api/v1/transfers/' + id + '/approve', { method: 'PUT' });
+  if (resp.ok) { showToast('已通过'); loadApprovals(approvalPage); loadStats(); }
+  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+}
+
+async function approveTransferDocument(docNo) {
+  showConfirmDialog('确认全部通过', '确定通过调拨单 ' + docNo + ' 的所有物品吗？', async () => {
+    const resp = await api('/api/v1/transfers/by-document/' + encodeURIComponent(docNo) + '/approve', { method: 'PUT' });
+    if (resp.ok) { const d = await resp.json(); showToast(d.message || '已全部通过'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await resp.json(); showToast(d.detail, 'error'); }
+  });
+}
+
+function showRejectTransferForId(id) {
+  showRejectDialog('驳回调拨', '确定驳回该调拨申请吗？', async (reason) => {
+    const resp = await api('/api/v1/transfers/' + id + '/reject', { method: 'PUT', body: JSON.stringify({ reason }) });
+    if (resp.ok) { showToast('已驳回'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await resp.json(); showToast(d.detail, 'error'); }
+  });
+}
+
+function showRejectTransferDialog(docNo) {
+  showRejectDialog('全部驳回', '确定驳回调拨单 ' + docNo + ' 的所有物品吗？', async (reason) => {
+    const resp = await api('/api/v1/transfers/by-document/' + encodeURIComponent(docNo) + '/reject', { method: 'PUT', body: JSON.stringify({ reason }) });
+    if (resp.ok) { showToast('已全部驳回'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await resp.json(); showToast(d.detail, 'error'); }
+  });
+}
+
 
 async function doApprove(id) {
   const resp = await api(`/api/v1/approvals/${id}/approve`, { method: 'PUT', body: JSON.stringify({ comment: '' }) });
   if (resp.ok) { showToast('已通过'); loadApprovals(approvalPage); loadStats(); }
   else { const d = await resp.json(); showToast(d.detail, 'error'); }
+}
+
+// ── 调拨单物品审核 ──
+async function approveTransferItem(id) {
+  showConfirmDialog('确认审核通过', '确定通过该调拨物品吗？', async () => {
+    const resp = await api(`/api/v1/transfers/${id}/approve`, { method: 'PUT' });
+    if (resp.ok) { showToast('已通过'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
+  });
+}
+
+function showRejectTransferDialog(id, itemName) {
+  showRejectDialog('驳回调拨', `确定驳回调拨物品 "${escapeHtml(itemName)}" 吗？`, async (reason) => {
+    const resp = await api(`/api/v1/transfers/${id}/reject`, { method: 'PUT', body: JSON.stringify({ reason }) });
+    if (resp.ok) { showToast('已驳回'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await resp.json(); showToast(d.detail || '驳回失败', 'error'); }
+  });
+}
+
+// ── 调拨整单审核 ──
+async function approveTransferDocument(docNo) {
+  showConfirmDialog(
+    '确认全部通过',
+    `确定通过调拨单 ${escapeHtml(docNo)} 下的所有物品吗？`,
+    async () => {
+      const resp = await api(`/api/v1/transfers/by-document/${encodeURIComponent(docNo)}/approve`, { method: 'PUT' });
+      if (resp.ok) {
+        const d = await resp.json();
+        showToast(d.message || '已全部通过');
+        loadApprovals(approvalPage);
+        loadStats();
+      } else {
+        const d = await resp.json();
+        showToast(d.detail || '操作失败', 'error');
+      }
+    }
+  );
+}
+
+async function rejectTransferDocument(docNo) {
+  showRejectDialog(
+    '全部驳回',
+    `确定驳回调拨单 ${escapeHtml(docNo)} 下的所有物品吗？`,
+    async (reason) => {
+      const resp = await api(`/api/v1/transfers/by-document/${encodeURIComponent(docNo)}/reject`, { method: 'PUT', body: JSON.stringify({ reason }) });
+      if (resp.ok) {
+        const d = await resp.json();
+        showToast(d.message || '已全部驳回');
+        loadApprovals(approvalPage);
+        loadStats();
+      } else {
+        const d = await resp.json();
+        showToast(d.detail || '操作失败', 'error');
+      }
+    }
+  );
+}
+
+// ── 统计 ──
+async function loadStats() {
+  const resp = await api('/api/v1/approvals/stats');
+  if (resp.ok) {
+    const d = await resp.json();
+    document.getElementById('stat-pending').textContent = d.total_pending ?? '--';
+    document.getElementById('stat-transfer-pending').textContent = d.transfer_pending ?? '--';
+    document.getElementById('stat-overtime').textContent = d.total_overtime ?? '--';
+    document.getElementById('stat-today').textContent = d.today_processed ?? '--';
+  }
+}
+
+// ── 单据分组折叠 ──
+function toggleDocGroup(header) {
+  const body = header.nextElementSibling;
+  const toggle = header.querySelector('.doc-group-toggle');
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    header.classList.remove('expanded');
+    toggle.textContent = '▼';
+  } else {
+    body.style.display = 'none';
+    header.classList.add('expanded');
+    toggle.textContent = '▶';
+  }
+}
+
+// ── 租借整单审核 ──
+async function approveByDocument(docNo) {
+  showConfirmDialog(
+    '确认全部通过',
+    `确定通过单据 ${docNo} 下的所有申请吗？`,
+    async () => {
+      const resp = await api(`/api/v1/approvals/by-document/${encodeURIComponent(docNo)}/approve`, {
+        method: 'PUT', body: JSON.stringify({ comment: '' })
+      });
+      if (resp.ok) {
+        const d = await resp.json();
+        showToast(d.message || '已全部通过');
+        loadApprovals(approvalPage);
+        loadStats();
+      } else {
+        const d = await resp.json();
+        showToast(d.detail, 'error');
+      }
+    }
+  );
+}
+
+async function rejectByDocument(docNo) {
+  showRejectDialog(
+    '全部驳回',
+    `确定驳回单据 ${docNo} 下的所有申请吗？原因将应用于该单据下所有记录。`,
+    async (reason) => {
+      const resp = await api(`/api/v1/approvals/by-document/${encodeURIComponent(docNo)}/reject`, {
+        method: 'PUT', body: JSON.stringify({ comment: reason })
+      });
+      if (resp.ok) {
+        const d = await resp.json();
+        showToast(d.message || '已全部驳回');
+        loadApprovals(approvalPage);
+        loadStats();
+      } else {
+        const d = await resp.json();
+        showToast(d.detail, 'error');
+      }
+    }
+  );
+}
+
+// ── 租借单据组渲染 ──
+function renderRecordDocGroup(doc) {
+  const hasDocNo = doc.document_no !== null;
+  const label = hasDocNo ? `单据号: ${doc.document_no}` : '单条记录';
+  const docKey = hasDocNo ? doc.document_no : doc.record_ids[0];
+  const overtimeStyle = doc.is_overtime ? ' style="border-left:3px solid var(--danger);"' : '';
+
+  return `
+  <div class="doc-group"${overtimeStyle}>
+    <div class="doc-group-header" onclick="toggleDocGroup(this)">
+      <div class="doc-group-meta">
+        <strong>${escapeHtml(label)}</strong>
+        <span>借用人: ${escapeHtml(doc.borrower_name)}</span>
+        <span>${doc.item_count} 件物品</span>
+        <span>${escapeHtml(doc.borrow_date)} ~ ${escapeHtml(doc.expected_return_date)}</span>
+        <span>${escapeHtml(doc.reason || '')}</span>
+        <span>审核截止: ${escapeHtml(doc.earliest_deadline || '-')}</span>
+        ${doc.is_overtime ? '<span class="status-badge overdue">超时</span>' : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveByDocument('${escapeHtml(String(docKey))}')">全部通过</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();rejectByDocument('${escapeHtml(String(docKey))}')">全部驳回</button>
+        <span class="doc-group-toggle">▼</span>
+      </div>
+    </div>
+    <div class="doc-group-body">
+      <table class="table">
+        <thead><tr><th>记录ID</th><th>物品</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>事由</th><th>审核截止</th><th>操作</th></tr></thead>
+        <tbody>${doc.items.map(r => `
+          <tr>
+            <td>${r.id}</td><td>${escapeHtml(r.item_name)}</td>
+            <td>${r.quantity}</td><td>${escapeHtml(r.borrow_date)}</td><td>${escapeHtml(r.expected_return_date)}</td>
+            <td>${escapeHtml(r.reason || '-')}</td>
+            <td>${escapeHtml(r.approval_deadline || '-')} ${r.is_overtime ? '<span class="status-badge overdue">超时</span>' : ''}</td>
+            <td>
+              <div class="btn-group">
+                <button class="btn btn-success btn-sm" onclick="doApproveWithConfirm(${r.id})">通过</button>
+                <button class="btn btn-danger btn-sm" onclick="showRejectDialogForId(${r.id})">驳回</button>
+              </div>
+            </td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ── 调拨单据组渲染 ──
+function renderTransferDocGroup(g) {
+  return `
+  <div class="doc-group">
+    <div class="doc-group-header" onclick="toggleDocGroup(this)">
+      <div class="doc-group-meta">
+        <strong>${escapeHtml(g.document_no)}</strong>
+        <span class="status-badge pending">仓库调拨</span>
+        <span><i class="bi bi-building"></i> ${escapeHtml(g.from_warehouse_name)} <i class="bi bi-arrow-right"></i> ${escapeHtml(g.to_warehouse_name)}</span>
+        <span>${g.count} 件物品</span>
+        <span>创建人: ${escapeHtml(g.created_by_name)}</span>
+        <span>${escapeHtml(g.created_at || '')}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveTransferDocument('${escapeHtml(g.document_no)}')">全部通过</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();rejectTransferDocument('${escapeHtml(g.document_no)}')">全部驳回</button>
+        <span class="doc-group-toggle">▼</span>
+      </div>
+    </div>
+    <div class="doc-group-body">
+      <table class="table">
+        <thead><tr><th>物品</th><th>数量</th><th>操作</th></tr></thead>
+        <tbody>${(g.items || []).map(t => `
+          <tr>
+            <td>${escapeHtml(t.item_name || '-')}</td>
+            <td>${t.quantity}</td>
+            <td>
+              <div class="btn-group">
+                <button class="btn btn-success btn-sm" onclick="approveTransferItem(${t.id})">通过</button>
+                <button class="btn btn-danger btn-sm" onclick="showRejectTransferDialog(${t.id}, '${escapeHtml(t.item_name || '#' + t.id)}')">驳回</button>
+              </div>
+            </td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ── 渲染分页 ──
+function renderPagination(total, pageSize, current) {
+  const pages = Math.ceil(total / pageSize);
+  if (pages <= 1) return '';
+  let html = '<div class="pagination">';
+  html += `<button onclick="loadApprovals(${current - 1})" ${current === 1 ? 'disabled' : ''}>上一页</button>`;
+  for (let i = 1; i <= pages; i++) {
+    html += `<button class="${i === current ? 'active' : ''}" onclick="loadApprovals(${i})">${i}</button>`;
+  }
+  html += `<button onclick="loadApprovals(${current + 1})" ${current === pages ? 'disabled' : ''}>下一页</button>`;
+  html += '</div>';
+  return html;
+}
+
+// ── 主加载函数 ──
+async function loadApprovals(page = 1) {
+  approvalPage = page;
+  const type = document.getElementById('approval-type').value;
+  const container = document.getElementById('approvals-table-container');
+
+  if (type === 'all') {
+    // 全部类型：同时请求租借和调拨，合并显示
+    const [recordsResp, transfersResp] = await Promise.all([
+      api('/api/v1/approvals/pending-grouped?page=1&page_size=50'),
+      api('/api/v1/approvals/pending-transfers?page=1&page_size=50')
+    ]);
+
+    let recordsDocs = [];
+    let transfersGroups = [];
+
+    if (recordsResp.ok) {
+      const d = await recordsResp.json();
+      recordsDocs = d.documents || [];
+    }
+    if (transfersResp.ok) {
+      const d = await transfersResp.json();
+      transfersGroups = d.groups || [];
+    }
+
+    if (recordsDocs.length === 0 && transfersGroups.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-clipboard-check"></i></div><p>暂无待审核记录</p></div>';
+      return;
+    }
+
+    let html = '';
+    html += transfersGroups.map(g => renderTransferDocGroup(g)).join('');
+    html += recordsDocs.map(doc => renderRecordDocGroup(doc)).join('');
+    container.innerHTML = html;
+    return;
+  }
+
+  if (type === 'records') {
+    const resp = await api(`/api/v1/approvals/pending-grouped?page=${page}&page_size=15`);
+    if (!resp.ok) { container.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
+
+    const data = await resp.json();
+    if (data.documents.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-clipboard-check"></i></div><p>暂无待审核租借记录</p></div>';
+      return;
+    }
+
+    container.innerHTML = data.documents.map(doc => renderRecordDocGroup(doc)).join('')
+      + renderPagination(data.total, 15, page);
+    return;
+  }
+
+  if (type === 'transfers') {
+    const resp = await api(`/api/v1/approvals/pending-transfers?page=${page}&page_size=20`);
+    if (!resp.ok) { container.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
+
+    const data = await resp.json();
+    const groups = data.groups || [];
+    if (groups.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-arrow-left-right"></i></div><p>暂无待审核调拨记录</p></div>';
+      return;
+    }
+
+    container.innerHTML = groups.map(g => renderTransferDocGroup(g)).join('')
+      + renderPagination(data.total, 20, page);
+    return;
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => { loadStats(); loadApprovals(); });
