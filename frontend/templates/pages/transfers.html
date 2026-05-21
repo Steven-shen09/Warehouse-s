@@ -583,8 +583,8 @@ async function loadTransfers(page = 1) {
         </div>
         <div style="display:flex;align-items:center;gap:8px;" onclick="event.stopPropagation()">
           ${isStaff && g.allPending ? `
-            <button class="btn btn-success btn-sm" onclick="approveDocument('\''${escapeHtml(g.document_no)}\'')">全部通过</button>
-            <button class="btn btn-danger btn-sm" onclick="showRejectDocumentDialog('\''${escapeHtml(g.document_no)}\'')">全部驳回</button>
+            <button class="btn btn-success btn-sm" onclick="approveDocument('${escapeHtml(g.document_no)}')">全部通过</button>
+            <button class="btn btn-danger btn-sm" onclick="showRejectDocumentDialog('${escapeHtml(g.document_no)}')">全部驳回</button>
           ` : ''}
           <span class="doc-group-toggle">▼</span>
         </div>
@@ -601,7 +601,7 @@ async function loadTransfers(page = 1) {
               ${isStaff ? `<td>${t.status === 'pending' ? `
                 <div class="btn-group">
                   <button class="btn btn-success btn-sm" onclick="approveTransfer(${t.id})">通过</button>
-                  <button class="btn btn-danger btn-sm" onclick="showRejectDialog(${t.id}, '\''${escapeHtml(t.item_name || '#' + t.id)}\'')">驳回</button>
+                  <button class="btn btn-danger btn-sm" onclick="showRejectDialog(${t.id}, '${escapeHtml(t.item_name || '#' + t.id)}')">驳回</button>
                 </div>` : '<span class="text-muted" style="font-size:13px;">--</span>'}</td>` : ''}
             </tr>`).join('')}</tbody>
         </table>
