@@ -261,6 +261,87 @@ def reject_transfer(
     conn.commit()
     return {"message": "调拨已驳回"}
 
+@router.put("/by-document/{document_no}/approve")
+def approve_document(
+    document_no: str,
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """审核通过整个调拨单据的所有物品"""
+    items = conn.execute("SELECT * FROM transfers WHERE document_no = ?", (document_no,)).fetchall()
+    if not items:
+        raise HTTPException(status_code=404, detail="调拨单据不存在")
+    if any(t["status"] != "待审核" for t in items):
+        raise HTTPException(status_code=400, detail="该单据中存在已处理的调拨，无法批量通过")
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for t in items:
+            stock = conn.execute(
+                "SELECT quantity FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?",
+                (t["item_id"], t["from_warehouse_id"]),
+            ).fetchone()
+            available = stock["quantity"] if stock else 0
+            if available < t["quantity"]:
+                raise HTTPException(status_code=400,
+                    detail=f"物品ID={t['item_id']} 库存不足（可用：{available}，需要：{t['quantity']}）")
+
+            conn.execute(
+                "UPDATE warehouse_stocks SET quantity = quantity - ? WHERE item_id = ? AND warehouse_id = ?",
+                (t["quantity"], t["item_id"], t["from_warehouse_id"]),
+            )
+            existing = conn.execute(
+                "SELECT id FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?",
+                (t["item_id"], t["to_warehouse_id"]),
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    "UPDATE warehouse_stocks SET quantity = quantity + ? WHERE item_id = ? AND warehouse_id = ?",
+                    (t["quantity"], t["item_id"], t["to_warehouse_id"]),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, ?, ?)",
+                    (t["item_id"], t["to_warehouse_id"], t["quantity"]),
+                )
+            conn.execute(
+                "UPDATE transfers SET status = '已通过', approved_by = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+                (current_user["id"], t["id"]),
+            )
+            _update_item_total(conn, t["item_id"])
+        conn.commit()
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="批量审核失败，已回滚")
+
+    return {"message": f"调拨单 {document_no} 已全部通过", "count": len(items)}
+
+
+@router.put("/by-document/{document_no}/reject")
+def reject_document(
+    document_no: str,
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """驳回整个调拨单据的所有物品"""
+    items = conn.execute("SELECT * FROM transfers WHERE document_no = ?", (document_no,)).fetchall()
+    if not items:
+        raise HTTPException(status_code=404, detail="调拨单据不存在")
+    if any(t["status"] != "待审核" for t in items):
+        raise HTTPException(status_code=400, detail="该单据中存在已处理的调拨，无法批量驳回")
+
+    for t in items:
+        conn.execute(
+            "UPDATE transfers SET status = '已驳回', approved_by = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+            (current_user["id"], t["id"]),
+        )
+    conn.commit()
+    return {"message": f"调拨单 {document_no} 已全部驳回", "count": len(items)}
+
+
 
 def _update_item_total(conn, item_id: int):
     """更新 items.total_quantity = 所有仓库库存之和"""

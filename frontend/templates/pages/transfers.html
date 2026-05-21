@@ -232,7 +232,7 @@
 </style>
 <script>
 let currentPage = 1;
-let _rejectCallback = null;
+let _rejectInfo = null;
 
 // ── HTML 转义 ──
 function escapeHtml(str) {
@@ -255,27 +255,62 @@ function statusBadge(status) {
 function showRejectDialog(transferId, itemName) {
   document.getElementById('reject-message').textContent = '确定驳回调拨 "' + itemName + '" 吗？';
   document.getElementById('reject-reason').value = '';
-  _rejectCallback = transferId;
+  _rejectInfo = { type: 'single', id: transferId };
+  openModal('reject-modal');
+}
+
+function showRejectDocumentDialog(docNo) {
+  document.getElementById('reject-message').textContent = '确定驳回单据 "' + docNo + '" 下的所有调拨吗？';
+  document.getElementById('reject-reason').value = '';
+  _rejectInfo = { type: 'document', docNo: docNo };
   openModal('reject-modal');
 }
 
 document.getElementById('reject-btn').addEventListener('click', async () => {
   const reason = document.getElementById('reject-reason').value.trim();
   if (!reason) { showToast('请填写驳回原因', 'error'); return; }
-  if (_rejectCallback) {
-    const id = _rejectCallback;
-    closeModal('reject-modal');
-    _rejectCallback = null;
-    const resp = await api(`/api/v1/transfers/${id}/reject`, { method: 'PUT', body: JSON.stringify({ reason }) });
-    if (resp.ok) { showToast('已驳回'); loadTransfers(currentPage); }
-    else { const d = await resp.json(); showToast(d.detail || '驳回失败', 'error'); }
+  if (!_rejectInfo) return;
+  const info = _rejectInfo;
+  closeModal('reject-modal');
+  _rejectInfo = null;
+
+  let url;
+  if (info.type === 'document') {
+    url = `/api/v1/transfers/by-document/${encodeURIComponent(info.docNo)}/reject`;
+  } else {
+    url = `/api/v1/transfers/${info.id}/reject`;
   }
+  const resp = await api(url, { method: 'PUT', body: JSON.stringify({ reason }) });
+  if (resp.ok) { showToast('已驳回'); loadTransfers(currentPage); }
+  else { const d = await resp.json(); showToast(d.detail || '驳回失败', 'error'); }
 });
 
 // ── 通过调拨 ──
 async function approveTransfer(id) {
   const resp = await api(`/api/v1/transfers/${id}/approve`, { method: 'PUT' });
   if (resp.ok) { showToast('已通过'); loadTransfers(currentPage); }
+  else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
+}
+
+// ── 单据分组折叠 ──
+function toggleDocGroup(header) {
+  const body = header.nextElementSibling;
+  const toggle = header.querySelector('.doc-group-toggle');
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    header.classList.remove('expanded');
+    toggle.textContent = '▼';
+  } else {
+    body.style.display = 'none';
+    header.classList.add('expanded');
+    toggle.textContent = '▶';
+  }
+}
+
+// ── 批量通过单据 ──
+async function approveDocument(docNo) {
+  const resp = await api(`/api/v1/transfers/by-document/${encodeURIComponent(docNo)}/approve`, { method: 'PUT' });
+  if (resp.ok) { showToast('已全部通过'); loadTransfers(currentPage); }
   else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
 }
 
@@ -487,72 +522,120 @@ function renderPagination(total, pageSize, current) {
   return html;
 }
 
-// ── 加载调拨列表 ──
+// ── 加载调拨列表（按 document_no 分组）──
 async function loadTransfers(page = 1) {
   currentPage = page;
   const status = document.getElementById('status-filter').value;
-  const params = new URLSearchParams({ page, page_size: 20 });
+  const params = new URLSearchParams({ page, page_size: 50 });
   if (status) params.set('status', status);
 
   const resp = await api(`/api/v1/transfers/?${params}`);
   const container = document.getElementById('transfers-table-container');
 
-  if (!resp.ok) {
-    container.innerHTML = '<div class="empty-state">加载失败</div>';
-    return;
-  }
-
+  if (!resp.ok) { container.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
   const data = await resp.json();
   if (!data.transfers || data.transfers.length === 0) {
     container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-arrow-left-right"></i></div><p>暂无调拨记录</p></div>';
     return;
   }
 
-  const isAdmin = AppState.isAdmin;
   const isStaff = AppState.isAdmin || AppState.isApprover;
-  container.innerHTML = `
-    <table class="table">
-      <thead><tr>
-        <th>单号</th>
-        <th>物品名称</th>
-        <th>源仓库 → 目标仓库</th>
-        <th>数量</th>
-        <th>状态</th>
-        <th>原因</th>
-        <th>创建人</th>
-        <th>时间</th>
-        <th>操作</th>
-      </tr></thead>
-      <tbody>${data.transfers.map(t => {
-        // 将 transfer 对象序列化为 JSON 字符串，传给 onclick
-        const transferJson = JSON.stringify(t).replace(/'/g, "&#39;").replace(/"/g, '&quot;');
-        return `
-        <tr style="cursor:pointer;" onclick="showTransferDetail(JSON.parse('${transferJson}'))">
-          <td>${escapeHtml(t.document_no || 'DB-' + t.id)}</td>
-          <td>${escapeHtml(t.item_name || t.item?.name || '-')}</td>
-          <td>
-            <span>${escapeHtml(t.from_warehouse_name || t.from_warehouse?.name || '-')}</span>
-            <i class="bi bi-arrow-right" style="margin:0 6px;color:var(--text-secondary);"></i>
-            <span>${escapeHtml(t.to_warehouse_name || t.to_warehouse?.name || '-')}</span>
-          </td>
-          <td>${t.quantity}</td>
-          <td>${statusBadge(t.status)}</td>
-          <td class="text-muted">${escapeHtml(t.reason || '-')}</td>
-          <td>${escapeHtml(t.created_by_name || t.created_by?.display_name || t.created_by?.username || '-')}</td>
-          <td>${t.created_at || '-'}</td>
-          <td onclick="event.stopPropagation()">
-            ${isStaff && t.status === 'pending' ? `
-            <div class="btn-group">
-              <button class="btn btn-success btn-sm" onclick="approveTransfer(${t.id})">通过</button>
-              <button class="btn btn-danger btn-sm" onclick="showRejectDialog(${t.id}, '${escapeHtml(t.item_name || t.item?.name || '#' + t.id)}')">驳回</button>
-            </div>
-            ` : '<span class="text-muted" style="font-size:13px;">--</span>'}
-          </td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table>
-    ${renderPagination(data.total, 20, currentPage)}
-  `;
+  const transfers = data.transfers;
+
+  // 按单据号分组
+  const groups = {};
+  transfers.forEach(t => {
+    const key = t.document_no || 'DB-' + t.id;
+    if (!groups[key]) {
+      groups[key] = {
+        document_no: key,
+        from_warehouse_name: t.from_warehouse_name,
+        to_warehouse_name: t.to_warehouse_name,
+        created_by_name: t.created_by_name,
+        created_at: t.created_at,
+        items: [], allPending: true
+      };
+    }
+    groups[key].items.push(t);
+    if (t.status !== 'pending') groups[key].allPending = false;
+  });
+
+  let html = '';
+  const groupList = Object.values(groups);
+  const paged = groupList.slice((page - 1) * 20, page * 20);
+  for (const g of paged) {
+    const sc = { pending: 0, approved: 0, rejected: 0 };
+    g.items.forEach(t => { sc[t.status] = (sc[t.status] || 0) + 1; });
+    const sp = [];
+    if (sc.pending) sp.push(`<span class="status-badge pending">${sc.pending}待审核</span>`);
+    if (sc.approved) sp.push(`<span class="status-badge approved">${sc.approved}已通过</span>`);
+    if (sc.rejected) sp.push(`<span class="status-badge rejected">${sc.rejected}已驳回</span>`);
+
+    html += `
+    <div class="doc-group">
+      <div class="doc-group-header" onclick="toggleDocGroup(this)">
+        <div class="doc-group-meta">
+          <strong>${escapeHtml(g.document_no)}</strong>
+          <span><i class="bi bi-building"></i> ${escapeHtml(g.from_warehouse_name)} <i class="bi bi-arrow-right"></i> ${escapeHtml(g.to_warehouse_name)}</span>
+          <span>${g.items.length} 件物品</span>
+          <span>${g.created_at || ''}</span>
+          <span>${sp.join(' ')}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;" onclick="event.stopPropagation()">
+          ${isStaff && g.allPending ? `
+            <button class="btn btn-success btn-sm" onclick="approveDocument('\''${escapeHtml(g.document_no)}\'')">全部通过</button>
+            <button class="btn btn-danger btn-sm" onclick="showRejectDocumentDialog('\''${escapeHtml(g.document_no)}\'')">全部驳回</button>
+          ` : ''}
+          <span class="doc-group-toggle">▼</span>
+        </div>
+      </div>
+      <div class="doc-group-body">
+        <table class="table">
+          <thead><tr><th>物品</th><th>数量</th><th>状态</th><th>原因</th>${isStaff ? '<th>操作</th>' : ''}</tr></thead>
+          <tbody>${g.items.map(t => `
+            <tr>
+              <td>${escapeHtml(t.item_name || '-')}</td>
+              <td>${t.quantity}</td>
+              <td>${statusBadge(t.status)}</td>
+              <td class="text-muted">${escapeHtml(t.reason || '-')}</td>
+              ${isStaff ? `<td>${t.status === 'pending' ? `
+                <div class="btn-group">
+                  <button class="btn btn-success btn-sm" onclick="approveTransfer(${t.id})">通过</button>
+                  <button class="btn btn-danger btn-sm" onclick="showRejectDialog(${t.id}, '\''${escapeHtml(t.item_name || '#' + t.id)}\'')">驳回</button>
+                </div>` : '<span class="text-muted" style="font-size:13px;">--</span>'}</td>` : ''}
+            </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+  container.innerHTML = html + renderPagination(groupList.length, 20, currentPage);
+}
+
+function toggleDocGroup(header) {
+  const body = header.nextElementSibling;
+  const toggle = header.querySelector('.doc-group-toggle');
+  if (body.style.display === 'none') { body.style.display = ''; toggle.textContent = '▼'; }
+  else { body.style.display = 'none'; toggle.textContent = '▶'; }
+}
+
+async function approveDocument(docNo) {
+  if (!confirm('确定通过该调拨单的所有物品吗？')) return;
+  const resp = await api(`/api/v1/transfers/by-document/${encodeURIComponent(docNo)}/approve`, { method: 'PUT' });
+  if (resp.ok) { const d = await resp.json(); showToast(d.message || '已全部通过'); loadTransfers(currentPage); }
+  else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
+}
+
+function showRejectDocumentDialog(docNo) {
+  const modal = document.getElementById('reject-modal');
+  const btn = modal.querySelector('.btn-danger');
+  btn.onclick = async function() {
+    const reason = document.getElementById('reject-reason').value.trim();
+    if (!reason) { showToast('请输入驳回原因', 'warning'); return; }
+    const resp = await api(`/api/v1/transfers/by-document/${encodeURIComponent(docNo)}/reject`, { method: 'PUT', body: JSON.stringify({ reason }) });
+    if (resp.ok) { closeModal('reject-modal'); showToast('已全部驳回'); loadTransfers(currentPage); }
+    else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
+  };
+  openModal('reject-modal');
 }
 
 // ═══════════════════════════════════════════
