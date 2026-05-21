@@ -28,12 +28,14 @@ def approval_stats(
 ):
     """审核统计数据"""
     total_pending = conn.execute("SELECT COUNT(*) FROM records WHERE status = '待审核'").fetchone()[0]
+    transfer_pending = conn.execute("SELECT COUNT(*) FROM transfers WHERE status = '待审核'").fetchone()[0]
     total_overtime = get_overdue_approvals_count(conn)
     today_processed = conn.execute(
         "SELECT COUNT(*) FROM approvals WHERE date(created_at) = date('now','localtime')"
     ).fetchone()[0]
     return {
         "total_pending": total_pending,
+        "transfer_pending": transfer_pending,
         "total_overtime": total_overtime,
         "today_processed": today_processed,
     }
@@ -148,3 +150,56 @@ def approval_history(
         (record_id,),
     ).fetchall()
     return {"items": [dict(r) for r in rows]}
+
+
+@router.get("/pending-transfers")
+def list_pending_transfers(
+    page: int = 1,
+    page_size: int = 20,
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """待审核调拨记录（按单据号分组）"""
+    rows = conn.execute(
+        """SELECT t.*, i.name AS item_name,
+           fw.name AS from_warehouse_name, tw.name AS to_warehouse_name,
+           cu.display_name AS created_by_name
+           FROM transfers t
+           JOIN items i ON t.item_id = i.id
+           JOIN warehouses fw ON t.from_warehouse_id = fw.id
+           JOIN warehouses tw ON t.to_warehouse_id = tw.id
+           JOIN users cu ON t.created_by = cu.id
+           WHERE t.status = '待审核'
+           ORDER BY t.id DESC"""
+    ).fetchall()
+
+    transfers = []
+    for r in rows:
+        d = dict(r)
+        d["status"] = "pending"
+        transfers.append(d)
+
+    # Group by document_no
+    groups = {}
+    for t in transfers:
+        key = t.get("document_no") or f"DB-{t['id']}"
+        if key not in groups:
+            groups[key] = {
+                "document_no": key,
+                "type": "transfer",
+                "from_warehouse_name": t["from_warehouse_name"],
+                "to_warehouse_name": t["to_warehouse_name"],
+                "created_by_name": t["created_by_name"],
+                "created_at": t["created_at"],
+                "items": [],
+                "count": 0,
+            }
+        groups[key]["items"].append(t)
+        groups[key]["count"] += 1
+
+    all_groups = list(groups.values())
+    total = len(all_groups)
+    offset = (page - 1) * page_size
+    paged = all_groups[offset:offset + page_size]
+
+    return {"groups": paged, "total": total, "page": page, "page_size": page_size}
