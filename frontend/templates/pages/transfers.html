@@ -582,27 +582,18 @@ async function loadTransfers(page = 1) {
           <span>${sp.join(' ')}</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;" onclick="event.stopPropagation()">
-          ${isStaff && g.allPending ? `
-            <button class="btn btn-success btn-sm" onclick="approveDocument('${escapeHtml(g.document_no)}')">全部通过</button>
-            <button class="btn btn-danger btn-sm" onclick="showRejectDocumentDialog('${escapeHtml(g.document_no)}')">全部驳回</button>
-          ` : ''}
           <span class="doc-group-toggle">▼</span>
         </div>
       </div>
       <div class="doc-group-body">
         <table class="table">
-          <thead><tr><th>物品</th><th>数量</th><th>状态</th><th>原因</th>${isStaff ? '<th>操作</th>' : ''}</tr></thead>
+          <thead><tr><th>物品</th><th>数量</th><th>状态</th><th>原因</th></tr></thead>
           <tbody>${g.items.map(t => `
             <tr>
               <td>${escapeHtml(t.item_name || '-')}</td>
               <td>${t.quantity}</td>
               <td>${statusBadge(t.status)}</td>
               <td class="text-muted">${escapeHtml(t.reason || '-')}</td>
-              ${isStaff ? `<td>${t.status === 'pending' ? `
-                <div class="btn-group">
-                  <button class="btn btn-success btn-sm" onclick="approveTransfer(${t.id})">通过</button>
-                  <button class="btn btn-danger btn-sm" onclick="showRejectDialog(${t.id}, '${escapeHtml(t.item_name || '#' + t.id)}')">驳回</button>
-                </div>` : '<span class="text-muted" style="font-size:13px;">--</span>'}</td>` : ''}
             </tr>`).join('')}</tbody>
         </table>
       </div>
