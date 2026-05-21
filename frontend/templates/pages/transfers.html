@@ -31,44 +31,57 @@
   <div class="text-center text-muted" style="padding:48px;">加载中...</div>
 </div>
 
-<!-- 新建调拨模态框 -->
+<!-- 新建调拨模态框（批量模式） -->
 <div class="modal-overlay" id="transfer-form-modal">
-  <div class="modal">
+  <div class="modal" style="max-width:700px;">
     <div class="modal-header">
-      <h3>新建调拨</h3>
+      <h3>新建调拨单</h3>
       <button class="btn btn-sm btn-outline" onclick="closeModal('transfer-form-modal')">&times;</button>
     </div>
     <div class="modal-body">
-      <form id="transfer-form" onsubmit="submitTransfer(event)">
-        <div class="form-group">
-          <label class="form-label">物品 *</label>
-          <select id="transfer-item" class="form-select" required>
-            <option value="">请选择物品</option>
-          </select>
-        </div>
+      <form id="transfer-form" onsubmit="submitBatchTransfer(event)">
         <div style="display:flex;gap:12px;">
           <div class="form-group" style="flex:1;">
             <label class="form-label">源仓库 *</label>
             <select id="transfer-from-warehouse" class="form-select" required>
-              <option value="">请选择源仓库</option>
+              <option value="">请选择</option>
             </select>
           </div>
           <div class="form-group" style="flex:1;">
             <label class="form-label">目标仓库 *</label>
             <select id="transfer-to-warehouse" class="form-select" required>
-              <option value="">请选择目标仓库</option>
+              <option value="">请选择</option>
             </select>
           </div>
         </div>
+        <div style="display:flex;gap:12px;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">添加物品</label>
+            <select id="transfer-item" class="form-select">
+              <option value="">请选择物品</option>
+            </select>
+          </div>
+          <div class="form-group" style="width:100px;">
+            <label class="form-label">数量</label>
+            <input type="number" id="transfer-item-qty" class="form-input" min="1" value="1">
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end;">
+            <button type="button" class="btn btn-outline" onclick="addTransferItem()">
+              <i class="bi bi-plus-lg"></i> 添加
+            </button>
+          </div>
+        </div>
         <div class="form-group">
-          <label class="form-label">数量 *</label>
-          <input type="number" id="transfer-quantity" class="form-input" min="1" value="1" required>
+          <label class="form-label">已添加物品清单 <span id="transfer-item-count" class="text-muted" style="font-size:13px;"></span></label>
+          <div id="transfer-items-list" style="border:1px solid var(--border-color, rgba(128,128,128,.15));border-radius:var(--radius);padding:8px 12px;min-height:80px;max-height:200px;overflow:auto;">
+            <div class="text-muted" style="text-align:center;padding:28px 0;">请添加物品</div>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">调拨原因</label>
-          <textarea id="transfer-reason" class="form-textarea" rows="3" placeholder="请简要说明调拨原因"></textarea>
+          <textarea id="transfer-reason" class="form-textarea" rows="2" placeholder="请简要说明调拨原因"></textarea>
         </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;">确认提交</button>
+        <button type="submit" class="btn btn-primary" style="width:100%;">提交调拨单</button>
       </form>
     </div>
   </div>
@@ -366,35 +379,85 @@ async function loadWarehousesForSelect() {
 }
 
 function openTransferModal() {
+  transferItems = [];
   document.getElementById('transfer-form').reset();
   document.getElementById('transfer-from-warehouse').value = '';
   document.getElementById('transfer-to-warehouse').value = '';
   document.getElementById('transfer-item').value = '';
-  document.getElementById('transfer-quantity').value = '1';
+  document.getElementById('transfer-item-qty').value = '1';
   document.getElementById('transfer-reason').value = '';
+  renderTransferItems();
   openModal('transfer-form-modal');
 }
 
-// ── 提交调拨 ──
-async function submitTransfer(e) {
+// ── 批量调拨：添加物品到清单 ──
+function addTransferItem() {
+  const sel = document.getElementById('transfer-item');
+  const qty = parseInt(document.getElementById('transfer-item-qty').value) || 1;
+  const itemId = parseInt(sel.value);
+  const itemName = sel.options[sel.selectedIndex]?.text || '';
+  if (!itemId) { showToast('请选择物品', 'warning'); return; }
+  if (transferItems.some(t => t.item_id === itemId)) { showToast('该物品已在清单中', 'warning'); return; }
+  transferItems.push({ item_id: itemId, item_name: itemName, quantity: qty });
+  sel.value = '';
+  document.getElementById('transfer-item-qty').value = '1';
+  renderTransferItems();
+}
+
+function removeTransferItem(idx) {
+  transferItems.splice(idx, 1);
+  renderTransferItems();
+}
+
+function renderTransferItems() {
+  const container = document.getElementById('transfer-items-list');
+  const count = document.getElementById('transfer-item-count');
+  count.textContent = transferItems.length > 0 ? `（共${transferItems.length}件）` : '';
+  if (transferItems.length === 0) {
+    container.innerHTML = '<div class="text-muted" style="text-align:center;padding:28px 0;">请添加物品</div>';
+    return;
+  }
+  container.innerHTML = `
+    <table class="table" style="margin:0;border:none;"><tbody>
+    ${transferItems.map((t, i) => `
+      <tr><td style="font-weight:500;">${escapeHtml(t.item_name)}</td>
+      <td style="width:80px;text-align:center;">×${t.quantity}</td>
+      <td style="width:40px;text-align:center;">
+        <button type="button" class="btn btn-sm btn-outline" onclick="removeTransferItem(${i})" style="padding:2px 6px;"><i class="bi bi-x"></i></button>
+      </td></tr>
+    `).join('')}
+    </tbody></table>`;
+}
+
+// ── 提交批量调拨 ──
+async function submitBatchTransfer(e) {
   e.preventDefault();
   const fromWh = parseInt(document.getElementById('transfer-from-warehouse').value);
   const toWh = parseInt(document.getElementById('transfer-to-warehouse').value);
-  if (fromWh === toWh) {
-    showToast('源仓库与目标仓库不能相同', 'error');
-    return;
-  }
-  const body = {
-    item_id: parseInt(document.getElementById('transfer-item').value),
-    from_warehouse_id: fromWh,
-    to_warehouse_id: toWh,
-    quantity: parseInt(document.getElementById('transfer-quantity').value),
-    reason: document.getElementById('transfer-reason').value.trim(),
-  };
-  const resp = await api('/api/v1/transfers/', { method: 'POST', body: JSON.stringify(body) });
+  if (!fromWh || !toWh) { showToast('请选择源仓库和目标仓库', 'warning'); return; }
+  if (fromWh === toWh) { showToast('源仓库与目标仓库不能相同', 'warning'); return; }
+  if (transferItems.length === 0) { showToast('请添加至少一个物品', 'warning'); return; }
+
+  const fd = new FormData();
+  fd.append('from_warehouse_id', fromWh);
+  fd.append('to_warehouse_id', toWh);
+  fd.append('reason', document.getElementById('transfer-reason').value.trim());
+  fd.append('items', JSON.stringify(transferItems.map(t => ({item_id: t.item_id, quantity: t.quantity}))));
+
+  const btn = document.querySelector('#transfer-form button[type=submit]');
+  btn.disabled = true; btn.textContent = '提交中...';
+
+  const resp = await fetch('/api/v1/transfers/batch', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${AppState.token}` },
+    body: fd,
+  });
+  btn.disabled = false; btn.textContent = '提交调拨单';
+
   if (resp.ok) {
+    const data = await resp.json();
     closeModal('transfer-form-modal');
-    showToast('调拨申请已提交');
+    showToast(data.message || '调拨单已提交');
     loadTransfers(1);
   } else {
     const d = await resp.json();
