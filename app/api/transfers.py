@@ -9,6 +9,10 @@ from app.schemas.warehouse import TransferCreate
 
 router = APIRouter(prefix="/api/v1/transfers", tags=["调拨管理"])
 
+# Status 映射（数据库中文 ↔ API 英文）
+STATUS_TO_API = {'待审核': 'pending', '已通过': 'approved', '已驳回': 'rejected'}
+STATUS_TO_DB = {v: k for k, v in STATUS_TO_API.items()}
+
 # 调拨导入列名
 TRANSFER_IMPORT_COLUMNS = ["物品名称", "源仓库", "目标仓库", "数量", "原因"]
 
@@ -37,7 +41,7 @@ def list_transfers(
     params = []
     if status:
         where += " AND t.status = ?"
-        params.append(status)
+        params.append(STATUS_TO_DB.get(status, status))
 
     total = conn.execute(f"SELECT COUNT(*) FROM transfers t {where}", params).fetchone()[0]
     offset = (page - 1) * page_size
@@ -56,8 +60,14 @@ def list_transfers(
         params + [page_size, offset],
     ).fetchall()
 
+    transfers = []
+    for r in rows:
+        d = dict(r)
+        d["status"] = STATUS_TO_API.get(d["status"], d["status"])
+        transfers.append(d)
+
     return {
-        "transfers": [dict(r) for r in rows],
+        "transfers": transfers,
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -99,6 +109,75 @@ def create_transfer(
     )
     conn.commit()
     return {"message": "调拨申请已创建", "document_no": doc_no}
+
+
+@router.post("/batch")
+def create_batch_transfer(
+    from_warehouse_id: int = Form(...),
+    to_warehouse_id: int = Form(...),
+    reason: str = Form(default=""),
+    items: str = Form(default=""),
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """批量创建调拨申请（同一单据号，多物品）"""
+    import json
+
+    if from_warehouse_id == to_warehouse_id:
+        raise HTTPException(status_code=400, detail="源仓库和目标仓库不能相同")
+
+    try:
+        items_list = json.loads(items)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="物品数据格式错误")
+
+    if not items_list:
+        raise HTTPException(status_code=400, detail="请至少添加一个物品")
+
+    from_wh = conn.execute("SELECT id FROM warehouses WHERE id = ?", (from_warehouse_id,)).fetchone()
+    to_wh = conn.execute("SELECT id FROM warehouses WHERE id = ?", (to_warehouse_id,)).fetchone()
+    if not from_wh or not to_wh:
+        raise HTTPException(status_code=400, detail="仓库不存在")
+
+    doc_no = _generate_doc_no(conn)
+    created = 0
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for item_data in items_list:
+            item_id = int(item_data.get("item_id", 0))
+            qty = int(item_data.get("quantity", 1))
+            if qty < 1:
+                continue
+
+            item = conn.execute("SELECT id FROM items WHERE id = ?", (item_id,)).fetchone()
+            if not item:
+                continue
+
+            stock = conn.execute(
+                "SELECT quantity FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?",
+                (item_id, from_warehouse_id),
+            ).fetchone()
+            available = stock["quantity"] if stock else 0
+            if available < qty:
+                raise HTTPException(status_code=400,
+                    detail=f"物品ID={item_id} 库存不足（可用：{available}，需要：{qty}）")
+
+            conn.execute(
+                """INSERT INTO transfers (item_id, from_warehouse_id, to_warehouse_id, quantity, reason, document_no, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (item_id, from_warehouse_id, to_warehouse_id, qty, reason, doc_no, current_user["id"]),
+            )
+            created += 1
+        conn.commit()
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="批量调拨创建失败，已回滚")
+
+    return {"message": f"调拨单已创建，共{created}件物品", "document_no": doc_no, "count": created}
 
 
 @router.put("/{transfer_id}/approve")
