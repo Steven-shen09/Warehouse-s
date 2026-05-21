@@ -346,15 +346,18 @@ function showTransferDetail(transfer) {
 }
 
 // ── 加载辅助数据 ──
-async function loadItemsForSelect() {
-  const resp = await api('/api/v1/items/?page_size=999');
+async function loadItemsForSelect(warehouseId) {
+  let url = '/api/v1/items/?page_size=999';
+  if (warehouseId) url += '&warehouse_id=' + warehouseId;
+  const resp = await api(url);
   if (!resp.ok) return;
   const data = await resp.json();
   const select = document.getElementById('transfer-item');
+  select.innerHTML = '<option value="">请选择物品</option>';
   data.items.forEach(item => {
     const opt = document.createElement('option');
     opt.value = item.id;
-    opt.textContent = item.name + (item.available_quantity !== undefined ? '（可用: ' + item.available_quantity + '）' : '');
+    opt.textContent = item.name + (item.available_quantity !== undefined ? '（库存: ' + item.available_quantity + '）' : '');
     select.appendChild(opt);
   });
 }
@@ -375,6 +378,11 @@ async function loadWarehousesForSelect() {
     optTo.value = wh.id;
     optTo.textContent = wh.name;
     toSelect.appendChild(optTo);
+  });
+
+  // 源仓库变更时重新加载物品列表
+  fromSelect.addEventListener('change', function() {
+    loadItemsForSelect(this.value ? parseInt(this.value) : null);
   });
 }
 
