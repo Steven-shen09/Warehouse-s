@@ -183,7 +183,7 @@ def create_batch_transfer(
 @router.put("/{transfer_id}/approve")
 def approve_transfer(
     transfer_id: int,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "approver")),
     conn=Depends(get_db),
 ):
     """审核通过 → 执行库存调拨"""
@@ -244,7 +244,7 @@ def approve_transfer(
 @router.put("/{transfer_id}/reject")
 def reject_transfer(
     transfer_id: int,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "approver")),
     conn=Depends(get_db),
 ):
     """驳回调拨"""

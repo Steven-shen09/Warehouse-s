@@ -509,6 +509,7 @@ async function loadTransfers(page = 1) {
   }
 
   const isAdmin = AppState.isAdmin;
+  const isStaff = AppState.isAdmin || AppState.isApprover;
   container.innerHTML = `
     <table class="table">
       <thead><tr>
@@ -540,7 +541,7 @@ async function loadTransfers(page = 1) {
           <td>${escapeHtml(t.created_by_name || t.created_by?.display_name || t.created_by?.username || '-')}</td>
           <td>${t.created_at || '-'}</td>
           <td onclick="event.stopPropagation()">
-            ${isAdmin && t.status === 'pending' ? `
+            ${isStaff && t.status === 'pending' ? `
             <div class="btn-group">
               <button class="btn btn-success btn-sm" onclick="approveTransfer(${t.id})">通过</button>
               <button class="btn btn-danger btn-sm" onclick="showRejectDialog(${t.id}, '${escapeHtml(t.item_name || t.item?.name || '#' + t.id)}')">驳回</button>
