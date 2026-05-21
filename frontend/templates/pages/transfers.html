@@ -292,6 +292,13 @@ async function approveTransfer(id) {
   else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
 }
 
+// ── 批量通过单据 ──
+async function approveDocument(docNo) {
+  const resp = await api(`/api/v1/transfers/by-document/${encodeURIComponent(docNo)}/approve`, { method: 'PUT' });
+  if (resp.ok) { const d = await resp.json(); showToast(d.message || '已全部通过'); loadTransfers(currentPage); }
+  else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
+}
+
 // ── 单据分组折叠 ──
 function toggleDocGroup(header) {
   const body = header.nextElementSibling;
@@ -305,13 +312,6 @@ function toggleDocGroup(header) {
     header.classList.add('expanded');
     toggle.textContent = '▶';
   }
-}
-
-// ── 批量通过单据 ──
-async function approveDocument(docNo) {
-  const resp = await api(`/api/v1/transfers/by-document/${encodeURIComponent(docNo)}/approve`, { method: 'PUT' });
-  if (resp.ok) { showToast('已全部通过'); loadTransfers(currentPage); }
-  else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
 }
 
 // ── 调拨详情 ──
@@ -609,33 +609,6 @@ async function loadTransfers(page = 1) {
     </div>`;
   }
   container.innerHTML = html + renderPagination(groupList.length, 20, currentPage);
-}
-
-function toggleDocGroup(header) {
-  const body = header.nextElementSibling;
-  const toggle = header.querySelector('.doc-group-toggle');
-  if (body.style.display === 'none') { body.style.display = ''; toggle.textContent = '▼'; }
-  else { body.style.display = 'none'; toggle.textContent = '▶'; }
-}
-
-async function approveDocument(docNo) {
-  if (!confirm('确定通过该调拨单的所有物品吗？')) return;
-  const resp = await api(`/api/v1/transfers/by-document/${encodeURIComponent(docNo)}/approve`, { method: 'PUT' });
-  if (resp.ok) { const d = await resp.json(); showToast(d.message || '已全部通过'); loadTransfers(currentPage); }
-  else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
-}
-
-function showRejectDocumentDialog(docNo) {
-  const modal = document.getElementById('reject-modal');
-  const btn = modal.querySelector('.btn-danger');
-  btn.onclick = async function() {
-    const reason = document.getElementById('reject-reason').value.trim();
-    if (!reason) { showToast('请输入驳回原因', 'warning'); return; }
-    const resp = await api(`/api/v1/transfers/by-document/${encodeURIComponent(docNo)}/reject`, { method: 'PUT', body: JSON.stringify({ reason }) });
-    if (resp.ok) { closeModal('reject-modal'); showToast('已全部驳回'); loadTransfers(currentPage); }
-    else { const d = await resp.json(); showToast(d.detail || '操作失败', 'error'); }
-  };
-  openModal('reject-modal');
 }
 
 // ═══════════════════════════════════════════
