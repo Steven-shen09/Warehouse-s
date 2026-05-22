@@ -327,9 +327,9 @@
       <div class="trend-header">
         <span class="trend-title"><i class="bi bi-graph-up"></i>趋势</span>
         <div class="trend-legend">
-          <span><i class="trend-dot borrowed"></i>借出</span>
-          <span><i class="trend-dot returned"></i>归还</span>
-          <span><i class="trend-dot new-items"></i>新增</span>
+          <span><i class="trend-dot borrowed"></i>借出 <strong x-text="totalBorrowed" style="color:var(--text)">--</strong></span>
+          <span><i class="trend-dot returned"></i>归还 <strong x-text="totalReturned" style="color:var(--text)">--</strong></span>
+          <span><i class="trend-dot new-items"></i>新增 <strong x-text="totalNewItems" style="color:var(--text)">--</strong></span>
         </div>
       </div>
       {% raw %}
@@ -585,6 +585,15 @@ function trendChart() {
       let max = 0;
       (this.trends.weeks || []).forEach(w => { max = Math.max(max, w.new_items || 0); });
       return Math.max(max, 3);
+    },
+    get totalBorrowed() {
+      return (this.trends.weeks || []).reduce((s, w) => s + (w.borrowed || 0), 0);
+    },
+    get totalReturned() {
+      return (this.trends.weeks || []).reduce((s, w) => s + (w.returned || 0), 0);
+    },
+    get totalNewItems() {
+      return (this.trends.weeks || []).reduce((s, w) => s + (w.new_items || 0), 0);
     },
 
     xPos(i) {
