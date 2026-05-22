@@ -432,68 +432,24 @@ a:hover { color: var(--primary-dark); }
   display: flex; align-items: center; justify-content: center;
   min-height: 100vh;
   position: relative;
-  background:
-    radial-gradient(ellipse 80% 50% at 30% 20%, rgba(91,140,255,0.15) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 60% at 70% 60%, rgba(139,124,255,0.12) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 50% at 50% 90%, rgba(100,210,255,0.10) 0%, transparent 50%),
-    linear-gradient(180deg, #EEF4FF 0%, #F4F8FF 40%, #EAF2FF 100%);
-}
-
-/* 登录页光晕动效 */
-.login-page::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 60% 40% at 50% 30%, rgba(91,140,255,0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 30% at 60% 70%, rgba(139,124,255,0.06) 0%, transparent 60%);
-  animation: loginGlow 15s ease-in-out infinite;
-}
-
-@keyframes loginGlow {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
+  background: linear-gradient(180deg, #F2F1ED 0%, #E6E5E0 100%);
 }
 
 .login-card {
   width: 420px; padding: 48px 44px;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur-strong);
-  -webkit-backdrop-filter: var(--glass-blur-strong);
-  border: 1px solid var(--glass-border);
+  background: #FFFFFF;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  box-shadow: 0 8px 40px rgba(38,37,30,0.08);
   position: relative;
   z-index: 1;
-  animation: fadeInUp 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-
-/* 登录卡片边缘折射高光 */
-.login-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg,
-    rgba(255,255,255,0.7) 0%,
-    rgba(255,255,255,0.2) 40%,
-    rgba(255,255,255,0.05) 70%,
-    rgba(255,255,255,0.25) 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
+  animation: fadeInUp 0.5s ease;
 }
 
 .login-card h1 {
   text-align: center; margin-bottom: 8px;
   font-size: 24px; font-weight: 700;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text);
   letter-spacing: -0.5px;
 }
 
@@ -520,16 +476,14 @@ a:hover { color: var(--primary-dark); }
 }
 .toast {
   padding: 14px 22px; margin-bottom: 8px;
-  border-radius: 14px; color: #fff; font-size: 14px; font-weight: 500;
-  box-shadow: var(--shadow-lg);
-  animation: slideInToast 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: var(--radius); color: #fff; font-size: 14px; font-weight: 500;
+  box-shadow: 0 4px 20px rgba(38,37,30,0.12);
+  animation: slideInToast 0.35s ease;
+  border: 1px solid rgba(255,255,255,0.15);
 }
-.toast.success { background: rgba(52,199,89,0.85); }
-.toast.error { background: rgba(255,69,58,0.85); }
-.toast.warning { background: rgba(255,159,10,0.85); }
+.toast.success { background: var(--success); }
+.toast.error { background: var(--danger); }
+.toast.warning { background: var(--warning); }
 
 @keyframes slideInToast {
   from { transform: translateX(120%); opacity: 0; }
@@ -592,20 +546,13 @@ a:hover { color: var(--primary-dark); }
 }
 .skeleton {
   background: linear-gradient(90deg,
-    rgba(255,255,255,0.1) 25%,
-    rgba(255,255,255,0.3) 50%,
-    rgba(255,255,255,0.1) 75%);
+    rgba(38,37,30,0.06) 25%,
+    rgba(38,37,30,0.12) 50%,
+    rgba(38,37,30,0.06) 75%);
   background-size: 800px 100%;
   animation: shimmer 1.8s ease-in-out infinite;
   border-radius: var(--radius-xs);
   min-height: 16px;
-}
-
-[data-theme="dark"] .skeleton {
-  background: linear-gradient(90deg,
-    rgba(255,255,255,0.02) 25%,
-    rgba(255,255,255,0.06) 50%,
-    rgba(255,255,255,0.02) 75%);
 }
 
 /* ── 工具类 ── */
@@ -880,40 +827,25 @@ a:hover { color: var(--primary-dark); }
 [data-theme="dark"] .cart-quantity-control button:hover:not(:disabled) {
   background: var(--primary-dark);
 }
-[data-theme="dark"] .login-page {
-  background:
-    radial-gradient(ellipse 80% 50% at 30% 20%, rgba(91,140,255,0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 60% at 70% 60%, rgba(139,124,255,0.06) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 50% at 50% 90%, rgba(100,210,255,0.04) 0%, transparent 50%),
-    linear-gradient(180deg, #0a0e1a 0%, #0f1428 40%, #0a0e1a 100%);
-}
-
 /* ── 页面内容过渡动画 ── */
 .main-content > * {
-  animation: fadeInUp 0.5s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: fadeInUp 0.4s ease both;
 }
 
 .main-content > *:nth-child(1) { animation-delay: 0s; }
-.main-content > *:nth-child(2) { animation-delay: 0.05s; }
-.main-content > *:nth-child(3) { animation-delay: 0.10s; }
-.main-content > *:nth-child(4) { animation-delay: 0.15s; }
+.main-content > *:nth-child(2) { animation-delay: 0.04s; }
+.main-content > *:nth-child(3) { animation-delay: 0.08s; }
+.main-content > *:nth-child(4) { animation-delay: 0.12s; }
 
 /* ── 滚动条美化 ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(91,140,255,0.2);
+  background: rgba(38,37,30,0.15);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(91,140,255,0.35);
-}
-
-[data-theme="dark"] ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.08);
-}
-[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.15);
+  background: rgba(38,37,30,0.25);
 }
 
 /* ── 确认对话框样式 ── */
