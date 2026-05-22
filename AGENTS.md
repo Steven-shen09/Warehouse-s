@@ -23,7 +23,7 @@
 | 调用 `Edit` 或 `Write` | `brainstorming`（首次该任务） | 修改代码前先过方案 |
 | 调用 `EnterPlanMode` | `brainstorming`（如果还没调） | 规划前必须先探索 |
 | 用户提到 bug/报错/异常 | `systematic-debugging` | 复现→最小化→假设→测量→修复→回归测试 |
-| 涉及 CSS/HTML/模板/Jinja2 | `brainstorming` + `frontend-design` | 结果必须符合 Apple Liquid Glass 设计规范（见 memory: apple_liquid_glass_design） |
+| 涉及 CSS/HTML/模板/Jinja2 | `brainstorming` + `frontend-design` | 结果必须符合 Cursor Warm Minimal 设计规范 |
 | 新增文件/函数/路由/API | `writing-plans` 或 `/plan` | 先出方案再动手 |
 | 写实现代码前 | `superpowers:test-driven-development` | 先写测试→红灯→绿灯→重构 |
 | 提交代码前 | `security-review` | 检查 JWT、RBAC、密码哈希、SQL 注入、XSS |
@@ -41,7 +41,7 @@
 
 ## 项目概述
 
-全栈物品租借管理系统。后端 Python FastAPI + SQLite（WAL 模式），前端 Jinja2 + HTMX 2.0 + Alpine.js 3.14，**Apple Liquid Glass** 设计系统（支持暗色模式），安全方案 PBKDF2-SHA256 + JWT (HS256)。
+全栈物品租借管理系统。后端 Python FastAPI + SQLite（WAL 模式），前端 Jinja2 + HTMX 2.0 + Alpine.js 3.14，**Cursor Warm Minimal** 设计系统，安全方案 PBKDF2-SHA256 + JWT (HS256)。
 
 详见 [DEV.md](./DEV.md) 和 [README.md](./README.md)。
 
@@ -59,7 +59,7 @@
 
 ### 前端与 UI
 - **frontend-design** — 创建/改进 Jinja2 模板页面时使用，生成有设计感的界面。
-- **ui-ux-pro-max** — 优化 Apple Liquid Glass 设计系统、暗色模式、响应式布局、组件交互时使用。
+- **ui-ux-pro-max** — 优化 Cursor Warm Minimal 设计系统、响应式布局、组件交互时使用。
 
 ### 安全与审查
 - **security-review** — 提交前审查 JWT、RBAC、密码哈希等安全相关变更。
