@@ -690,7 +690,7 @@ function trendChart() {
       tip.innerHTML = `${w.label}<br><span style="color:#F54E00">借出 ${w.borrowed}</span>  <span style="color:#C08532">归还 ${w.returned}</span>  <span style="color:#E04A00">新增 ${w.new_items}</span>`;
       let tx = e.clientX - rect.left + 12;
       if (tx + 180 > rect.width) tx = e.clientX - rect.left - 180;
-      tip.style.cssText = `display:block;position:absolute;left:${tx}px;top:${e.clientY-rect.top-60}px;background:rgba(38,37,30,0.92);color:#F2F1ED;padding:6px 12px;border-radius:8px;font-size:11px;pointer-events:none;z-index:20;white-space:nowrap`;
+      tip.style.cssText = `display:block;opacity:1;position:absolute;left:${tx}px;top:${e.clientY-rect.top-60}px;background:rgba(38,37,30,0.92);color:#F2F1ED;padding:6px 12px;border-radius:8px;font-size:11px;pointer-events:none;z-index:20;white-space:nowrap`;
     },
     onLeave() {
       const svg = this.$el.querySelector('svg');
