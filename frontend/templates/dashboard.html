@@ -712,7 +712,7 @@ function trendChart() {
         if (resp.ok) {
           const data = await resp.json();
           this.trends = data;
-          this.$nextTick(() => this.renderLabels());
+          requestAnimationFrame(() => { requestAnimationFrame(() => this.renderLabels()); });
         }
       } catch (e) { console.error('加载趋势数据失败:', e); }
     },
@@ -741,13 +741,16 @@ function trendChart() {
     },
 
     setup() {
-      const el = this;
-      const today = new Date();
-      const d7 = new Date(today);
-      d7.setDate(d7.getDate() - 7);
-      el.customStart = d7.toISOString().split('T')[0];
-      el.customEnd = today.toISOString().split('T')[0];
-      el.fetchTrends({ start_date: el.customStart, end_date: el.customEnd });
+      const loadData = () => {
+        const today = new Date();
+        const d7 = new Date(today);
+        d7.setDate(d7.getDate() - 7);
+        this.customStart = d7.toISOString().split('T')[0];
+        this.customEnd = today.toISOString().split('T')[0];
+        this.fetchTrends({ start_date: this.customStart, end_date: this.customEnd });
+      };
+      loadData();
+      window.addEventListener('pageshow', (e) => { if (e.persisted) loadData(); });
     }
   };
 }
@@ -763,7 +766,7 @@ function topBorrowed() {
         if (resp.ok) {
           const data = await resp.json();
           this.items = data.items || [];
-          this.$nextTick(() => this.render());
+          requestAnimationFrame(() => { requestAnimationFrame(() => this.render()); });
         }
       } catch (e) { console.error('加载热门借出失败:', e); }
     },
