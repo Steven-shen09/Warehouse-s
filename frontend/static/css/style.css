@@ -247,64 +247,68 @@ a:hover { color: var(--primary-dark); }
 /* ── 表格 ── */
 .table {
   width: 100%; border-collapse: separate; border-spacing: 0;
-  font-size: 15px; font-weight: 500;
+  font-size: 14px; font-weight: 500;
   border-radius: var(--radius-sm);
 }
 .table th, .table td {
-  padding: 14px 18px; text-align: left;
+  padding: 12px 16px; text-align: left;
   border-bottom: 1px solid var(--border-light);
 }
 .table th {
   font-weight: 600; color: var(--text-secondary);
-  background: rgba(255,255,255,0.2);
-  font-size: 13px; text-transform: none;
+  background: var(--bg-soft);
+  font-size: 13px;
   letter-spacing: -0.1px;
 }
 .table tbody tr {
-  transition: all 0.25s ease;
+  transition: background 0.15s ease;
   background: transparent;
 }
-.table tbody tr:hover {
-  background: rgba(91,140,255,0.04);
-  box-shadow: 0 0 0 1px rgba(91,140,255,0.08);
-  border-radius: 8px;
+.table tbody tr:nth-child(even) {
+  background: #F7F7F4;
 }
-.table td:first-child, .table th:first-child { padding-left: 22px; }
+.table tbody tr:hover {
+  background: rgba(245,78,0,0.04);
+}
+.table td:first-child, .table th:first-child { padding-left: 20px; }
 
 /* ── 状态标签 ── */
 .status-badge {
-  display: inline-block; padding: 4px 14px; border-radius: 20px;
+  display: inline-block; padding: 3px 12px; border-radius: 999px;
   font-size: 12px; font-weight: 600; white-space: nowrap;
   letter-spacing: -0.1px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
-.status-badge.available, .status-badge.returned, .status-badge.approved {
-  background: rgba(52,199,89,0.12); color: #1B8C3A;
-  border: 1px solid rgba(52,199,89,0.2);
+.status-badge.available {
+  background: rgba(31,138,101,0.10); color: #1F8A65;
+  border: 1px solid rgba(31,138,101,0.18);
 }
-.status-badge.lent, .status-badge.pending {
-  background: rgba(255,159,10,0.12); color: #B8700A;
-  border: 1px solid rgba(255,159,10,0.2);
+.status-badge.lent {
+  background: rgba(159,187,224,0.18); color: #5A7BA8;
+  border: 1px solid rgba(159,187,224,0.30);
 }
-.status-badge.damaged, .status-badge.rejected, .status-badge.overdue {
-  background: rgba(255,69,58,0.12); color: #C8352E;
-  border: 1px solid rgba(255,69,58,0.2);
+.status-badge.damaged {
+  background: rgba(207,45,86,0.10); color: #CF2D56;
+  border: 1px solid rgba(207,45,86,0.18);
 }
-
-[data-theme="dark"] .status-badge.available,
-[data-theme="dark"] .status-badge.returned,
-[data-theme="dark"] .status-badge.approved {
-  background: rgba(52,199,89,0.15); color: #30D158;
+.status-badge.pending {
+  background: rgba(192,133,50,0.12); color: #C08532;
+  border: 1px solid rgba(192,133,50,0.20);
 }
-[data-theme="dark"] .status-badge.lent,
-[data-theme="dark"] .status-badge.pending {
-  background: rgba(255,159,10,0.15); color: #FFB340;
+.status-badge.approved {
+  background: rgba(159,201,162,0.18); color: #5A8F62;
+  border: 1px solid rgba(159,201,162,0.28);
 }
-[data-theme="dark"] .status-badge.damaged,
-[data-theme="dark"] .status-badge.rejected,
-[data-theme="dark"] .status-badge.overdue {
-  background: rgba(255,69,58,0.15); color: #FF6961;
+.status-badge.rejected {
+  background: rgba(207,45,86,0.10); color: #CF2D56;
+  border: 1px solid rgba(207,45,86,0.18);
+}
+.status-badge.returned {
+  background: rgba(192,168,221,0.18); color: #7B68A0;
+  border: 1px solid rgba(192,168,221,0.28);
+}
+.status-badge.overdue {
+  background: rgba(245,78,0,0.10); color: #F54E00;
+  border: 1px solid rgba(245,78,0,0.20);
 }
 
 /* ── 表单 ── */
