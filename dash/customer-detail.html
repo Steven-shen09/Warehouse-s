@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevPulse — Customer Detail</title>
+<style>
+  :root {
+    --bg:      oklch(10% 0.015 240);
+    --surface: oklch(15% 0.02 240);
+    --surface2:oklch(18% 0.022 240);
+    --fg:      oklch(92% 0.005 240);
+    --muted:   oklch(60% 0.018 240);
+    --border:  oklch(22% 0.02 240);
+    --accent:  oklch(56% 0.12 170);
+    --success: oklch(62% 0.14 155);
+    --warning: oklch(70% 0.14 80);
+    --danger:  oklch(56% 0.18 25);
+    --info:    oklch(58% 0.12 240);
+    --font-display: 'Söhne', 'Avenir Next', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --font-body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --font-mono:    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 24px; border-bottom: 1px solid var(--border);
+    background: var(--surface); position: sticky; top: 0; z-index: 100;
+  }
+  .topbar-logo { font-family: var(--font-display); font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
+  .topbar-logo span { color: var(--accent); }
+  .topbar-nav { display: flex; gap: 4px; }
+  .topbar-nav a { color: var(--muted); text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+  .topbar-nav a:hover, .topbar-nav a.active { color: var(--fg); background: var(--surface2); }
+  .topbar-nav a.active { color: var(--accent); }
+
+  .main { max-width: 1200px; margin: 0 auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* Back link */
+  .back-link { color: var(--muted); text-decoration: none; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; }
+  .back-link:hover { color: var(--fg); }
+
+  /* Customer header */
+  .customer-header {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 20px 24px; display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: start;
+  }
+  .customer-name { font-family: var(--font-display); font-size: 24px; font-weight: 700; }
+  .customer-id { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .customer-meta { display: flex; gap: 24px; margin-top: 12px; flex-wrap: wrap; }
+  .meta-item { display: flex; flex-direction: column; gap: 2px; }
+  .meta-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .meta-value { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .customer-actions { display: flex; gap: 8px; align-items: flex-start; }
+  .pill {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600; padding: 4px 12px;
+    border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .pill.enterprise { background: oklch(56% 0.12 170 / 0.15); color: var(--accent); }
+  .pill.active { background: oklch(62% 0.14 155 / 0.15); color: var(--success); }
+
+  /* Detail grid */
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; display: flex; flex-direction: column;
+  }
+  .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .panel-title { font-size: 13px; font-weight: 600; }
+  .chart-subtitle { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+
+  /* Usage chart placeholder */
+  .chart-body {
+    flex: 1; min-height: 200px; background: var(--surface2);
+    border: 1px dashed var(--border); border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .chart-placeholder { color: var(--muted); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* Info table */
+  .info-table { width: 100%; border-collapse: collapse; }
+  .info-table td { padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .info-table td:first-child { color: var(--muted); font-size: 12px; width: 140px; }
+  .info-table td:last-child { font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+  /* Activity list */
+  .activity-list { display: flex; flex-direction: column; }
+  .activity-row {
+    display: grid; grid-template-columns: 72px 1fr auto; gap: 10px;
+    align-items: center; padding: 6px 0; border-bottom: 1px solid oklch(22% 0.02 240 / 0.5);
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .activity-time { color: var(--muted); }
+  .activity-desc { color: var(--fg); }
+  .activity-amt { color: var(--accent); font-weight: 600; }
+
+  /* KPI mini row */
+  .kpi-mini-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .kpi-mini {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .kmi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .kmi-value { font-family: var(--font-mono); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kmi-delta { font-family: var(--font-mono); font-size: 11px; }
+  .kmi-delta.up { color: var(--success); }
+  .kmi-delta.down { color: var(--danger); }
+
+  /* Full-width panel */
+  .panel-full { grid-column: 1 / -1; }
+
+  @media (max-width: 1024px) {
+    .detail-grid { grid-template-columns: 1fr; }
+    .kpi-mini-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .topbar { padding: 10px 14px; }
+    .topbar-nav { display: none; }
+    .main { padding: 12px 10px; }
+    .customer-header { grid-template-columns: 1fr; }
+    .kpi-mini-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="dashboard.html" class="topbar-logo">Dev<span>Pulse</span></a>
+  <nav class="topbar-nav">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="customer-detail.html" class="active">Customers</a>
+    <a href="event-log.html">Events</a>
+  </nav>
+  <span class="chart-subtitle" style="color:var(--muted)">Customer Detail</span>
+</header>
+
+<main class="main">
+  <a href="dashboard.html" class="back-link">← Back to Dashboard</a>
+
+  <!-- Customer header -->
+  <section class="customer-header">
+    <div>
+      <div class="customer-name">Acme Corp</div>
+      <div class="customer-id">cust_3f8a91b2 — Created 2024-09-12</div>
+      <div class="customer-meta">
+        <div class="meta-item"><span class="meta-label">MRR</span><span class="meta-value">$24,500</span></div>
+        <div class="meta-item"><span class="meta-label">Seats</span><span class="meta-value">248 / 300</span></div>
+        <div class="meta-item"><span class="meta-label">API Calls/mo</span><span class="meta-value">14.2M</span></div>
+        <div class="meta-item"><span class="meta-label">Avg. Latency</span><span class="meta-value">42ms</span></div>
+        <div class="meta-item"><span class="meta-label">Health Score</span><span class="meta-value" style="color:var(--success)">92/100</span></div>
+      </div>
+    </div>
+    <div class="customer-actions">
+      <span class="pill enterprise">Enterprise</span>
+      <span class="pill active">Active</span>
+    </div>
+  </section>
+
+  <!-- KPI Mini Row -->
+  <section class="kpi-mini-row">
+    <div class="kpi-mini"><span class="kmi-label">MRR Growth</span><span class="kmi-value">+14.2%</span><span class="kmi-delta up">vs last quarter</span></div>
+    <div class="kpi-mini"><span class="kmi-label">Net Retention</span><span class="kmi-value">118%</span><span class="kmi-delta up">expansion</span></div>
+    <div class="kpi-mini"><span class="kmi-label">Support Tickets</span><span class="kmi-value">3 open</span><span class="kmi-delta down">+1 this week</span></div>
+    <div class="kpi-mini"><span class="kmi-label">Last Invoice</span><span class="kmi-value">$24,500</span><span class="kmi-delta up" style="color:var(--muted)">Paid May 01</span></div>
+  </section>
+
+  <!-- Detail grid -->
+  <section class="detail-grid">
+    <!-- Usage over time -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">API Usage — Last 12 Months</span>
+        <span class="chart-subtitle">M requests / month</span>
+      </div>
+      <div class="chart-body">
+        <span class="chart-placeholder">[ Usage Trend Chart — Monthly API Calls ]</span>
+      </div>
+    </div>
+
+    <!-- Plan Details -->
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Plan & Billing</span></div>
+      <table class="info-table">
+        <tr><td>Plan</td><td>Enterprise — Annual</td></tr>
+        <tr><td>Base MRR</td><td>$18,000</td></tr>
+        <tr><td>Overage</td><td>$4,200</td></tr>
+        <tr><td>Add-ons</td><td>$2,300 (SSO + Audit Log)</td></tr>
+        <tr><td>Discount</td><td>10% annual commitment</td></tr>
+        <tr><td>Next Renewal</td><td>2026-09-12</td></tr>
+        <tr><td>Payment Method</td><td>Wire Transfer (Net 30)</td></tr>
+      </table>
+    </div>
+
+    <!-- Recent activity -->
+    <div class="panel panel-full">
+      <div class="panel-header"><span class="panel-title">Recent Activity</span></div>
+      <div class="activity-list">
+        <div class="activity-row"><span class="activity-time">2026-05-21</span><span class="activity-desc">Upgraded from 200 to 300 seats</span><span class="activity-amt">+$4,000/mo</span></div>
+        <div class="activity-row"><span class="activity-time">2026-05-15</span><span class="activity-desc">Enabled SSO add-on</span><span class="activity-amt">+$500/mo</span></div>
+        <div class="activity-row"><span class="activity-time">2026-05-10</span><span class="activity-desc">API overage — 14.2M calls (cap: 10M)</span><span class="activity-amt">+$4,200</span></div>
+        <div class="activity-row"><span class="activity-time">2026-05-01</span><span class="activity-desc">Invoice #INV-0501 paid</span><span class="activity-amt">$24,500</span></div>
+        <div class="activity-row"><span class="activity-time">2026-04-28</span><span class="activity-desc">Support ticket #8842 resolved — SSO config</span><span class="activity-amt">—</span></div>
+        <div class="activity-row"><span class="activity-time">2026-04-15</span><span class="activity-desc">Added 2 new workspaces (total: 18)</span><span class="activity-amt">—</span></div>
+        <div class="activity-row"><span class="activity-time">2026-04-01</span><span class="activity-desc">Invoice #INV-0401 paid</span><span class="activity-amt">$20,000</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+</body>
+</html>

@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-此文件为 Claude Code 在 Warehouse-s 项目中工作时提供指引。
+此文件为 Codex 在 Warehouse-s 项目中工作时提供指引。
 
 ## 强制工作流（最高优先级，不可跳过）
 
@@ -12,7 +12,7 @@
 
 ```
 🔍 任务类型：[新功能 / Bug / UI / 数据 / 重构]
-📋 适用流程：[对应 CLAUDE.md 工作流]
+📋 适用流程：[对应 AGENTS.md 工作流]
 ✅ 前置条件：[已调用的 skill 名称]
 ```
 
