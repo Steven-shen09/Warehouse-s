@@ -24,6 +24,7 @@
 | 调用 `EnterPlanMode` | `brainstorming`（如果还没调） | 规划前必须先探索 |
 | 用户提到 bug/报错/异常 | `systematic-debugging` | 复现→最小化→假设→测量→修复→回归测试 |
 | 涉及 CSS/HTML/模板/Jinja2 | `brainstorming` + `frontend-design` | 结果必须符合 Apple Liquid Glass 设计规范（见 memory: apple_liquid_glass_design） |
+| 设计规划阶段（定义调色板/字体/布局/情绪板） | `design-brief` | 将模糊设计需求转化为结构化 DESIGN.md，输出 I-Lang 协议设计规格 |
 | 新增文件/函数/路由/API | `writing-plans` 或 `/plan` | 先出方案再动手 |
 | 写实现代码前 | `superpowers:test-driven-development` | 先写测试→红灯→绿灯→重构 |
 | 提交代码前 | `security-review` | 检查 JWT、RBAC、密码哈希、SQL 注入、XSS |
@@ -58,7 +59,8 @@
 - **systematic-debugging** — 遇到 bug、测试失败或异常行为时使用，先排查再修复。
 
 ### 前端与 UI
-- **frontend-design** — 创建/改进 Jinja2 模板页面时使用，生成有设计感的界面。
+- **design-brief** — 设计规划阶段使用，将模糊需求（"做得专业一点"）转化为结构化 DESIGN.md（调色板/字体/布局/情绪板/密度/约束）。
+- **frontend-design** — 日常开发创建/改进 Jinja2 模板页面时使用，生成有设计感的界面。
 - **ui-ux-pro-max** — 优化 Apple Liquid Glass 设计系统、暗色模式、响应式布局、组件交互时使用。
 
 ### 安全与审查
@@ -77,47 +79,51 @@
 - 所有前端资源本地托管，**不引入任何外部 CDN 依赖**。
 - 版本号规则：每次推送 GitHub 时版本号 +0.1（v1.1 → v1.2 → v1.3 ...）。
 
-## 设计系统 — Apple VisionOS Liquid Glass
+## 设计系统 — Cursor Warm Minimal
 
 > 完整设计规范见 [`design-system/MASTER.md`](./design-system/MASTER.md)
-> 风格：液态玻璃 · 光学折射 · 空间层次 · 动态环境光 · 漂浮布局
+> 风格：温暖纸质触感 · 极简无装饰 · 色彩层次代替光影层次
 
-### 配色（Apple VisionOS Liquid Glass）
+### 配色（Cursor Warm Minimal）
 
 CSS 变量定义在 `frontend/static/css/style.css :root` 中：
 
-| 用途 | 变量 | 亮色值 | 暗色值 |
-|------|------|--------|--------|
-| 主色（Apple蓝） | `--primary` | `#5B8CFF` | 同 |
-| 点缀色（冰川紫） | `--accent` | `#8B7CFF` | 同 |
-| 页面背景 | `--bg` | `#F4F8FF` | `#0a0e1a` |
-| 卡片背景 | `--bg-card` | `rgba(255,255,255,.18)` | `rgba(20,28,60,.35)` |
-| 标题文字 | `--text-title` | `#111827` | `rgba(255,255,255,.92)` |
-| 正文 | `--text` | `rgba(17,24,39,.88)` | `rgba(255,255,255,.88)` |
-| 次级文字 | `--text-secondary` | `rgba(31,41,55,.56)` | `rgba(255,255,255,.72)` |
-| 圆角 | `--radius` | `24px` | 同 |
-| 阴影 | `--shadow` | `0 4px 20px rgba(120,160,255,.10), inset 0 1px 0 rgba(255,255,255,.35)` | - |
+| 用途 | 变量 | 亮色值 |
+|------|------|--------|
+| 主色（Cursor橙） | `--primary` | `#F54E00` |
+| 点缀色（暖金） | `--accent` | `#C08532` |
+| 页面背景 | `--bg` | `#F2F1ED` |
+| 卡片背景 | `--bg-card` | `#E6E5E0` |
+| 标题文字 | `--text-title` | `#26251E` |
+| 正文 | `--text` | `#26251E` |
+| 次级文字 | `--text-secondary` | `rgba(38,37,30,0.56)` |
+| 辅助文字 | `--text-muted` | `rgba(38,37,30,0.40)` |
+| 圆角 | `--radius` | `14px` |
+| 阴影（仅hover） | `--shadow-hover` | `0 2px 16px rgba(38,37,30,0.06)` |
 
 ### 字号层级
 
 | 层级 | 元素 | 字号/字重 |
 |------|------|----------|
-| 页面大标题 | `.main-content h2` | 34px / 700 → 蓝紫渐变 |
-| 数据数字 | `.stat-value` | 42px / 700 → 蓝紫渐变 |
+| 页面大标题 | `.main-content h2` | 44px / 700 |
+| 数据数字 | `.stat-value` | 42px / 700 |
 | 区块标题 | `.card-title` | 20px / 600 |
-| 按钮/表格/输入框 | `.btn` `.table` `.form-input` | 15px / 500-600 |
-| 侧边栏/标签 | `.sidebar a` `.stat-label` | 14px / 500 |
-| 次级文字 | - | 13px / 400 |
+| 按钮/表格/输入框 | `.btn` `.table` `.form-input` | 14px / 500 |
+| 侧边栏/标签 | `.sidebar a` `.stat-label` | 13px / 500 |
+| 次级文字 | — | 13px / 400 |
 
-### 玻璃效果
+### 平面设计原则
 
-- **分层 blur**：卡片 16px / 导航栏 24px / 侧边栏 30px / 模态框 40px
-- **全边框折射高光**：`mask-composite: exclude` 技术，1px 渐变边框模拟光学折射
-- **液态扫光**：hover 时 skewX(-20deg) 斜切光带扫描（1.2s）
-- **噪点纹理**：SVG `feTurbulence` fractalNoise，opacity 0.025
-- **阴影内发光**：所有阴影含 `inset 0 1px 0 rgba(255,255,255,.x)` 模拟玻璃微反射
-- **背景光晕**：5层径向渐变 (200% size) + 20s 流动动画
-- **卡片悬浮**：hover → `translateY(-4px) scale(1.01)` + 50px 蓝色调阴影
+本设计系统不使用模糊（blur）、渐变（gradient）、噪点纹理（SVG feTurbulence）、液态扫光动画。以色彩层次代替光影层次：
+
+- **无模糊**：导航栏、侧边栏、卡片、模态框均为纯色背景，不使用 backdrop-filter: blur()
+- **无渐变**：标题、按钮、数据数字使用纯色填充，不应用 linear-gradient()
+- **无噪点纹理**：移除 body::after SVG feTurbulence 纹理叠加
+- **无液态扫光**：移除 hover 时 skewX 斜切光带扫描动画
+- **无阴影内发光**：不添加 inset 阴影模拟玻璃微反射，仅 hover 时使用轻微暖棕色 box-shadow
+- **无背景光晕**：不使用径向渐变背景动画
+
+动画方面，仅保留必要的交互反馈（hover 过渡、页面进入 fadeIn），不使用扫光、流动等装饰性动画。
 
 ### 组件使用规范
 

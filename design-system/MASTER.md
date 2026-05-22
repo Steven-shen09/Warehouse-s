@@ -1,18 +1,18 @@
-# Warehouse-s 设计系统 — Apple VisionOS Liquid Glass
+# Warehouse-s 设计系统 — Cursor Warm Minimal
 
-> 风格名称：**Apple VisionOS Liquid Glass**
-> 最后更新：2026-05-17
+> 风格名称：**Cursor Warm Minimal**
+> 最后更新：2026-05-22
 > 适用范围：Warehouse-s 项目所有页面
 
 ---
 
 ## 一、风格定义
 
-基于 Apple Vision Pro / VisionOS 设计语言的液态玻璃 UI 系统。强调**空间层次感、光学折射、动态环境光、漂浮式布局**。不是简单的 blur + 白色透明，而是模拟真实世界中「漂浮在空间中的薄玻璃」的光学材质效果。
+基于 Cursor 编辑器的暖色极简设计语言。强调**温暖纸质触感、极简无装饰、色彩层次代替光影层次**。不使用任何模糊、透明、渐变或动画效果。
 
-**关键词：** Translucency、Refraction、Depth、Ambient Light、Floating Layers、Optical Material
+**关键词：** Warm Minimalism、Paper Texture、Flat Surfaces、Warm Neutrals、Ink & Craft
 
-**参考：** Apple Vision Pro、iOS 18、macOS Sonoma、Arc Browser、Linear
+**参考：** Cursor Editor、Cursor-showcase.html、精装印刷品设计
 
 ---
 
