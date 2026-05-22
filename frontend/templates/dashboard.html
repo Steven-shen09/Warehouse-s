@@ -47,10 +47,10 @@
   font-size: 20px;
   flex-shrink: 0;
 }
-.quick-stat-icon.danger { background: rgba(207,45,86,0.10); color: var(--danger); }
-.quick-stat-icon.success { background: rgba(31,138,101,0.10); color: var(--success); }
-.quick-stat-icon.warning { background: rgba(192,133,50,0.10); color: var(--warning); }
-.quick-stat-icon.info { background: rgba(159,187,224,0.12); color: var(--info); }
+.quick-stat-icon.danger { background: rgba(38,37,30,0.08); color: #26251E; }
+.quick-stat-icon.success { background: rgba(192,133,50,0.10); color: #C08532; }
+.quick-stat-icon.warning { background: rgba(245,78,0,0.08); color: #F54E00; }
+.quick-stat-icon.info { background: rgba(245,78,0,0.06); color: #E04A00; }
 .quick-stat-info { display: flex; flex-direction: column; }
 .quick-stat-value {
   font-size: 22px;
@@ -169,7 +169,7 @@
   display: inline-block;
 }
 .trend-dot.borrowed { background: var(--primary); }
-.trend-dot.returned { background: var(--info); }
+.trend-dot.returned { background: #C08532; }
 .trend-dot.new-items { background: var(--accent); }
 
 .trend-svg { width: 100%; }
@@ -348,12 +348,12 @@
               <stop offset="100%" stop-color="#F54E00" stop-opacity="0"/>
             </linearGradient>
             <linearGradient id="returnFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#9FBBE0" stop-opacity=".20"/>
-              <stop offset="100%" stop-color="#9FBBE0" stop-opacity="0"/>
-            </linearGradient>
-            <linearGradient id="newFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stop-color="#C08532" stop-opacity=".20"/>
               <stop offset="100%" stop-color="#C08532" stop-opacity="0"/>
+            </linearGradient>
+            <linearGradient id="newFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#E04A00" stop-opacity=".20"/>
+              <stop offset="100%" stop-color="#E04A00" stop-opacity="0"/>
             </linearGradient>
           </defs>
           <line x1="40" x2="620" y1="20" y2="20" class="trend-grid-line"/>
@@ -363,13 +363,13 @@
           <path :d="areaPaths.returned" fill="url(#returnFill)" class="trend-area"/>
           <path :d="areaPaths.newItems" fill="url(#newFill)" class="trend-area"/>
           <path :d="linePaths.borrowed" class="trend-line" stroke="#F54E00" stroke-dasharray="8 4"/>
-          <path :d="linePaths.returned" class="trend-line" stroke="#9FBBE0" stroke-dasharray="4 4"/>
-          <path :d="linePaths.newItems" class="trend-line" stroke="#C08532" stroke-dasharray="2 4"/>
+          <path :d="linePaths.returned" class="trend-line" stroke="#C08532" stroke-dasharray="4 4"/>
+          <path :d="linePaths.newItems" class="trend-line" stroke="#E04A00" stroke-dasharray="2 4"/>
           <g class="hover-group" style="display:none">
             <line class="trend-hover-line" x1="0" x2="0" y1="0" y2="0"/>
             <circle r="3.5" fill="#F54E00" stroke="#fff" stroke-width="1.5"/>
-            <circle r="3.5" fill="#9FBBE0" stroke="#fff" stroke-width="1.5"/>
             <circle r="3.5" fill="#C08532" stroke="#fff" stroke-width="1.5"/>
+            <circle r="3.5" fill="#E04A00" stroke="#fff" stroke-width="1.5"/>
           </g>
         </svg>
         <div class="trend-tooltip" style="display:none"></div>
@@ -523,11 +523,11 @@ function dashboardData() {
             this.animateNum('g5', catQtyTotal);
           }, 100);
           // 构建饼图 — 每类表盘独立配色，符合系统主色调
-          const C1 = ['#F54E00','#FF6B24','#FF8C52','#E04A00','#FFA878','#FFC4A0'];       // 总物品-暖橙系
-          const C2 = ['#C08532','#D49E40','#E0B058','#A07020','#E8C878','#F0D898'];       // 库存总量-暖金系
-          const C3 = ['#F54E00','#C0A8DD','#9FBBE0','#C08532','#9FC9A2','#1F8A65'];      // 分类占比-暖色混合系
-          const C4 = ['#1F8A65','rgba(38,37,30,0.08)'];                                  // 健康度-茶绿/暖灰
-          const C5 = ['#C08532','rgba(38,37,30,0.08)'];                                  // 再借率-暖金/暖灰
+          const C1 = ['#F54E00','#E04A00','#FF6B24','#D94300','#FF8C52','#C03A00'];       // 总物品-橙系
+          const C2 = ['#C08532','#A07020','#D49E40','#B08030','#E0B058','#906020'];       // 库存总量-金系
+          const C3 = ['#F54E00','#C08532','#E04A00','#D49E40','#D94300','#A07020'];      // 分类占比-橙金交替
+          const C4 = ['#F54E00','rgba(38,37,30,0.08)'];                                  // 健康度-橙/暖灰
+          const C5 = ['#C08532','rgba(38,37,30,0.08)'];                                  // 再借率-金/暖灰
 
           const pie1 = this.buildPieSegments(data.category_distribution || [], C1);
           const pie2 = this.buildPieSegments(data.warehouse_distribution || [], C2);
@@ -646,8 +646,8 @@ function trendChart() {
       const w = weeks[idx];
       return [
         { x: this.xPos(idx), y: this.yPosB(w.borrowed || 0), color: '#F54E00' },
-        { x: this.xPos(idx), y: this.yPosR(w.returned || 0), color: '#9FBBE0' },
-        { x: this.xPos(idx), y: this.yPosN(w.new_items || 0), color: '#C08532' }
+        { x: this.xPos(idx), y: this.yPosR(w.returned || 0), color: '#C08532' },
+        { x: this.xPos(idx), y: this.yPosN(w.new_items || 0), color: '#E04A00' }
       ];
     },
 
@@ -678,7 +678,7 @@ function trendChart() {
       cs[2].setAttribute('cx', px); cs[2].setAttribute('cy', this.yPosN(w.new_items||0));
       // tooltip
       const tip = this.$el.querySelector('.trend-tooltip');
-      tip.innerHTML = `${w.label}<br><span style="color:#F54E00">借出 ${w.borrowed}</span>  <span style="color:#9FBBE0">归还 ${w.returned}</span>  <span style="color:#C08532">新增 ${w.new_items}</span>`;
+      tip.innerHTML = `${w.label}<br><span style="color:#F54E00">借出 ${w.borrowed}</span>  <span style="color:#C08532">归还 ${w.returned}</span>  <span style="color:#E04A00">新增 ${w.new_items}</span>`;
       let tx = e.clientX - rect.left + 12;
       if (tx + 180 > rect.width) tx = e.clientX - rect.left - 180;
       tip.style.cssText = `display:block;position:absolute;left:${tx}px;top:${e.clientY-rect.top-60}px;background:rgba(38,37,30,0.92);color:#F2F1ED;padding:6px 12px;border-radius:8px;font-size:11px;pointer-events:none;z-index:20;white-space:nowrap`;
@@ -741,7 +741,7 @@ function trendChart() {
 function topBorrowed() {
   return {
     items: [],
-    colors: ['#F54E00','#FF6B24','#FF8C52','#C08532','#D49E40','#E0B058','#C0A8DD','#9FBBE0','#9FC9A2','#1F8A65'],
+    colors: ['#F54E00','#C08532','#E04A00','#D49E40','#D94300','#A07020','#FF6B24','#B08030','#FF8C52','#E0B058'],
     async load() {
       try {
         const resp = await api('/api/v1/stats/top-borrowed?days=7&limit=10');
