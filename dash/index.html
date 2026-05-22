@@ -6,16 +6,16 @@
 <title>DevPulse — Analytics Suite</title>
 <style>
   :root {
-    --bg:      oklch(10% 0.015 240);
-    --surface: oklch(15% 0.02 240);
-    --surface2:oklch(18% 0.022 240);
-    --fg:      oklch(92% 0.005 240);
-    --muted:   oklch(60% 0.018 240);
-    --border:  oklch(22% 0.02 240);
-    --accent:  oklch(56% 0.12 170);
-    --font-display: 'Söhne', 'Avenir Next', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-    --font-body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-    --font-mono:    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --bg:      #F2F1ED;
+    --surface: #E6E5E0;
+    --surface2:#EBEAE5;
+    --fg:      #26251E;
+    --muted:   rgba(38,37,30,0.56);
+    --border:  oklab(0.263084 -0.00230259 0.0124794 / 0.1);
+    --accent:  #F54E00;
+    --font-display: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body:    system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono:    ui-monospace, 'SF Mono', monospace;
   }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -51,16 +51,16 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 22px; margin-bottom: 4px;
   }
-  .screen-card:nth-child(1) .screen-card-icon { background: oklch(56% 0.12 170 / 0.12); }
-  .screen-card:nth-child(2) .screen-card-icon { background: oklch(58% 0.12 240 / 0.12); }
-  .screen-card:nth-child(3) .screen-card-icon { background: oklch(62% 0.12 290 / 0.12); }
+  .screen-card:nth-child(1) .screen-card-icon { background: rgba(245,78,0,0.10); }
+  .screen-card:nth-child(2) .screen-card-icon { background: rgba(159,187,224,0.15); }
+  .screen-card:nth-child(3) .screen-card-icon { background: rgba(192,168,221,0.15); }
   .screen-card-title { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
   .screen-card-desc { font-size: 12px; color: var(--muted); line-height: 1.6; }
   .screen-card-tag {
     font-family: var(--font-mono); font-size: 10px; color: var(--accent);
     text-transform: uppercase; letter-spacing: 0.06em;
     padding: 3px 10px; border-radius: 20px;
-    background: oklch(56% 0.12 170 / 0.10);
+    background: rgba(245,78,0,0.08);
   }
 
   @media (max-width: 640px) {

@@ -6,20 +6,20 @@
 <title>DevPulse — Event Log</title>
 <style>
   :root {
-    --bg:      oklch(10% 0.015 240);
-    --surface: oklch(15% 0.02 240);
-    --surface2:oklch(18% 0.022 240);
-    --fg:      oklch(92% 0.005 240);
-    --muted:   oklch(60% 0.018 240);
-    --border:  oklch(22% 0.02 240);
-    --accent:  oklch(56% 0.12 170);
-    --success: oklch(62% 0.14 155);
-    --warning: oklch(70% 0.14 80);
-    --danger:  oklch(56% 0.18 25);
-    --info:    oklch(58% 0.12 240);
-    --font-display: 'Söhne', 'Avenir Next', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-    --font-body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-    --font-mono:    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --bg:      #F2F1ED;
+    --surface: #E6E5E0;
+    --surface2:#EBEAE5;
+    --fg:      #26251E;
+    --muted:   rgba(38,37,30,0.56);
+    --border:  oklab(0.263084 -0.00230259 0.0124794 / 0.1);
+    --accent:  #F54E00;
+    --success: #1F8A65;
+    --warning: #C08532;
+    --danger:  #CF2D56;
+    --info:    #9FBBE0;
+    --font-display: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body:    system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono:    ui-monospace, 'SF Mono', monospace;
   }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -57,7 +57,7 @@
     cursor: pointer; transition: all 0.15s; user-select: none;
   }
   .filter-pill:hover { color: var(--fg); border-color: var(--muted); }
-  .filter-pill.active { background: oklch(56% 0.12 170 / 0.15); border-color: var(--accent); color: var(--accent); }
+  .filter-pill.active { background: rgba(245,78,0,0.12); border-color: var(--accent); color: var(--accent); }
   .filter-search {
     margin-left: auto; background: var(--surface2); border: 1px solid var(--border);
     color: var(--fg); font-family: var(--font-mono); font-size: 12px;
@@ -94,9 +94,9 @@
   }
   .event-table td {
     font-family: var(--font-mono); font-size: 12px; padding: 9px 14px;
-    border-bottom: 1px solid oklch(22% 0.02 240 / 0.4); vertical-align: middle;
+    border-bottom: 1px solid oklab(0.263084 -0.00230259 0.0124794 / 0.4); vertical-align: middle;
   }
-  .event-table tbody tr:hover td { background: oklch(56% 0.12 170 / 0.04); }
+  .event-table tbody tr:hover td { background: rgba(245,78,0,0.03); }
   .ev-time { color: var(--muted); }
   .ev-type {
     font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
@@ -105,16 +105,16 @@
   .ev-type.error { color: var(--danger); }
   .ev-type.signup { color: var(--success); }
   .ev-type.billing { color: var(--warning); }
-  .ev-type.webhook { color: oklch(62% 0.12 290); }
-  .ev-type.security { color: oklch(70% 0.14 40); }
+  .ev-type.webhook { color: #C0A8DD; }
+  .ev-type.security { color: #F5A623; }
   .ev-severity {
     font-size: 10px; font-weight: 600; text-transform: uppercase;
     padding: 2px 8px; border-radius: 10px;
   }
-  .ev-severity.info { background: oklch(58% 0.12 240 / 0.12); color: var(--info); }
-  .ev-severity.warn { background: oklch(70% 0.14 80 / 0.12); color: var(--warning); }
-  .ev-severity.error { background: oklch(56% 0.18 25 / 0.12); color: var(--danger); }
-  .ev-severity.critical { background: oklch(56% 0.18 25 / 0.20); color: var(--danger); }
+  .ev-severity.info { background: rgba(159,187,224,0.10); color: var(--info); }
+  .ev-severity.warn { background: rgba(192,133,50,0.10); color: var(--warning); }
+  .ev-severity.error { background: rgba(207,45,86,0.10); color: var(--danger); }
+  .ev-severity.critical { background: rgba(207,45,86,0.16); color: var(--danger); }
   .ev-env { font-size: 10px; color: var(--muted); }
   .ev-detail { color: var(--fg); max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -131,7 +131,7 @@
     border-radius: 4px; cursor: pointer;
   }
   .page-btn:hover { color: var(--fg); border-color: var(--muted); }
-  .page-btn.active { background: oklch(56% 0.12 170 / 0.15); border-color: var(--accent); color: var(--accent); }
+  .page-btn.active { background: rgba(245,78,0,0.12); border-color: var(--accent); color: var(--accent); }
 
   @media (max-width: 1024px) {
     .stats-row { grid-template-columns: repeat(2, 1fr); }
