@@ -76,32 +76,23 @@ body {
 a { color: var(--primary); text-decoration: none; transition: var(--transition); }
 a:hover { color: var(--primary-dark); }
 
-/* ── 导航栏 - 漂浮式玻璃条 ── */
+/* ── 导航栏 - 暖色实体条 ── */
 .navbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 28px; height: 60px;
   background: var(--bg-header);
-  backdrop-filter: var(--blur-nav);
-  -webkit-backdrop-filter: var(--blur-nav);
-  border-bottom: 1px solid var(--glass-border);
-  box-shadow: 0 1px 0 rgba(255,255,255,0.25), 0 4px 20px rgba(120,160,255,0.06);
+  border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 100;
 }
 .navbar-brand {
   font-size: 20px; font-weight: 600;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text);
   display: flex; align-items: center; gap: 8px;
   letter-spacing: -0.3px;
 }
 .navbar-brand i {
   font-size: 24px;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--primary);
 }
 .navbar-nav { display: flex; align-items: center; gap: 14px; list-style: none; }
 .navbar-nav a, .navbar-nav span, .navbar-nav button {
@@ -109,14 +100,14 @@ a:hover { color: var(--primary-dark); }
   padding: 6px 14px; border-radius: 20px;
   transition: var(--transition);
 }
-.navbar-nav a:hover { color: var(--primary); background: rgba(91,140,255,0.06); }
+.navbar-nav a:hover { color: var(--primary); background: rgba(245,78,0,0.06); }
 
 .badge-role {
   display: inline-block; padding: 3px 12px; border-radius: 20px;
   font-size: 12px; font-weight: 600;
-  background: linear-gradient(135deg, rgba(91,140,255,0.10), rgba(139,124,255,0.08));
-  color: var(--primary-dark);
-  border: 1px solid rgba(91,140,255,0.15);
+  background: rgba(245,78,0,0.08);
+  color: var(--primary);
+  border: 1px solid rgba(245,78,0,0.15);
 }
 
 /* ── 布局 ── */
