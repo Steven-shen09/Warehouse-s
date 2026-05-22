@@ -340,7 +340,7 @@
         <button class="btn btn-sm btn-primary" @click="setCustom" style="font-size:11px;padding:3px 10px">应用</button>
       </div>
       <div style="position:relative">
-        <svg viewBox="0 0 640 180" class="trend-svg"
+        <svg id="trendSvg" viewBox="0 0 640 180" class="trend-svg"
              @mousemove="onHover($event)" @mouseleave="onLeave()">
           <defs>
             <linearGradient id="borrowFill" x1="0" y1="0" x2="0" y2="1">
@@ -372,7 +372,7 @@
             <circle r="3.5" fill="#E04A00" stroke="#fff" stroke-width="1.5"/>
           </g>
         </svg>
-        <div class="trend-tooltip" style="display:none"></div>
+        <div id="trendTooltip" class="trend-tooltip" style="display:none"></div>
       </div>
       {% endraw %}
     </div>
@@ -384,7 +384,7 @@
         <span style="font-size:11px;color:var(--text-muted)">本周</span>
       </div>
       {% raw %}
-      <svg viewBox="0 0 240 160" style="width:100%"></svg>
+      <svg id="topBorrowedSvg" viewBox="0 0 240 160" style="width:100%"></svg>
       {% endraw %}
     </div>
   </div>
@@ -676,26 +676,31 @@ function trendChart() {
       const w = weeks[idx];
       const px = this.xPos(idx);
       const hg = svg.querySelector('.hover-group');
+      if (!hg) return;
       hg.style.display = '';
-      hg.querySelector('line').setAttribute('x1', px);
-      hg.querySelector('line').setAttribute('x2', px);
-      hg.querySelector('line').setAttribute('y1', '20');
-      hg.querySelector('line').setAttribute('y2', '140');
+      const hl = hg.querySelector('line');
+      if (hl) { hl.setAttribute('x1', px); hl.setAttribute('x2', px); hl.setAttribute('y1', '20'); hl.setAttribute('y2', '140'); }
       const cs = hg.querySelectorAll('circle');
-      cs[0].setAttribute('cx', px); cs[0].setAttribute('cy', this.yPosB(w.borrowed||0));
-      cs[1].setAttribute('cx', px); cs[1].setAttribute('cy', this.yPosR(w.returned||0));
-      cs[2].setAttribute('cx', px); cs[2].setAttribute('cy', this.yPosN(w.new_items||0));
+      if (cs.length >= 3) {
+        cs[0].setAttribute('cx', px); cs[0].setAttribute('cy', this.yPosB(w.borrowed||0));
+        cs[1].setAttribute('cx', px); cs[1].setAttribute('cy', this.yPosR(w.returned||0));
+        cs[2].setAttribute('cx', px); cs[2].setAttribute('cy', this.yPosN(w.new_items||0));
+      }
       // tooltip
-      const tip = this.$el.querySelector('.trend-tooltip');
+      const tip = document.getElementById('trendTooltip');
+      if (!tip) return;
       tip.innerHTML = `${w.label}<br><span style="color:#F54E00">借出 ${w.borrowed}</span>  <span style="color:#C08532">归还 ${w.returned}</span>  <span style="color:#E04A00">新增 ${w.new_items}</span>`;
       let tx = e.clientX - rect.left + 12;
       if (tx + 180 > rect.width) tx = e.clientX - rect.left - 180;
       tip.style.cssText = `display:block;opacity:1;position:absolute;left:${tx}px;top:${e.clientY-rect.top-60}px;background:rgba(38,37,30,0.92);color:#F2F1ED;padding:6px 12px;border-radius:8px;font-size:11px;pointer-events:none;z-index:20;white-space:nowrap`;
     },
     onLeave() {
-      const svg = this.$el.querySelector('svg');
-      svg.querySelector('.hover-group').style.display = 'none';
-      const tip = this.$el.querySelector('.trend-tooltip');
+      const svg = document.getElementById('trendSvg');
+      if (svg) {
+        const hg = svg.querySelector('.hover-group');
+        if (hg) hg.style.display = 'none';
+      }
+      const tip = document.getElementById('trendTooltip');
       if (tip) tip.style.display = 'none';
     },
 
@@ -717,7 +722,8 @@ function trendChart() {
     },
     /* JS 渲染 X 轴日期标签 */
     renderLabels() {
-      const svg = this.$el.querySelector('svg');
+      const svg = document.getElementById('trendSvg');
+      if (!svg) return;
       svg.querySelectorAll('.x-label').forEach(el => el.remove());
       const weeks = this.trends.weeks || [];
       const ns = 'http://www.w3.org/2000/svg';
@@ -762,7 +768,8 @@ function topBorrowed() {
       } catch (e) { console.error('加载热门借出失败:', e); }
     },
     render() {
-      const svg = this.$el.querySelector('svg');
+      const svg = document.getElementById('topBorrowedSvg');
+      if (!svg) return;
       svg.querySelectorAll('.bar-g').forEach(el => el.remove());
       const items = this.items;
       if (!items.length) return;
