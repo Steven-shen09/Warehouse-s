@@ -1,95 +1,59 @@
-/* ── Warehouse-s Apple Liquid Glass 设计系统 ── */
+/* ── Warehouse-s Cursor Warm Minimal 设计系统 ── */
 
 :root {
-  /* 主色调 — Apple 蓝 + 冰川紫 */
-  --primary: #5B8CFF;
-  --primary-dark: #4A7AF0;
-  --primary-light: #8DB5FF;
-  --accent: #8B7CFF;
-  --accent-dark: #7B6AF0;
-  --success: #34C759;
-  --warning: #FF9F0A;
-  --danger: #FF453A;
-  --info: #64D2FF;
+  /* 主色调 — Cursor 橙 + 暖金 */
+  --primary: #F54E00;
+  --primary-dark: #D94300;
+  --primary-light: #FF7A33;
+  --accent: #C08532;
+  --accent-dark: #A06E28;
+  --success: #1F8A65;
+  --warning: #C08532;
+  --danger: #CF2D56;
+  --info: #9FBBE0;
 
-  /* 中性色 — 冰川蓝白底 */
-  --bg: #F4F8FF;
-  --bg-soft: #EEF4FF;
-  --bg-card: rgba(255,255,255,0.18);
-  --bg-card-hover: rgba(255,255,255,0.32);
-  --bg-sidebar: rgba(255,255,255,0.12);
-  --bg-header: rgba(244,248,255,0.35);
-  --text-title: #111827;
-  --text: rgba(17,24,39,0.88);
-  --text-secondary: rgba(31,41,55,0.56);
-  --text-muted: rgba(31,41,55,0.40);
-  --border: rgba(255,255,255,0.35);
-  --border-light: rgba(255,255,255,0.20);
-  --border-card: rgba(255,255,255,0.45);
+  /* 中性色 — 暖米白纸感 */
+  --bg: #F2F1ED;
+  --bg-soft: #E6E5E0;
+  --bg-card: #E6E5E0;
+  --bg-card-hover: #EBEAE5;
+  --bg-sidebar: #E6E5E0;
+  --bg-header: #F2F1ED;
+  --text-title: #26251E;
+  --text: #26251E;
+  --text-secondary: rgba(38,37,30,0.56);
+  --text-muted: rgba(38,37,30,0.40);
+
+  /* 边框（oklab 暖棕空间） */
+  --border: oklab(0.263084 -0.00230259 0.0124794 / 0.1);
+  --border-strong: oklab(0.263084 -0.00230259 0.0124794 / 0.2);
+  --border-heavy: rgba(38,37,30,0.55);
+  --border-light: oklab(0.263084 -0.00230259 0.0124794 / 0.06);
+  --border-card: oklab(0.263084 -0.00230259 0.0124794 / 0.1);
 
   /* 状态颜色 */
-  --status-available: #34C759;
-  --status-lent: #FF9F0A;
-  --status-damaged: #FF453A;
-  --status-pending: #FF9F0A;
-  --status-approved: #5B8CFF;
-  --status-rejected: #FF453A;
-  --status-returned: #34C759;
-  --status-overdue: #BF5AF2;
-
-  /* 玻璃效果 */
-  --glass-bg: rgba(255,255,255,0.18);
-  --glass-bg-strong: rgba(255,255,255,0.28);
-  --glass-border: rgba(255,255,255,0.35);
-  --glass-highlight: rgba(255,255,255,0.7);
-  --glass-blur: blur(16px);
-  --glass-blur-strong: blur(30px);
-  --blur-nav: blur(24px);
-  --blur-modal: blur(40px);
+  --status-available: #1F8A65;
+  --status-lent: #9FBBE0;
+  --status-damaged: #CF2D56;
+  --status-pending: #C08532;
+  --status-approved: #9FC9A2;
+  --status-rejected: #CF2D56;
+  --status-returned: #C0A8DD;
+  --status-overdue: #F54E00;
 
   /* 字体 */
-  --font-sans: "SF Pro Display", "PingFang SC", "Noto Sans SC", -apple-system, sans-serif;
-  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
 
   /* 间距与圆角 */
-  --radius: 24px;
-  --radius-sm: 14px;
-  --radius-xs: 10px;
-  --radius-lg: 28px;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-xs: 8px;
+  --radius-lg: 24px;
 
-  /* 柔和阴影（带内发光） */
-  --shadow: 0 4px 20px rgba(120,160,255,0.10), inset 0 1px 0 rgba(255,255,255,0.35);
-  --shadow-lg: 0 12px 40px rgba(120,160,255,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
-  --shadow-raised: 0 8px 32px rgba(120,160,255,0.16), inset 0 1px 0 rgba(255,255,255,0.20);
-  --shadow-glow: 0 0 40px rgba(91,140,255,0.15), 0 0 80px rgba(139,124,255,0.08);
-  --shadow-hover: 0 20px 50px rgba(91,140,255,0.18), inset 0 1px 0 rgba(255,255,255,0.15);
-  --transition: 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-
-/* ── 暗色模式 ── */
-[data-theme="dark"] {
-  --bg: #0a0e1a;
-  --bg-soft: #0f1428;
-  --bg-card: rgba(20,28,60,0.35);
-  --bg-card-hover: rgba(30,40,80,0.48);
-  --bg-sidebar: rgba(10,14,26,0.28);
-  --bg-header: rgba(10,14,26,0.35);
-  --text-title: rgba(255,255,255,0.92);
-  --text: rgba(255,255,255,0.88);
-  --text-secondary: rgba(255,255,255,0.72);
-  --text-muted: rgba(255,255,255,0.48);
-  --border: rgba(255,255,255,0.12);
-  --border-light: rgba(255,255,255,0.08);
-  --border-card: rgba(255,255,255,0.14);
-  --glass-bg: rgba(20,28,60,0.30);
-  --glass-bg-strong: rgba(30,40,80,0.40);
-  --glass-border: rgba(255,255,255,0.12);
-  --glass-highlight: rgba(255,255,255,0.06);
-  --shadow: 0 4px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04);
-  --shadow-lg: 0 12px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
-  --shadow-raised: 0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.03);
-  --shadow-glow: 0 0 60px rgba(91,140,255,0.2), 0 0 120px rgba(139,124,255,0.10);
-  --shadow-hover: 0 20px 50px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+  /* 阴影（仅 hover 使用） */
+  --shadow-hover: 0 2px 16px rgba(38,37,30,0.06);
+  --transition: 0.2s ease;
 }
 
 /* ── 基础重置 ── */
@@ -107,55 +71,6 @@ body {
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-/* ── 流动光晕背景 ── */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(91,140,255,0.12) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 70% at 80% 30%, rgba(139,124,255,0.10) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 50% at 50% 80%, rgba(100,210,255,0.08) 0%, transparent 50%),
-    radial-gradient(ellipse 50% 50% at 10% 70%, rgba(91,140,255,0.06) 0%, transparent 50%),
-    radial-gradient(ellipse 40% 40% at 90% 80%, rgba(139,124,255,0.07) 0%, transparent 50%);
-  background-size: 200% 200%;
-  animation: bgFlow 20s ease-in-out infinite;
-}
-
-/* ── 噪点纹理（模拟真实玻璃表面） ── */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-  background-size: 256px 256px;
-}
-
-@keyframes bgFlow {
-  0%, 100% {
-    background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%;
-    opacity: 1;
-  }
-  25% {
-    background-position: 5% -3%, -3% 5%, 3% 2%, -2% 3%, 2% -2%;
-    opacity: 0.8;
-  }
-  50% {
-    background-position: 1% 1%, 2% -1%, -1% -3%, 3% 1%, -2% 2%;
-    opacity: 1;
-  }
-  75% {
-    background-position: -3% 2%, 3% -2%, -2% 3%, 1% -2%, 2% 3%;
-    opacity: 0.85;
-  }
 }
 
 a { color: var(--primary); text-decoration: none; transition: var(--transition); }
