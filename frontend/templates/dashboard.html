@@ -84,7 +84,7 @@
 }
 .gauge-card svg { position: relative; z-index: 2; }
 .gauge-value {
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 700;
   letter-spacing: -0.03em;
   fill: var(--text-title);
@@ -208,7 +208,7 @@
   .quick-stat-value { font-size: 18px; }
   .gauge-grid { gap: 14px; }
   .gauge-card { padding: 18px 10px 14px; }
-  .gauge-value { font-size: 28px; }
+  .gauge-value { font-size: 24px; }
 }
 @media (max-width: 1023px) {
   .quick-stats { grid-template-columns: repeat(3, 1fr); }
@@ -272,8 +272,8 @@
     <div class="gauge-card" x-data="{hoverIdx:-1}" @mouseleave="hoverIdx=-1">
       <svg viewBox="0 0 200 200" style="width:100%;max-width:215px">
         <g class="pie-slices" data-gauge="1"></g>
-        <text x="100" y="95" text-anchor="middle" font-size="15" font-weight="600" fill="var(--text-secondary)">总物品</text>
-        <text x="100" y="116" text-anchor="middle" class="gauge-value" x-text="animNums.g1">0</text>
+        <text x="100" y="90" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text-secondary)">总物品</text>
+        <text x="100" y="125" text-anchor="middle" class="gauge-value" x-text="animNums.g1">0</text>
       </svg>
       <div class="pie-tooltip" style="display:none"></div>
     </div>
@@ -282,8 +282,8 @@
     <div class="gauge-card" x-data="{hoverIdx:-1}" @mouseleave="hoverIdx=-1">
       <svg viewBox="0 0 200 200" style="width:100%;max-width:215px">
         <g class="pie-slices" data-gauge="2"></g>
-        <text x="100" y="95" text-anchor="middle" font-size="15" font-weight="600" fill="var(--text-secondary)">库存总量</text>
-        <text x="100" y="116" text-anchor="middle" class="gauge-value" x-text="animNums.g2">0</text>
+        <text x="100" y="90" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text-secondary)">库存总量</text>
+        <text x="100" y="125" text-anchor="middle" class="gauge-value" x-text="animNums.g2">0</text>
       </svg>
       <div class="pie-tooltip" style="display:none"></div>
     </div>
@@ -292,8 +292,8 @@
     <div class="gauge-card" x-data="{hoverIdx:-1}" @mouseleave="hoverIdx=-1">
       <svg viewBox="0 0 200 200" style="width:100%;max-width:215px">
         <g class="pie-slices" data-gauge="3"></g>
-        <text x="100" y="95" text-anchor="middle" font-size="15" font-weight="600" fill="var(--text-secondary)">分类库存占比</text>
-        <text x="100" y="116" text-anchor="middle" class="gauge-value" x-text="animNums.g5">0</text>
+        <text x="100" y="90" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text-secondary)">分类库存占比</text>
+        <text x="100" y="125" text-anchor="middle" class="gauge-value" x-text="animNums.g5">0</text>
       </svg>
       <div class="pie-tooltip" style="display:none"></div>
     </div>
@@ -302,8 +302,8 @@
     <div class="gauge-card" x-data="{hoverIdx:-1}" @mouseleave="hoverIdx=-1">
       <svg viewBox="0 0 200 200" style="width:100%;max-width:215px">
         <g class="pie-slices" data-gauge="4"></g>
-        <text x="100" y="95" text-anchor="middle" font-size="15" font-weight="600" fill="var(--text-secondary)">库存健康度</text>
-        <text x="100" y="116" text-anchor="middle" class="gauge-value" x-text="animNums.g4 + '%'">0%</text>
+        <text x="100" y="90" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text-secondary)">库存健康度</text>
+        <text x="100" y="125" text-anchor="middle" class="gauge-value" x-text="animNums.g4 + '%'">0%</text>
       </svg>
       <div class="pie-tooltip" style="display:none"></div>
     </div>
@@ -312,8 +312,8 @@
     <div class="gauge-card" x-data="{hoverIdx:-1}" @mouseleave="hoverIdx=-1">
       <svg viewBox="0 0 200 200" style="width:100%;max-width:215px">
         <g class="pie-slices" data-gauge="5"></g>
-        <text x="100" y="95" text-anchor="middle" font-size="15" font-weight="600" fill="var(--text-secondary)">再借率</text>
-        <text x="100" y="116" text-anchor="middle" class="gauge-value" x-text="animNums.g3 + '%'">0%</text>
+        <text x="100" y="90" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text-secondary)">再借率</text>
+        <text x="100" y="125" text-anchor="middle" class="gauge-value" x-text="animNums.g3 + '%'">0%</text>
       </svg>
       <div class="pie-tooltip" style="display:none"></div>
     </div>
