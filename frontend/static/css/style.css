@@ -116,83 +116,43 @@ a:hover { color: var(--primary-dark); }
   position: relative; z-index: 1;
 }
 
-/* ── 侧边栏 - 半透明毛玻璃 ── */
+/* ── 侧边栏 - 实色 ── */
 .sidebar {
   width: 240px;
   background: var(--bg-sidebar);
-  backdrop-filter: var(--glass-blur-strong);
-  -webkit-backdrop-filter: var(--glass-blur-strong);
-  border-right: 1px solid var(--glass-border);
+  border-right: 1px solid var(--border);
   padding: 20px 0;
   flex-shrink: 0;
   display: flex; flex-direction: column;
-  position: relative;
-  z-index: 10;
-}
-
-/* 侧边栏顶部折射高光 */
-.sidebar::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), rgba(255,255,255,0.15), transparent);
 }
 
 .sidebar a {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 24px; margin: 2px 12px;
   color: var(--text-secondary);
-  font-size: 14px; font-weight: 500;
-  border-radius: 14px;
-  position: relative;
-  transition: all 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
-  overflow: hidden;
+  font-size: 13px; font-weight: 500;
+  border-radius: 10px;
+  transition: all 0.15s ease;
 }
 
 .sidebar a i {
   font-size: 18px;
-  transition: transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-
-/* 导航项液态高光 */
-.sidebar a::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: linear-gradient(135deg,
-    rgba(255,255,255,0) 0%, rgba(255,255,255,0.3) 45%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 55%);
-  background-size: 200% 200%;
-  opacity: 0;
-  transition: opacity 0.4s ease;
+  transition: transform 0.15s ease;
 }
 
 .sidebar a:hover, .sidebar a.active {
-  color: var(--primary-dark);
-  background: rgba(91,140,255,0.08);
-  box-shadow: 0 0 0 1px rgba(91,140,255,0.12);
+  color: var(--text);
+  background: rgba(38,37,30,0.06);
 }
 
 .sidebar a.active {
-  background: linear-gradient(135deg, rgba(91,140,255,0.10), rgba(139,124,255,0.08));
-  box-shadow:
-    0 0 0 1px rgba(91,140,255,0.15),
-    0 0 20px rgba(91,140,255,0.08);
+  background: rgba(38,37,30,0.08);
   font-weight: 600;
 }
 
-.sidebar a:hover::before {
-  opacity: 1;
-  animation: liquidShimmer 1.5s ease-in-out infinite;
-}
+.sidebar a:hover i { transform: scale(1.05); }
 
-@keyframes liquidShimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-.sidebar a:hover i { transform: scale(1.1); }
-.sidebar a:active { transform: scale(0.97); }
-
-/* 侧边栏分隔 */
+/* 侧边栏分隔 — 最后一项推到底 */
 .sidebar a:last-of-type {
   margin-top: auto;
 }
@@ -201,7 +161,7 @@ a:hover { color: var(--primary-dark); }
   flex: 1; padding: 28px 32px;
   overflow-x: auto;
   position: relative; z-index: 1;
-  animation: fadeInUp 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+  animation: fadeInUp 0.4s ease;
 }
 
 @keyframes fadeInUp {
