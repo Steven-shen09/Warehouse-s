@@ -2,7 +2,7 @@
 
 ## 一、项目概述
 
-物品仓库管理系统，支持多仓库物品全生命周期管理、库存调拨、物品盘点、租借审批工作流、归还追踪、批量导入导出。后端 Python FastAPI + SQLite（WAL 模式），前端 Jinja2 + HTMX + Alpine.js，Apple Liquid Glass 设计系统。
+物品仓库管理系统，支持多仓库物品全生命周期管理、库存调拨、物品盘点、租借审批工作流、归还追踪、批量导入导出。后端 Python FastAPI + PostgreSQL（SQLAlchemy Core），前端 Jinja2 + HTMX + Alpine.js，Cursor Warm Minimal 设计系统。
 
 ## 二、快速开始
 
@@ -10,19 +10,27 @@
 
 - Python 3.10+
 - pip
+- PostgreSQL 16+（本地或 Docker）
 
 ### 安装与启动
 
 ```bash
 cd Warehouse-s
 pip install -r requirements.txt
+
+# 配置 PostgreSQL 连接（.env）
+DATABASE_URL=postgresql+psycopg2://warehouse:warehouse123@localhost:5432/warehouse
+
+# 首次启动前迁移数据（如有 SQLite 旧库）
+python migrate_data.py
+
 python run.py
 ```
 
 - 前端界面：http://localhost:8000
 - 局域网访问（移动端测试）：http://<本机IP>:8000
 - Swagger API 文档：http://localhost:8000/docs
-- 首次启动自动创建数据库并写入种子数据
+- 首次启动自动创建数据库表并写入种子数据
 
 ### 预置账号
 
@@ -36,7 +44,7 @@ python run.py
 
 ```
 SECRET_KEY=warehouse-s-dev-secret-key-change-in-production
-DATABASE_PATH=data/warehouse.db
+DATABASE_URL=postgresql+psycopg2://warehouse:warehouse123@localhost:5432/warehouse
 APPROVAL_TIMEOUT_HOURS=24         # 审核超时小时数
 
 # 可选：DeepSeek AI 智能审核
@@ -82,7 +90,7 @@ Warehouse-s/
 ├── app/                           # ── 应用主包 ──
 │   ├── __init__.py                # FastAPI 工厂函数 create_app()
 │   ├── config.py                  # 配置管理（Settings 类）
-│   ├── database.py                # SQLite 连接、建表、种子数据
+│   ├── database.py                # PostgreSQL 连接（SQLAlchemy Core）、建表、种子数据
 │   │
 │   ├── api/                       # ── 路由层 ──
 │   │   ├── __init__.py            # 路由注册
@@ -151,7 +159,9 @@ Warehouse-s/
 │           ├── htmx.min.js
 │           └── alpine.min.js
 │
-├── data/                          # SQLite 数据库文件
+├── migrate_data.py                # SQLite → PostgreSQL 数据迁移
+├── docker-compose.yml              # PostgreSQL Docker 部署配置
+├── data/                           # SQLite 数据库文件（旧）
 └── docs/superpowers/              # 设计文档和计划
     ├── specs/                     # 功能设计 spec
     └── plans/                     # 实施计划
@@ -247,15 +257,16 @@ Warehouse-s/
 #### records — 租借记录表
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | INTEGER PK | |
+| id | SERIAL PK | |
 | item_id | INTEGER FK→items | |
 | borrower_id | INTEGER FK→users | |
-| document_no | TEXT | 单号 DJ-YYYYMMDD-XXXX |
+| document_no | VARCHAR(50) | 单号 DJ-YYYYMMDD-XXXX |
+| source_warehouse_id | INTEGER FK→warehouses | 借出来源仓库（仓库级追踪） |
 | quantity | INTEGER | |
-| borrow_date / expected_return_date / actual_return_date | TEXT | |
-| status | TEXT CHECK(待审核/借出中/已拒绝/已归还/逾期) | |
+| borrow_date / expected_return_date / actual_return_date | DATE/TIMESTAMP | |
+| status | VARCHAR(20) CHECK(待审核/借出中/已拒绝/已归还/逾期) | |
 | reason / return_notes | TEXT | |
-| approval_deadline | TEXT | |
+| approval_deadline | TIMESTAMP | |
 | original_record_id | INTEGER FK→records | 部分归还追溯 |
 
 #### approvals — 审核记录表
@@ -430,8 +441,10 @@ Warehouse-s/
 ### 多仓库体系
 - items.total_quantity = SUM(warehouse_stocks.quantity)
 - 新建物品自动分配到默认仓库
-- 仓库筛选替代旧的位置筛选
-- 物品列表点击行可展开各仓库库存明细
+- 仓库筛选时可用量按该仓库独立计算
+- 物品列表点击行展开各仓库明细（库存 / 借出 / 剩余）
+- 借出来源仓库追踪：records.source_warehouse_id 精确记录每笔借出从哪个仓库发出
+- 租借清单数量受限于选中仓库的实际库存
 
 ### 库存调拨
 - 支持单条和批量（同一单据号多物品）
@@ -482,7 +495,7 @@ Warehouse-s/
 ## 九、关键设计说明
 
 ### 库存一致性
-所有库存变更使用 `BEGIN IMMEDIATE` 事务保护。
+所有库存变更使用 `with conn.begin()` 事务保护。借出时自动匹配来源仓库，校验单仓库存 >= 借出量；不足时提示分批操作。物品列表仓库行展示原始库存、借出量、剩余量。
 
 ### 状态机集成
 业务层禁止直接修改 status，必须通过 state_machine 引擎。

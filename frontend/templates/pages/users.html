@@ -17,6 +17,21 @@
   <div class="text-center text-muted" style="padding:48px;">加载中...</div>
 </div>
 
+<!-- 确认弹窗 -->
+<div class="modal-overlay" id="user-confirm-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="user-confirm-title">确认操作</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('user-confirm-modal')">&times;</button>
+    </div>
+    <div class="modal-body"><p id="user-confirm-message" class="text-muted"></p></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('user-confirm-modal')">取消</button>
+      <button class="btn btn-danger" id="user-confirm-btn">确认</button>
+    </div>
+  </div>
+</div>
+
 <!-- 新增用户模态框 -->
 <div class="modal-overlay" id="user-form-modal">
   <div class="modal">
@@ -115,11 +130,31 @@ async function toggleUser(id) {
   else { const d = await resp.json(); showToast(d.detail, 'error'); }
 }
 
+let _userConfirmCb = null;
+function showUserConfirmDialog(title, message, onConfirm, confirmClass = 'btn-danger', confirmText = '确认') {
+  document.getElementById('user-confirm-title').textContent = title;
+  document.getElementById('user-confirm-message').textContent = message;
+  const btn = document.getElementById('user-confirm-btn');
+  btn.className = 'btn ' + confirmClass;
+  btn.textContent = confirmText;
+  _userConfirmCb = onConfirm;
+  openModal('user-confirm-modal');
+}
+document.addEventListener('DOMContentLoaded', function() {
+  const btn = document.getElementById('user-confirm-btn');
+  if (btn) {
+    btn.addEventListener('click', function() {
+      if (_userConfirmCb) { closeModal('user-confirm-modal'); _userConfirmCb(); _userConfirmCb = null; }
+    });
+  }
+});
+
 async function resetPassword(id) {
-  if (!confirm('确定重置密码为 123456 吗？')) return;
-  const resp = await api(`/api/v1/users/${id}/reset-password`, { method: 'PUT' });
-  if (resp.ok) { showToast('密码已重置'); }
-  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+  showUserConfirmDialog('确认重置密码', '确定将该用户的密码重置为 123456 吗？', async () => {
+    const resp = await api(`/api/v1/users/${id}/reset-password`, { method: 'PUT' });
+    if (resp.ok) { showToast('密码已重置'); }
+    else { const d = await resp.json(); showToast(d.detail, 'error'); }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', () => loadUsers());

@@ -7,7 +7,7 @@ class Settings(BaseSettings):
 
     # 应用基础
     SECRET_KEY: str = "change-me-in-production"
-    DATABASE_PATH: str = "C:/Users/slama/first-cc/Warehouse-s/data/warehouse.db"
+    DATABASE_URL: str = "postgresql+psycopg2://warehouse:warehouse123@localhost:5432/warehouse"
     APPROVAL_TIMEOUT_HOURS: int = 24
 
     # DeepSeek AI（审核建议、异常检测）

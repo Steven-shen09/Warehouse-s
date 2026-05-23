@@ -1,5 +1,6 @@
 """审核路由"""
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from app.api.deps import get_db, get_current_user, require_role
 from app.schemas.approval import ApproveRequest, RejectRequest
 from app.services.approval_service import (
@@ -27,15 +28,15 @@ def approval_stats(
     conn=Depends(get_db),
 ):
     """审核统计数据"""
-    total_pending = conn.execute("SELECT COUNT(*) FROM records WHERE status = '待审核'").fetchone()[0]
-    transfer_pending = conn.execute("SELECT COUNT(*) FROM transfers WHERE status = '待审核'").fetchone()[0]
+    total_pending = conn.execute(text("SELECT COUNT(*) FROM records WHERE status = '待审核'")).fetchone()[0]
+    transfer_pending = conn.execute(text("SELECT COUNT(*) FROM transfers WHERE status = '待审核'")).fetchone()[0]
     total_overtime = get_overdue_approvals_count(conn)
-    today_processed = conn.execute(
-        "SELECT COUNT(*) FROM approvals WHERE date(created_at) = date('now','localtime')"
-    ).fetchone()[0]
-    to_return = conn.execute(
+    today_processed = conn.execute(text(
+        "SELECT COUNT(*) FROM approvals WHERE date(created_at) = CURRENT_DATE"
+    )).fetchone()[0]
+    to_return = conn.execute(text(
         "SELECT COUNT(*) FROM records WHERE status IN ('借出中', '逾期')"
-    ).fetchone()[0]
+    )).fetchone()[0]
     return {
         "total_pending": total_pending,
         "transfer_pending": transfer_pending,
@@ -147,12 +148,11 @@ def approval_history(
     conn=Depends(get_db),
 ):
     """某记录的审核历史"""
-    rows = conn.execute(
+    rows = conn.execute(text(
         """SELECT a.*, u.username as approver_username, u.display_name as approver_name
            FROM approvals a JOIN users u ON a.approver_id = u.id
-           WHERE a.record_id = ? ORDER BY a.created_at DESC""",
-        (record_id,),
-    ).fetchall()
+           WHERE a.record_id = :rid ORDER BY a.created_at DESC"""
+    ), {"rid": record_id}).fetchall()
     return {"items": [dict(r) for r in rows]}
 
 
@@ -164,7 +164,7 @@ def list_pending_transfers(
     conn=Depends(get_db),
 ):
     """待审核调拨记录（按单据号分组）"""
-    rows = conn.execute(
+    rows = conn.execute(text(
         """SELECT t.*, i.name AS item_name,
            fw.name AS from_warehouse_name, tw.name AS to_warehouse_name,
            cu.display_name AS created_by_name
@@ -175,7 +175,7 @@ def list_pending_transfers(
            JOIN users cu ON t.created_by = cu.id
            WHERE t.status = '待审核'
            ORDER BY t.id DESC"""
-    ).fetchall()
+    )).fetchall()
 
     transfers = []
     for r in rows:

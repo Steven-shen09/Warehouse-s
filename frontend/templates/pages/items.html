@@ -131,6 +131,21 @@
   </div>
 </div>
 
+<!-- 确认弹窗 -->
+<div class="modal-overlay" id="item-confirm-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="item-confirm-title">确认操作</h3>
+      <button class="btn btn-sm btn-outline" onclick="closeModal('item-confirm-modal')">&times;</button>
+    </div>
+    <div class="modal-body"><p id="item-confirm-message" class="text-muted"></p></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('item-confirm-modal')">取消</button>
+      <button class="btn btn-danger" id="item-confirm-btn">确认</button>
+    </div>
+  </div>
+</div>
+
 <!-- 批量提交租借清单模态框 -->
 <div class="modal-overlay" id="batch-borrow-modal">
   <div class="modal">
@@ -272,7 +287,7 @@
 .import-summary-error { color:#FF3B30; }
 .text-error { color:#FF3B30; }
 .warehouse-stock-row td { padding:8px 18px; background:rgba(91,140,255,.04); border-bottom:1px solid var(--border-light); }
-.warehouse-stock-row .stock-item { display:inline-flex; align-items:center; gap:6px; margin-right:16px; font-size:13px; color:var(--text-secondary); }
+.warehouse-stock-row .stock-item { display:inline-block; margin-right:16px; font-size:13px; color:var(--text-secondary); }
 .warehouse-stock-row .stock-item i { font-size:14px; color:var(--primary); }
 </style>
 <script>
@@ -530,6 +545,29 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// ── 自定义确认弹窗（替代原生 confirm） ──
+let _itemConfirmCb = null;
+function showItemConfirmDialog(title, message, onConfirm) {
+  document.getElementById('item-confirm-title').textContent = title;
+  document.getElementById('item-confirm-message').textContent = message;
+  _itemConfirmCb = onConfirm;
+  openModal('item-confirm-modal');
+}
+document.addEventListener('DOMContentLoaded', function() {
+  const confirmBtn = document.getElementById('item-confirm-btn');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', function() {
+      if (_itemConfirmCb) { closeModal('item-confirm-modal'); _itemConfirmCb(); _itemConfirmCb = null; }
+    });
+  }
+});
+
+function editItemFromRow(el) {
+  const data = el.getAttribute('data-item');
+  if (!data) return;
+  editItem(JSON.parse(data));
+}
+
 // ── 购物车状态 ──
 const cart = {
   items: {},
@@ -586,6 +624,16 @@ function updateCartQuantity(itemId, delta) {
   renderCart();
 }
 
+function setCartQuantity(itemId, value) {
+  const item = cart.items[itemId];
+  if (!item) return;
+  const qty = parseInt(value) || 1;
+  if (qty < 1) { renderCart(); return; }
+  if (qty > item.max) { renderCart(); return; }
+  item.quantity = qty;
+  renderCart();
+}
+
 function removeCartItem(itemId) {
   cart.remove(itemId);
   const cb = document.querySelector(`.cart-checkbox[data-item-id="${itemId}"]`);
@@ -638,7 +686,8 @@ function renderCart() {
           <span class="cart-item-price">¥${item.price.toFixed(2)}</span>
           <div class="cart-quantity-control">
             <button onclick="updateCartQuantity(${item.id}, -1)" ${item.quantity <= 1 ? 'disabled' : ''}>−</button>
-            <span class="cart-quantity-value">${item.quantity}</span>
+            <input type="number" class="cart-quantity-input" value="${item.quantity}" min="1" max="${item.max}"
+              onchange="setCartQuantity(${item.id}, this.value)" style="width:50px;text-align:center;">
             <button onclick="updateCartQuantity(${item.id}, 1)" ${item.quantity >= item.max ? 'disabled' : ''}>+</button>
           </div>
           <span class="cart-item-subtotal">¥${(item.price * item.quantity).toFixed(2)}</span>
@@ -788,7 +837,13 @@ async function loadItems(page = 1, lowStock = false) {
       <tbody>${data.items.map(item => {
         const stocks = item.warehouse_stocks || [];
         const stockHtml = stocks.length > 0
-          ? stocks.map(s => `<span class="stock-item"><i class="bi bi-building"></i> ${escapeHtml(s.warehouse_name)} ×${s.quantity}</span>`).join('')
+          ? stocks.map(s => {
+              const b = s.borrowed || 0;
+              const a = s.available !== undefined ? s.available : s.quantity;
+              let line = `<i class="bi bi-building"></i> ${escapeHtml(s.warehouse_name)} 库存${s.quantity}`;
+              if (b > 0) line += ` <span style="color:var(--primary);">借出${b}</span> 剩余${a}`;
+              return `<span class="stock-item">${line}</span>`;
+            }).join('')
           : '<span class="text-muted">未分配仓库</span>';
         const hasStocks = stocks.length > 0;
         return `
@@ -812,7 +867,7 @@ async function loadItems(page = 1, lowStock = false) {
           <td>¥${item.value.toFixed(2)}</td>
           ${isAdmin ? `<td>
             <div class="btn-group">
-              <button class="btn btn-outline btn-sm" onclick='editItem(${JSON.stringify(item)});event.stopPropagation()'>编辑</button>
+              <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();editItemFromRow(this)" data-item='${JSON.stringify(item).replace(/'/g, "&#39;")}'>编辑</button>
               ${item.status === '损坏' ? `<button class="btn btn-success btn-sm" onclick="markAvailable(${item.id});event.stopPropagation()">修复</button>` : `<button class="btn btn-warning btn-sm" onclick="markDamaged(${item.id});event.stopPropagation()">损坏</button>`}
               <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id});event.stopPropagation()">删除</button>
             </div>
@@ -883,10 +938,11 @@ async function saveItem(e) {
 }
 
 async function markDamaged(id) {
-  if (!confirm('确定标记该物品为损坏吗？')) return;
-  const resp = await api(`/api/v1/items/${id}/mark-damaged`, { method: 'PUT' });
-  if (resp.ok) { showToast('已标记为损坏'); loadItems(currentPage); }
-  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+  showItemConfirmDialog('确认操作', '确定标记该物品为损坏吗？', async () => {
+    const resp = await api(`/api/v1/items/${id}/mark-damaged`, { method: 'PUT' });
+    if (resp.ok) { showToast('已标记为损坏'); loadItems(currentPage); }
+    else { const d = await resp.json(); showToast(d.detail, 'error'); }
+  });
 }
 
 async function markAvailable(id) {
@@ -896,10 +952,11 @@ async function markAvailable(id) {
 }
 
 async function deleteItem(id) {
-  if (!confirm('确定删除该物品吗？')) return;
-  const resp = await api(`/api/v1/items/${id}`, { method: 'DELETE' });
-  if (resp.ok) { showToast('物品已删除'); loadItems(currentPage); }
-  else { const d = await resp.json(); showToast(d.detail, 'error'); }
+  showItemConfirmDialog('确认删除', '确定删除该物品吗？此操作不可撤销。', async () => {
+    const resp = await api(`/api/v1/items/${id}`, { method: 'DELETE' });
+    if (resp.ok) { showToast('物品已删除'); loadItems(currentPage); }
+    else { const d = await resp.json(); showToast(d.detail, 'error'); }
+  });
 }
 
 function toggleWarehouseStock(itemId) {

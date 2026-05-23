@@ -687,6 +687,21 @@ a:hover { color: var(--primary-dark); }
   font-size: 14px; font-weight: 600;
   min-width: 30px; text-align: center;
 }
+.cart-quantity-input {
+  font-size: 14px; font-weight: 600;
+  width: 50px; text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 0;
+  background: var(--bg);
+  color: var(--text);
+  -moz-appearance: textfield;
+}
+.cart-quantity-input::-webkit-outer-spin-button,
+.cart-quantity-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 .cart-item-subtotal {
   font-size: 15px; font-weight: 700;
   color: var(--primary);

@@ -1,6 +1,7 @@
 """统计路由"""
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import text
 from app.api.deps import get_db, get_current_user
 from app.services.inventory_service import check_low_stock
 
@@ -17,79 +18,74 @@ def dashboard_stats(
     user_id = current_user["id"]
 
     # 库存指标 — 所有人可见
-    total_items = conn.execute("SELECT COUNT(*) FROM items").fetchone()[0]
-    total_available = conn.execute(
+    total_items = conn.execute(text("SELECT COUNT(*) FROM items")).fetchone()[0]
+    total_available = conn.execute(text(
         "SELECT COUNT(*) FROM items WHERE status = '可用'"
-    ).fetchone()[0]
-    total_quantity = conn.execute(
+    )).fetchone()[0]
+    total_quantity = conn.execute(text(
         "SELECT COALESCE(SUM(total_quantity), 0) FROM items"
-    ).fetchone()[0]
+    )).fetchone()[0]
 
     # 分类统计
-    category_count = conn.execute(
+    category_count = conn.execute(text(
         "SELECT COUNT(DISTINCT category) FROM items WHERE category != ''"
-    ).fetchone()[0]
-    cat_rows = conn.execute(
+    )).fetchone()[0]
+    cat_rows = conn.execute(text(
         "SELECT category, COUNT(*) as cnt FROM items WHERE category != '' GROUP BY category ORDER BY cnt DESC"
-    ).fetchall()
+    )).fetchall()
     category_distribution = [{"name": r[0], "count": r[1]} for r in cat_rows]
     # 各分类库存总量占比
-    cat_qty_rows = conn.execute(
+    cat_qty_rows = conn.execute(text(
         "SELECT category, COALESCE(SUM(total_quantity), 0) as total FROM items WHERE category != '' GROUP BY category ORDER BY total DESC"
-    ).fetchall()
+    )).fetchall()
     category_quantity_distribution = [{"name": r[0], "count": r[1]} for r in cat_qty_rows]
 
     # 物品状态分布
-    status_rows = conn.execute(
+    status_rows = conn.execute(text(
         "SELECT status, COUNT(*) as cnt FROM items GROUP BY status"
-    ).fetchall()
+    )).fetchall()
     status_distribution = [{"status": r[0], "count": r[1]} for r in status_rows]
 
     # 仓库库存分布
-    wh_rows = conn.execute(
+    wh_rows = conn.execute(text(
         "SELECT w.name, COALESCE(SUM(ws.quantity), 0) as total FROM warehouses w LEFT JOIN warehouse_stocks ws ON w.id = ws.warehouse_id GROUP BY w.id ORDER BY w.id"
-    ).fetchall()
+    )).fetchall()
     warehouse_distribution = [{"name": r[0], "count": r[1]} for r in wh_rows if r[1] > 0]
 
     # 记录指标 — 普通用户只显示自己的
     if is_user:
-        total_borrowed = conn.execute(
-            "SELECT COUNT(*) FROM records WHERE status IN ('借出中', '逾期') AND borrower_id = ?",
-            (user_id,),
-        ).fetchone()[0]
-        total_overdue = conn.execute(
-            "SELECT COUNT(*) FROM records WHERE status = '逾期' AND borrower_id = ?",
-            (user_id,),
-        ).fetchone()[0]
-        total_pending = conn.execute(
-            "SELECT COUNT(*) FROM records WHERE status = '待审核' AND borrower_id = ?",
-            (user_id,),
-        ).fetchone()[0]
-        returned_today = conn.execute(
-            "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) = date('now','localtime') AND borrower_id = ?",
-            (user_id,),
-        ).fetchone()[0]
-        approval_timeout = conn.execute(
-            "SELECT COUNT(*) FROM records WHERE status = '待审核' AND approval_deadline < datetime('now','localtime') AND borrower_id = ?",
-            (user_id,),
-        ).fetchone()[0]
+        total_borrowed = conn.execute(text(
+            "SELECT COUNT(*) FROM records WHERE status IN ('借出中', '逾期') AND borrower_id = :uid"
+        ), {"uid": user_id}).fetchone()[0]
+        total_overdue = conn.execute(text(
+            "SELECT COUNT(*) FROM records WHERE status = '逾期' AND borrower_id = :uid"
+        ), {"uid": user_id}).fetchone()[0]
+        total_pending = conn.execute(text(
+            "SELECT COUNT(*) FROM records WHERE status = '待审核' AND borrower_id = :uid"
+        ), {"uid": user_id}).fetchone()[0]
+        returned_today = conn.execute(text(
+            "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) = CURRENT_DATE AND borrower_id = :uid"
+        ), {"uid": user_id}).fetchone()[0]
+        approval_timeout = conn.execute(text(
+            "SELECT COUNT(*) FROM records WHERE status = '待审核' AND approval_deadline < NOW() AND borrower_id = :uid"
+        ), {"uid": user_id}).fetchone()[0]
         low_stock_list = []
     else:
-        total_borrowed = conn.execute(
+        total_borrowed = conn.execute(text(
             "SELECT COUNT(*) FROM records WHERE status IN ('借出中', '逾期')"
-        ).fetchone()[0]
-        total_overdue = conn.execute(
+        )).fetchone()[0]
+        total_overdue = conn.execute(text(
             "SELECT COUNT(*) FROM records WHERE status = '逾期'"
-        ).fetchone()[0]
-        total_pending = conn.execute(
+        )).fetchone()[0]
+        total_pending = conn.execute(text(
             "SELECT COUNT(*) FROM records WHERE status = '待审核'"
-        ).fetchone()[0]
-        returned_today = conn.execute(
-            "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) = date('now','localtime')"
-        ).fetchone()[0]
-        approval_timeout = conn.execute(
-            "SELECT COUNT(*) FROM records WHERE status = '待审核' AND approval_deadline < datetime('now','localtime')"
-        ).fetchone()[0]
+        )).fetchone()[0]
+        returned_today = conn.execute(text(
+            "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) = CURRENT_DATE"
+        )).fetchone()[0]
+        approval_timeout = conn.execute(text(
+            "SELECT COUNT(*) FROM records WHERE status = '待审核' AND approval_deadline < NOW()"
+        )).fetchone()[0]
         low_stock_list = check_low_stock(conn)
 
     return {
@@ -148,28 +144,23 @@ def weekly_trends(
             next_str = (d + timedelta(days=1)).strftime("%Y-%m-%d")
 
             if is_user:
-                borrowed = conn.execute(
-                    "SELECT COUNT(*) FROM records WHERE date(borrow_date) = ? AND borrower_id = ?",
-                    (d_str, user_id),
-                ).fetchone()[0]
-                returned = conn.execute(
-                    "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) = ? AND borrower_id = ?",
-                    (d_str, user_id),
-                ).fetchone()[0]
+                borrowed = conn.execute(text(
+                    "SELECT COUNT(*) FROM records WHERE date(borrow_date) = :d_str AND borrower_id = :uid"
+                ), {"d_str": d_str, "uid": user_id}).fetchone()[0]
+                returned = conn.execute(text(
+                    "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) = :d_str AND borrower_id = :uid"
+                ), {"d_str": d_str, "uid": user_id}).fetchone()[0]
             else:
-                borrowed = conn.execute(
-                    "SELECT COUNT(*) FROM records WHERE date(borrow_date) = ?",
-                    (d_str,),
-                ).fetchone()[0]
-                returned = conn.execute(
-                    "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) = ?",
-                    (d_str,),
-                ).fetchone()[0]
+                borrowed = conn.execute(text(
+                    "SELECT COUNT(*) FROM records WHERE date(borrow_date) = :d_str"
+                ), {"d_str": d_str}).fetchone()[0]
+                returned = conn.execute(text(
+                    "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) = :d_str"
+                ), {"d_str": d_str}).fetchone()[0]
 
-            new_items = conn.execute(
-                "SELECT COUNT(*) FROM items WHERE date(created_at) = ?",
-                (d_str,),
-            ).fetchone()[0]
+            new_items = conn.execute(text(
+                "SELECT COUNT(*) FROM items WHERE date(created_at) = :d_str"
+            ), {"d_str": d_str}).fetchone()[0]
 
             trends.append({
                 "label": label,
@@ -187,28 +178,23 @@ def weekly_trends(
             end_str = week_end.strftime("%Y-%m-%d")
 
             if is_user:
-                borrowed = conn.execute(
-                    "SELECT COUNT(*) FROM records WHERE date(borrow_date) BETWEEN ? AND ? AND borrower_id = ?",
-                    (start_str, end_str, user_id),
-                ).fetchone()[0]
-                returned = conn.execute(
-                    "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) BETWEEN ? AND ? AND borrower_id = ?",
-                    (start_str, end_str, user_id),
-                ).fetchone()[0]
+                borrowed = conn.execute(text(
+                    "SELECT COUNT(*) FROM records WHERE date(borrow_date) BETWEEN :start AND :end AND borrower_id = :uid"
+                ), {"start": start_str, "end": end_str, "uid": user_id}).fetchone()[0]
+                returned = conn.execute(text(
+                    "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) BETWEEN :start AND :end AND borrower_id = :uid"
+                ), {"start": start_str, "end": end_str, "uid": user_id}).fetchone()[0]
             else:
-                borrowed = conn.execute(
-                    "SELECT COUNT(*) FROM records WHERE date(borrow_date) BETWEEN ? AND ?",
-                    (start_str, end_str),
-                ).fetchone()[0]
-                returned = conn.execute(
-                    "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) BETWEEN ? AND ?",
-                    (start_str, end_str),
-                ).fetchone()[0]
+                borrowed = conn.execute(text(
+                    "SELECT COUNT(*) FROM records WHERE date(borrow_date) BETWEEN :start AND :end"
+                ), {"start": start_str, "end": end_str}).fetchone()[0]
+                returned = conn.execute(text(
+                    "SELECT COUNT(*) FROM records WHERE status = '已归还' AND date(updated_at) BETWEEN :start AND :end"
+                ), {"start": start_str, "end": end_str}).fetchone()[0]
 
-            new_items = conn.execute(
-                "SELECT COUNT(*) FROM items WHERE date(created_at) BETWEEN ? AND ?",
-                (start_str, end_str),
-            ).fetchone()[0]
+            new_items = conn.execute(text(
+                "SELECT COUNT(*) FROM items WHERE date(created_at) BETWEEN :start AND :end"
+            ), {"start": start_str, "end": end_str}).fetchone()[0]
 
             trends.append({
                 "label": label,
@@ -233,20 +219,18 @@ def top_borrowed(
     since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
     if is_user:
-        rows = conn.execute(
-            """SELECT i.name, COUNT(*) as cnt FROM records r
+        rows = conn.execute(text(
+            """SELECT i.name, COUNT(*) as cnt, COALESCE(SUM(r.quantity), 0) as total_qty FROM records r
                JOIN items i ON r.item_id = i.id
-               WHERE date(r.borrow_date) >= ? AND r.borrower_id = ?
-               GROUP BY r.item_id ORDER BY cnt DESC LIMIT ?""",
-            (since, user_id, limit),
-        ).fetchall()
+               WHERE date(r.borrow_date) >= :since AND r.borrower_id = :uid
+               GROUP BY r.item_id, i.name ORDER BY cnt DESC LIMIT :limit"""
+        ), {"since": since, "uid": user_id, "limit": limit}).fetchall()
     else:
-        rows = conn.execute(
-            """SELECT i.name, COUNT(*) as cnt FROM records r
+        rows = conn.execute(text(
+            """SELECT i.name, COUNT(*) as cnt, COALESCE(SUM(r.quantity), 0) as total_qty FROM records r
                JOIN items i ON r.item_id = i.id
-               WHERE date(r.borrow_date) >= ?
-               GROUP BY r.item_id ORDER BY cnt DESC LIMIT ?""",
-            (since, limit),
-        ).fetchall()
+               WHERE date(r.borrow_date) >= :since
+               GROUP BY r.item_id, i.name ORDER BY cnt DESC LIMIT :limit"""
+        ), {"since": since, "limit": limit}).fetchall()
 
-    return {"items": [{"name": r[0], "count": r[1]} for r in rows]}
+    return {"items": [{"name": r[0], "count": r[1], "total_qty": r[2]} for r in rows]}

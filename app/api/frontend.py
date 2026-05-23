@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBearer
 from jinja2 import Environment, FileSystemLoader
+from sqlalchemy import text
 from app.utils.security import verify_token
 
 router = APIRouter(tags=["前端"])
@@ -38,10 +39,9 @@ async def get_optional_user(request: Request):
 
     conn = get_connection()
     try:
-        user = conn.execute(
-            "SELECT id, username, display_name, role FROM users WHERE id = ? AND is_active = 1",
-            (int(payload["sub"]),),
-        ).fetchone()
+        user = conn.execute(text(
+            "SELECT id, username, display_name, role FROM users WHERE id = :uid AND is_active = 1"
+        ), {"uid": int(payload["sub"])}).fetchone()
         if user:
             u = dict(user)
             role_map = {"admin": "管理员", "approver": "审核员", "user": "普通用户"}
@@ -94,10 +94,9 @@ async def debug_auth(request: Request):
         conn = get_connection()
         try:
             steps["db_connect"] = "OK"
-            user = conn.execute(
-                "SELECT id, username, display_name, role FROM users WHERE id = ? AND is_active = 1",
-                (int(payload["sub"]),),
-            ).fetchone()
+            user = conn.execute(text(
+                "SELECT id, username, display_name, role FROM users WHERE id = :uid AND is_active = 1"
+            ), {"uid": int(payload["sub"])}).fetchone()
             steps["user_found"] = user is not None
             if user:
                 steps["user_data"] = dict(user)

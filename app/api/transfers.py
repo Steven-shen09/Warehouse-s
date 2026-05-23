@@ -4,6 +4,7 @@ import io
 import os
 import json
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
+from sqlalchemy import text
 from app.api.deps import get_db, get_current_user, require_role
 from app.schemas.warehouse import TransferCreate
 
@@ -22,8 +23,8 @@ def _generate_doc_no(conn) -> str:
     from datetime import datetime
     today = datetime.now().strftime("%Y%m%d")
     count = conn.execute(
-        "SELECT COUNT(*) FROM transfers WHERE document_no LIKE ?",
-        (f"DB-{today}-%",),
+        text("SELECT COUNT(*) FROM transfers WHERE document_no LIKE :pat"),
+        {"pat": f"DB-{today}-%"},
     ).fetchone()[0]
     return f"DB-{today}-{count + 1:03d}"
 
@@ -38,16 +39,16 @@ def list_transfers(
 ):
     """调拨记录列表"""
     where = "WHERE 1=1"
-    params = []
+    params = {}
     if status:
-        where += " AND t.status = ?"
-        params.append(STATUS_TO_DB.get(status, status))
+        where += " AND t.status = :status"
+        params["status"] = STATUS_TO_DB.get(status, status)
 
-    total = conn.execute(f"SELECT COUNT(*) FROM transfers t {where}", params).fetchone()[0]
+    total = conn.execute(text(f"SELECT COUNT(*) FROM transfers t {where}"), params).fetchone()[0]
     offset = (page - 1) * page_size
 
     rows = conn.execute(
-        f"""SELECT t.*, i.name AS item_name,
+        text(f"""SELECT t.*, i.name AS item_name,
            fw.name AS from_warehouse_name, tw.name AS to_warehouse_name,
            cu.display_name AS created_by_name, au.display_name AS approved_by_name
            FROM transfers t
@@ -56,8 +57,8 @@ def list_transfers(
            JOIN warehouses tw ON t.to_warehouse_id = tw.id
            JOIN users cu ON t.created_by = cu.id
            LEFT JOIN users au ON t.approved_by = au.id
-           {where} ORDER BY t.id DESC LIMIT ? OFFSET ?""",
-        params + [page_size, offset],
+           {where} ORDER BY t.id DESC LIMIT :limit OFFSET :offset"""),
+        {**params, "limit": page_size, "offset": offset},
     ).fetchall()
 
     transfers = []
@@ -84,18 +85,18 @@ def create_transfer(
     if body.from_warehouse_id == body.to_warehouse_id:
         raise HTTPException(status_code=400, detail="源仓库和目标仓库不能相同")
 
-    item = conn.execute("SELECT id, name FROM items WHERE id = ?", (body.item_id,)).fetchone()
+    item = conn.execute(text("SELECT id, name FROM items WHERE id = :iid"), {"iid": body.item_id}).fetchone()
     if not item:
         raise HTTPException(status_code=400, detail="物品不存在")
 
-    from_wh = conn.execute("SELECT id FROM warehouses WHERE id = ?", (body.from_warehouse_id,)).fetchone()
-    to_wh = conn.execute("SELECT id FROM warehouses WHERE id = ?", (body.to_warehouse_id,)).fetchone()
+    from_wh = conn.execute(text("SELECT id FROM warehouses WHERE id = :wid"), {"wid": body.from_warehouse_id}).fetchone()
+    to_wh = conn.execute(text("SELECT id FROM warehouses WHERE id = :wid"), {"wid": body.to_warehouse_id}).fetchone()
     if not from_wh or not to_wh:
         raise HTTPException(status_code=400, detail="仓库不存在")
 
     stock = conn.execute(
-        "SELECT quantity FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?",
-        (body.item_id, body.from_warehouse_id),
+        text("SELECT quantity FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id = :wid"),
+        {"iid": body.item_id, "wid": body.from_warehouse_id},
     ).fetchone()
     available = stock["quantity"] if stock else 0
     if available < body.quantity:
@@ -103,9 +104,10 @@ def create_transfer(
 
     doc_no = _generate_doc_no(conn)
     conn.execute(
-        """INSERT INTO transfers (item_id, from_warehouse_id, to_warehouse_id, quantity, reason, document_no, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (body.item_id, body.from_warehouse_id, body.to_warehouse_id, body.quantity, body.reason, doc_no, current_user["id"]),
+        text("""INSERT INTO transfers (item_id, from_warehouse_id, to_warehouse_id, quantity, reason, document_no, created_by)
+           VALUES (:iid, :fid, :tid, :qty, :reason, :doc, :cby)"""),
+        {"iid": body.item_id, "fid": body.from_warehouse_id, "tid": body.to_warehouse_id,
+         "qty": body.quantity, "reason": body.reason, "doc": doc_no, "cby": current_user["id"]},
     )
     conn.commit()
     return {"message": "调拨申请已创建", "document_no": doc_no}
@@ -121,8 +123,6 @@ def create_batch_transfer(
     conn=Depends(get_db),
 ):
     """批量创建调拨申请（同一单据号，多物品）"""
-    import json
-
     if from_warehouse_id == to_warehouse_id:
         raise HTTPException(status_code=400, detail="源仓库和目标仓库不能相同")
 
@@ -134,8 +134,8 @@ def create_batch_transfer(
     if not items_list:
         raise HTTPException(status_code=400, detail="请至少添加一个物品")
 
-    from_wh = conn.execute("SELECT id FROM warehouses WHERE id = ?", (from_warehouse_id,)).fetchone()
-    to_wh = conn.execute("SELECT id FROM warehouses WHERE id = ?", (to_warehouse_id,)).fetchone()
+    from_wh = conn.execute(text("SELECT id FROM warehouses WHERE id = :wid"), {"wid": from_warehouse_id}).fetchone()
+    to_wh = conn.execute(text("SELECT id FROM warehouses WHERE id = :wid"), {"wid": to_warehouse_id}).fetchone()
     if not from_wh or not to_wh:
         raise HTTPException(status_code=400, detail="仓库不存在")
 
@@ -143,38 +143,37 @@ def create_batch_transfer(
     created = 0
 
     try:
-        conn.execute("BEGIN IMMEDIATE")
-        for item_data in items_list:
-            item_id = int(item_data.get("item_id", 0))
-            qty = int(item_data.get("quantity", 1))
-            if qty < 1:
-                continue
-
-            item = conn.execute("SELECT id FROM items WHERE id = ?", (item_id,)).fetchone()
-            if not item:
-                continue
-
-            stock = conn.execute(
-                "SELECT quantity FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?",
-                (item_id, from_warehouse_id),
-            ).fetchone()
-            available = stock["quantity"] if stock else 0
-            if available < qty:
-                raise HTTPException(status_code=400,
-                    detail=f"物品ID={item_id} 库存不足（可用：{available}，需要：{qty}）")
-
-            conn.execute(
-                """INSERT INTO transfers (item_id, from_warehouse_id, to_warehouse_id, quantity, reason, document_no, created_by)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (item_id, from_warehouse_id, to_warehouse_id, qty, reason, doc_no, current_user["id"]),
-            )
-            created += 1
-        conn.commit()
-    except HTTPException:
         conn.rollback()
+        with conn.begin():
+            for item_data in items_list:
+                item_id = int(item_data.get("item_id", 0))
+                qty = int(item_data.get("quantity", 1))
+                if qty < 1:
+                    continue
+
+                item = conn.execute(text("SELECT id FROM items WHERE id = :iid"), {"iid": item_id}).fetchone()
+                if not item:
+                    continue
+
+                stock = conn.execute(
+                    text("SELECT quantity FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id = :wid"),
+                    {"iid": item_id, "wid": from_warehouse_id},
+                ).fetchone()
+                available = stock["quantity"] if stock else 0
+                if available < qty:
+                    raise HTTPException(status_code=400,
+                        detail=f"物品ID={item_id} 库存不足（可用：{available}，需要：{qty}）")
+
+                conn.execute(
+                    text("""INSERT INTO transfers (item_id, from_warehouse_id, to_warehouse_id, quantity, reason, document_no, created_by)
+                       VALUES (:iid, :fid, :tid, :qty, :reason, :doc, :cby)"""),
+                    {"iid": item_id, "fid": from_warehouse_id, "tid": to_warehouse_id,
+                     "qty": qty, "reason": reason, "doc": doc_no, "cby": current_user["id"]},
+                )
+                created += 1
+    except HTTPException:
         raise
     except Exception:
-        conn.rollback()
         raise HTTPException(status_code=500, detail="批量调拨创建失败，已回滚")
 
     return {"message": f"调拨单已创建，共{created}件物品", "document_no": doc_no, "count": created}
@@ -187,7 +186,7 @@ def approve_transfer(
     conn=Depends(get_db),
 ):
     """审核通过 → 执行库存调拨"""
-    t = conn.execute("SELECT * FROM transfers WHERE id = ?", (transfer_id,)).fetchone()
+    t = conn.execute(text("SELECT * FROM transfers WHERE id = :tid"), {"tid": transfer_id}).fetchone()
     if not t:
         raise HTTPException(status_code=404, detail="调拨记录不存在")
     if t["status"] != "待审核":
@@ -195,45 +194,42 @@ def approve_transfer(
 
     # 再次校验库存
     stock = conn.execute(
-        "SELECT quantity FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?",
-        (t["item_id"], t["from_warehouse_id"]),
+        text("SELECT quantity FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id = :wid"),
+        {"iid": t["item_id"], "wid": t["from_warehouse_id"]},
     ).fetchone()
     available = stock["quantity"] if stock else 0
     if available < t["quantity"]:
         raise HTTPException(status_code=400, detail=f"源仓库库存不足（当前可用：{available}）")
 
-    try:
-        conn.execute("BEGIN IMMEDIATE")
-        # 扣减源仓库
-        conn.execute(
-            "UPDATE warehouse_stocks SET quantity = quantity - ? WHERE item_id = ? AND warehouse_id = ?",
-            (t["quantity"], t["item_id"], t["from_warehouse_id"]),
-        )
-        # 增加目标仓库
-        existing = conn.execute(
-            "SELECT id FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?",
-            (t["item_id"], t["to_warehouse_id"]),
-        ).fetchone()
-        if existing:
-            conn.execute(
-                "UPDATE warehouse_stocks SET quantity = quantity + ? WHERE item_id = ? AND warehouse_id = ?",
-                (t["quantity"], t["item_id"], t["to_warehouse_id"]),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, ?, ?)",
-                (t["item_id"], t["to_warehouse_id"], t["quantity"]),
-            )
-        # 更新调拨状态
-        conn.execute(
-            "UPDATE transfers SET status = '已通过', approved_by = ?, updated_at = datetime('now','localtime') WHERE id = ?",
-            (current_user["id"], transfer_id),
-        )
-        conn.commit()
-    except Exception:
+    conn.rollback()
+    with conn.begin():
         conn.rollback()
-        raise HTTPException(status_code=500, detail="调拨执行失败，已回滚")
-
+        with conn.begin():
+            # 扣减源仓库
+            conn.execute(
+                text("UPDATE warehouse_stocks SET quantity = quantity - :qty WHERE item_id = :iid AND warehouse_id = :wid"),
+                {"qty": t["quantity"], "iid": t["item_id"], "wid": t["from_warehouse_id"]},
+            )
+            # 增加目标仓库
+            existing = conn.execute(
+                text("SELECT id FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id = :wid"),
+                {"iid": t["item_id"], "wid": t["to_warehouse_id"]},
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    text("UPDATE warehouse_stocks SET quantity = quantity + :qty WHERE item_id = :iid AND warehouse_id = :wid"),
+                    {"qty": t["quantity"], "iid": t["item_id"], "wid": t["to_warehouse_id"]},
+                )
+            else:
+                conn.execute(
+                    text("INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (:iid, :wid, :qty)"),
+                    {"iid": t["item_id"], "wid": t["to_warehouse_id"], "qty": t["quantity"]},
+                )
+            # 更新调拨状态
+            conn.execute(
+                text("UPDATE transfers SET status = '已通过', approved_by = :auid, updated_at = NOW() WHERE id = :tid"),
+                {"auid": current_user["id"], "tid": transfer_id},
+            )
     # 更新物品 total_quantity
     _update_item_total(conn, t["item_id"])
     conn.commit()
@@ -248,18 +244,19 @@ def reject_transfer(
     conn=Depends(get_db),
 ):
     """驳回调拨"""
-    t = conn.execute("SELECT * FROM transfers WHERE id = ?", (transfer_id,)).fetchone()
+    t = conn.execute(text("SELECT * FROM transfers WHERE id = :tid"), {"tid": transfer_id}).fetchone()
     if not t:
         raise HTTPException(status_code=404, detail="调拨记录不存在")
     if t["status"] != "待审核":
         raise HTTPException(status_code=400, detail="该调拨记录已处理")
 
     conn.execute(
-        "UPDATE transfers SET status = '已驳回', approved_by = ?, updated_at = datetime('now','localtime') WHERE id = ?",
-        (current_user["id"], transfer_id),
+        text("UPDATE transfers SET status = '已驳回', approved_by = :auid, updated_at = NOW() WHERE id = :tid"),
+        {"auid": current_user["id"], "tid": transfer_id},
     )
     conn.commit()
     return {"message": "调拨已驳回"}
+
 
 @router.put("/by-document/{document_no}/approve")
 def approve_document(
@@ -268,53 +265,51 @@ def approve_document(
     conn=Depends(get_db),
 ):
     """审核通过整个调拨单据的所有物品"""
-    items = conn.execute("SELECT * FROM transfers WHERE document_no = ?", (document_no,)).fetchall()
+    items = conn.execute(text("SELECT * FROM transfers WHERE document_no = :dno"), {"dno": document_no}).fetchall()
     if not items:
         raise HTTPException(status_code=404, detail="调拨单据不存在")
     if any(t["status"] != "待审核" for t in items):
         raise HTTPException(status_code=400, detail="该单据中存在已处理的调拨，无法批量通过")
 
     try:
-        conn.execute("BEGIN IMMEDIATE")
-        for t in items:
-            stock = conn.execute(
-                "SELECT quantity FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?",
-                (t["item_id"], t["from_warehouse_id"]),
-            ).fetchone()
-            available = stock["quantity"] if stock else 0
-            if available < t["quantity"]:
-                raise HTTPException(status_code=400,
-                    detail=f"物品ID={t['item_id']} 库存不足（可用：{available}，需要：{t['quantity']}）")
-
-            conn.execute(
-                "UPDATE warehouse_stocks SET quantity = quantity - ? WHERE item_id = ? AND warehouse_id = ?",
-                (t["quantity"], t["item_id"], t["from_warehouse_id"]),
-            )
-            existing = conn.execute(
-                "SELECT id FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?",
-                (t["item_id"], t["to_warehouse_id"]),
-            ).fetchone()
-            if existing:
-                conn.execute(
-                    "UPDATE warehouse_stocks SET quantity = quantity + ? WHERE item_id = ? AND warehouse_id = ?",
-                    (t["quantity"], t["item_id"], t["to_warehouse_id"]),
-                )
-            else:
-                conn.execute(
-                    "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, ?, ?)",
-                    (t["item_id"], t["to_warehouse_id"], t["quantity"]),
-                )
-            conn.execute(
-                "UPDATE transfers SET status = '已通过', approved_by = ?, updated_at = datetime('now','localtime') WHERE id = ?",
-                (current_user["id"], t["id"]),
-            )
-            _update_item_total(conn, t["item_id"])
-        conn.commit()
-    except HTTPException:
         conn.rollback()
+        with conn.begin():
+            for t in items:
+                stock = conn.execute(
+                    text("SELECT quantity FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id = :wid"),
+                    {"iid": t["item_id"], "wid": t["from_warehouse_id"]},
+                ).fetchone()
+                available = stock["quantity"] if stock else 0
+                if available < t["quantity"]:
+                    raise HTTPException(status_code=400,
+                        detail=f"物品ID={t['item_id']} 库存不足（可用：{available}，需要：{t['quantity']}）")
+
+                conn.execute(
+                    text("UPDATE warehouse_stocks SET quantity = quantity - :qty WHERE item_id = :iid AND warehouse_id = :wid"),
+                    {"qty": t["quantity"], "iid": t["item_id"], "wid": t["from_warehouse_id"]},
+                )
+                existing = conn.execute(
+                    text("SELECT id FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id = :wid"),
+                    {"iid": t["item_id"], "wid": t["to_warehouse_id"]},
+                ).fetchone()
+                if existing:
+                    conn.execute(
+                        text("UPDATE warehouse_stocks SET quantity = quantity + :qty WHERE item_id = :iid AND warehouse_id = :wid"),
+                        {"qty": t["quantity"], "iid": t["item_id"], "wid": t["to_warehouse_id"]},
+                    )
+                else:
+                    conn.execute(
+                        text("INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (:iid, :wid, :qty)"),
+                        {"iid": t["item_id"], "wid": t["to_warehouse_id"], "qty": t["quantity"]},
+                    )
+                conn.execute(
+                    text("UPDATE transfers SET status = '已通过', approved_by = :auid, updated_at = NOW() WHERE id = :tid"),
+                    {"auid": current_user["id"], "tid": t["id"]},
+                )
+                _update_item_total(conn, t["item_id"])
+    except HTTPException:
         raise
     except Exception:
-        conn.rollback()
         raise HTTPException(status_code=500, detail="批量审核失败，已回滚")
 
     return {"message": f"调拨单 {document_no} 已全部通过", "count": len(items)}
@@ -327,7 +322,7 @@ def reject_document(
     conn=Depends(get_db),
 ):
     """驳回整个调拨单据的所有物品"""
-    items = conn.execute("SELECT * FROM transfers WHERE document_no = ?", (document_no,)).fetchall()
+    items = conn.execute(text("SELECT * FROM transfers WHERE document_no = :dno"), {"dno": document_no}).fetchall()
     if not items:
         raise HTTPException(status_code=404, detail="调拨单据不存在")
     if any(t["status"] != "待审核" for t in items):
@@ -335,22 +330,21 @@ def reject_document(
 
     for t in items:
         conn.execute(
-            "UPDATE transfers SET status = '已驳回', approved_by = ?, updated_at = datetime('now','localtime') WHERE id = ?",
-            (current_user["id"], t["id"]),
+            text("UPDATE transfers SET status = '已驳回', approved_by = :auid, updated_at = NOW() WHERE id = :tid"),
+            {"auid": current_user["id"], "tid": t["id"]},
         )
     conn.commit()
     return {"message": f"调拨单 {document_no} 已全部驳回", "count": len(items)}
 
 
-
 def _update_item_total(conn, item_id: int):
     """更新 items.total_quantity = 所有仓库库存之和"""
     total = conn.execute(
-        "SELECT COALESCE(SUM(quantity), 0) FROM warehouse_stocks WHERE item_id = ?", (item_id,)
+        text("SELECT COALESCE(SUM(quantity), 0) FROM warehouse_stocks WHERE item_id = :iid"), {"iid": item_id}
     ).fetchone()[0]
     conn.execute(
-        "UPDATE items SET total_quantity = ?, updated_at = datetime('now','localtime') WHERE id = ?",
-        (total, item_id),
+        text("UPDATE items SET total_quantity = :total, updated_at = NOW() WHERE id = :iid"),
+        {"total": total, "iid": item_id},
     )
 
 
@@ -407,21 +401,21 @@ def _validate_transfer_row(conn, row: dict, index: int) -> dict:
     except ValueError:
         return {"index": index, "data": row, "status": "error", "message": f"数量必须为大于等于1的整数（当前：{qty_str}）"}
 
-    item = conn.execute("SELECT id, name FROM items WHERE name = ?", (name,)).fetchone()
+    item = conn.execute(text("SELECT id, name FROM items WHERE name = :nm"), {"nm": name}).fetchone()
     if not item:
         return {"index": index, "data": row, "status": "error", "message": f"物品「{name}」不存在"}
 
-    fw = conn.execute("SELECT id, name FROM warehouses WHERE name = ?", (from_wh,)).fetchone()
+    fw = conn.execute(text("SELECT id, name FROM warehouses WHERE name = :nm"), {"nm": from_wh}).fetchone()
     if not fw:
         return {"index": index, "data": row, "status": "error", "message": f"源仓库「{from_wh}」不存在"}
 
-    tw = conn.execute("SELECT id, name FROM warehouses WHERE name = ?", (to_wh,)).fetchone()
+    tw = conn.execute(text("SELECT id, name FROM warehouses WHERE name = :nm"), {"nm": to_wh}).fetchone()
     if not tw:
         return {"index": index, "data": row, "status": "error", "message": f"目标仓库「{to_wh}」不存在"}
 
     stock = conn.execute(
-        "SELECT quantity FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?",
-        (item["id"], fw["id"]),
+        text("SELECT quantity FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id = :wid"),
+        {"iid": item["id"], "wid": fw["id"]},
     ).fetchone()
     available = stock["quantity"] if stock else 0
     if available < qty:
@@ -510,25 +504,22 @@ def transfer_import_confirm(
     selection_set = {s["index"] for s in selected}
     created = 0
 
-    try:
-        conn.execute("BEGIN IMMEDIATE")
-        for row_data in validated:
-            if row_data["index"] not in selection_set:
-                continue
-            res = row_data["resolved"]
-            doc_no = _generate_doc_no(conn)
-            conn.execute(
-                """INSERT INTO transfers (item_id, from_warehouse_id, to_warehouse_id, quantity, reason, document_no, created_by, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, '待审核')""",
-                (res["item_id"], res["from_warehouse_id"], res["to_warehouse_id"],
-                 res["quantity"], res["reason"], doc_no, current_user["id"]),
-            )
-            created += 1
-        conn.commit()
-    except Exception:
+    conn.rollback()
+    with conn.begin():
         conn.rollback()
-        raise HTTPException(status_code=500, detail="导入失败，已回滚")
-
+        with conn.begin():
+            for row_data in validated:
+                if row_data["index"] not in selection_set:
+                    continue
+                res = row_data["resolved"]
+                doc_no = _generate_doc_no(conn)
+                conn.execute(
+                    text("""INSERT INTO transfers (item_id, from_warehouse_id, to_warehouse_id, quantity, reason, document_no, created_by, status)
+                       VALUES (:iid, :fid, :tid, :qty, :reason, :doc, :cby, '待审核')"""),
+                    {"iid": res["item_id"], "fid": res["from_warehouse_id"], "tid": res["to_warehouse_id"],
+                     "qty": res["quantity"], "reason": res["reason"], "doc": doc_no, "cby": current_user["id"]},
+                )
+                created += 1
     skipped = len(validated) - created
     return {"message": f"成功创建 {created} 条调拨申请", "imported": created, "skipped": skipped}
 

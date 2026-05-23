@@ -1,5 +1,6 @@
 """用户管理路由（管理员专用）"""
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from app.api.deps import get_db, get_current_user, require_role
 from app.schemas.user import UserCreate, UserUpdate
 from app.utils.security import hash_password
@@ -17,17 +18,19 @@ def list_users(
 ):
     """用户列表（分页）"""
     where = "WHERE 1=1"
-    params = []
+    params = {}
     if keyword:
-        where += " AND (username LIKE ? OR display_name LIKE ?)"
-        params.extend([f"%{keyword}%", f"%{keyword}%"])
+        where += " AND (username LIKE :kw1 OR display_name LIKE :kw2)"
+        params["kw1"] = f"%{keyword}%"
+        params["kw2"] = f"%{keyword}%"
 
-    total = conn.execute(f"SELECT COUNT(*) FROM users {where}", params).fetchone()[0]
+    total = conn.execute(text(f"SELECT COUNT(*) FROM users {where}"), params).fetchone()[0]
     offset = (page - 1) * page_size
-    rows = conn.execute(
-        f"SELECT id, username, display_name, role, email, phone, is_active, created_at FROM users {where} ORDER BY id DESC LIMIT ? OFFSET ?",
-        params + [page_size, offset],
-    ).fetchall()
+    params["limit"] = page_size
+    params["offset"] = offset
+    rows = conn.execute(text(
+        f"SELECT id, username, display_name, role, email, phone, is_active, created_at FROM users {where} ORDER BY id DESC LIMIT :limit OFFSET :offset"
+    ), params).fetchall()
 
     return {
         "items": [dict(r) for r in rows],
@@ -44,14 +47,13 @@ def create_user(
     conn=Depends(get_db),
 ):
     """创建用户"""
-    existing = conn.execute("SELECT id FROM users WHERE username = ?", (body.username,)).fetchone()
+    existing = conn.execute(text("SELECT id FROM users WHERE username = :un"), {"un": body.username}).fetchone()
     if existing:
         raise HTTPException(status_code=400, detail="用户名已存在")
 
-    conn.execute(
-        "INSERT INTO users (username, password_hash, display_name, role, email, phone) VALUES (?, ?, ?, ?, ?, ?)",
-        (body.username, hash_password(body.password), body.display_name, body.role, body.email, body.phone),
-    )
+    conn.execute(text(
+        "INSERT INTO users (username, password_hash, display_name, role, email, phone) VALUES (:un, :ph, :dn, :r, :em, :p)"
+    ), {"un": body.username, "ph": hash_password(body.password), "dn": body.display_name, "r": body.role, "em": body.email, "p": body.phone})
     conn.commit()
     return {"message": "用户创建成功"}
 
@@ -63,10 +65,9 @@ def get_user(
     conn=Depends(get_db),
 ):
     """获取用户详情"""
-    user = conn.execute(
-        "SELECT id, username, display_name, role, email, phone, is_active, created_at FROM users WHERE id = ?",
-        (user_id,),
-    ).fetchone()
+    user = conn.execute(text(
+        "SELECT id, username, display_name, role, email, phone, is_active, created_at FROM users WHERE id = :uid"
+    ), {"uid": user_id}).fetchone()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     return dict(user)
@@ -80,7 +81,7 @@ def update_user(
     conn=Depends(get_db),
 ):
     """更新用户信息"""
-    user = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    user = conn.execute(text("SELECT id FROM users WHERE id = :uid"), {"uid": user_id}).fetchone()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
@@ -95,9 +96,10 @@ def update_user(
         updates["role"] = body.role
 
     if updates:
-        set_clause = ", ".join(f"{k} = ?" for k in updates)
-        values = list(updates.values()) + [user_id]
-        conn.execute(f"UPDATE users SET {set_clause}, updated_at = datetime('now','localtime') WHERE id = ?", values)
+        set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+        params = {k: v for k, v in updates.items()}
+        params["uid"] = user_id
+        conn.execute(text(f"UPDATE users SET {set_clause}, updated_at = NOW() WHERE id = :uid"), params)
         conn.commit()
 
     return {"message": "用户信息更新成功"}
@@ -113,13 +115,14 @@ def toggle_user(
     if user_id == admin["id"]:
         raise HTTPException(status_code=400, detail="不能停用自己")
 
-    user = conn.execute("SELECT id, is_active FROM users WHERE id = ?", (user_id,)).fetchone()
+    user = conn.execute(text("SELECT id, is_active FROM users WHERE id = :uid"), {"uid": user_id}).fetchone()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
     new_status = 0 if user["is_active"] else 1
-    conn.execute("UPDATE users SET is_active = ?, updated_at = datetime('now','localtime') WHERE id = ?",
-                 (new_status, user_id))
+    conn.execute(text(
+        "UPDATE users SET is_active = :st, updated_at = NOW() WHERE id = :uid"
+    ), {"st": new_status, "uid": user_id})
     conn.commit()
     return {"message": f"用户已{'启用' if new_status else '停用'}"}
 
@@ -131,12 +134,12 @@ def reset_password(
     conn=Depends(get_db),
 ):
     """重置用户密码为默认密码"""
-    user = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    user = conn.execute(text("SELECT id FROM users WHERE id = :uid"), {"uid": user_id}).fetchone()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    default_password = hash_password("123456")
-    conn.execute("UPDATE users SET password_hash = ?, updated_at = datetime('now','localtime') WHERE id = ?",
-                 (default_password, user_id))
+    conn.execute(text(
+        "UPDATE users SET password_hash = :ph, updated_at = NOW() WHERE id = :uid"
+    ), {"ph": hash_password("123456"), "uid": user_id})
     conn.commit()
     return {"message": "密码已重置为 123456"}

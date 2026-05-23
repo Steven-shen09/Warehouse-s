@@ -1,5 +1,5 @@
 """租借引擎：申请提交、库存检查、状态流转"""
-import sqlite3
+from sqlalchemy import text
 from app.state_machine.transitions import can_transition
 from app.state_machine.events import SUBMIT_BORROW, RESUBMIT
 from app.services.inventory_service import reserve_stock, update_item_status, check_stock
@@ -8,59 +8,54 @@ from app.config import settings
 from app.utils.helpers import deadline_str, generate_document_no
 
 
-def submit_borrow(
-    conn: sqlite3.Connection,
-    item_id: int,
-    borrower_id: int,
-    borrower_name: str,
-    quantity: int,
-    borrow_date: str,
-    expected_return_date: str,
-    reason: str = "",
-    contact: str = "",
-) -> dict:
-    """
-    提交租借申请。
-    1. 校验库存
-    2. 在事务中预留库存并创建记录
-    3. 设置审核截止时间
-    """
-    conn.execute("BEGIN IMMEDIATE")
-    try:
-        # 库存检查 + 预留
+def submit_borrow(conn, item_id, borrower_id, borrower_name, quantity, borrow_date, expected_return_date, reason="", contact="", source_warehouse_id=None):
+    conn.rollback()
+    with conn.begin():
         if not reserve_stock(conn, item_id, quantity):
-            conn.rollback()
             raise ValueError("库存不足，无法提交申请")
 
-        # 创建租借记录
+        # 未指定来源仓库时，自动选库存 >= 借出数量的仓库（优先库存最多的）
+        if source_warehouse_id is None:
+            wh_row = conn.execute(text(
+                "SELECT warehouse_id FROM warehouse_stocks WHERE item_id = :iid AND quantity >= :qty ORDER BY quantity DESC LIMIT 1"
+            ), {"iid": item_id, "qty": quantity}).fetchone()
+            if wh_row:
+                source_warehouse_id = wh_row[0]
+            else:
+                # 没有单个仓库够，尝试找库存最多的那个
+                wh_row = conn.execute(text(
+                    "SELECT warehouse_id, quantity FROM warehouse_stocks WHERE item_id = :iid AND quantity > 0 ORDER BY quantity DESC LIMIT 1"
+                ), {"iid": item_id}).fetchone()
+                if wh_row:
+                    raise ValueError(
+                        f"该物品最大单仓库存为 {wh_row[1]} 件，不足以借出 {quantity} 件。"
+                        f"请分多次从不同仓库借出，或在调拨中先将库存集中。"
+                    )
+                else:
+                    raise ValueError("该物品无可用仓库")
+
         deadline = deadline_str(settings.APPROVAL_TIMEOUT_HOURS)
         document_no = generate_document_no(conn)
-        cursor = conn.execute(
+        result = conn.execute(text(
             """INSERT INTO records
                (item_id, borrower_id, borrower_name, contact, quantity, borrow_date,
-                expected_return_date, reason, status, approval_deadline, created_by, document_no)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, '待审核', ?, ?, ?)""",
-            (item_id, borrower_id, borrower_name, contact, quantity,
-             borrow_date, expected_return_date, reason, deadline, borrower_id, document_no),
-        )
-        record_id = cursor.lastrowid
+                expected_return_date, reason, status, approval_deadline, created_by, document_no, source_warehouse_id)
+               VALUES (:iid, :bid, :bname, :contact, :qty, :bdate, :rdate, :reason, '待审核', :deadline, :cby, :dno, :swid)
+               RETURNING id"""
+        ), {"iid": item_id, "bid": borrower_id, "bname": borrower_name, "contact": contact,
+            "qty": quantity, "bdate": borrow_date, "rdate": expected_return_date,
+            "reason": reason, "deadline": deadline, "cby": borrower_id, "dno": document_no, "swid": source_warehouse_id})
+        record_id = result.fetchone()[0]
 
-        # 更新物品状态
         update_item_status(conn, item_id)
-
-        # 操作日志
         log(conn, borrower_id, borrower_name, "borrow", "record", record_id,
             f"提交租借申请：物品ID={item_id}，数量={quantity}，预计归还={expected_return_date}")
 
-        conn.commit()
         return {"record_id": record_id, "document_no": document_no, "message": "租借申请已提交，等待审核"}
-    except Exception:
-        conn.rollback()
-        raise
 
 
 def resubmit_borrow(
-    conn: sqlite3.Connection,
+    conn,
     record_id: int,
     borrower_id: int,
     borrower_name: str,
@@ -76,7 +71,7 @@ def resubmit_borrow(
     2. 检查库存
     3. 更新记录状态回"待审核"
     """
-    record = conn.execute("SELECT * FROM records WHERE id = ?", (record_id,)).fetchone()
+    record = conn.execute(text("SELECT * FROM records WHERE id = :rid"), {"rid": record_id}).fetchone()
     if not record:
         raise ValueError("租借记录不存在")
     if record["status"] != "已拒绝":
@@ -87,33 +82,28 @@ def resubmit_borrow(
     if not can_transition(record["status"], RESUBMIT):
         raise ValueError(f"不允许从 [{record['status']}] 重新提交")
 
-    conn.execute("BEGIN IMMEDIATE")
-    try:
+    conn.rollback()
+    with conn.begin():
         # 重新检查库存
         if not reserve_stock(conn, record["item_id"], quantity):
-            conn.rollback()
             raise ValueError("库存不足，无法重新提交")
 
         deadline = deadline_str(settings.APPROVAL_TIMEOUT_HOURS)
-        conn.execute(
-            """UPDATE records SET quantity = ?, borrow_date = ?, expected_return_date = ?,
-               reason = ?, contact = ?, status = '待审核', approval_deadline = ?,
-               updated_at = datetime('now','localtime') WHERE id = ?""",
-            (quantity, borrow_date, expected_return_date, reason, contact, deadline, record_id),
-        )
+        conn.execute(text(
+            """UPDATE records SET quantity = :qty, borrow_date = :bdate, expected_return_date = :rdate,
+               reason = :reason, contact = :contact, status = '待审核', approval_deadline = :deadline,
+               updated_at = NOW() WHERE id = :rid"""
+        ), {"qty": quantity, "bdate": borrow_date, "rdate": expected_return_date,
+            "reason": reason, "contact": contact, "deadline": deadline, "rid": record_id})
 
         update_item_status(conn, record["item_id"])
         log(conn, borrower_id, borrower_name, "resubmit", "record", record_id,
             f"重新提交租借申请：数量={quantity}，预计归还={expected_return_date}")
-        conn.commit()
         return {"message": "申请已重新提交，等待审核"}
-    except Exception:
-        conn.rollback()
-        raise
 
 
 def submit_batch_borrow(
-    conn: sqlite3.Connection,
+    conn,
     items: list[dict],
     borrower_id: int,
     borrower_name: str,
@@ -129,12 +119,11 @@ def submit_batch_borrow(
     if not items:
         raise ValueError("租借物品列表不能为空")
 
-    conn.execute("BEGIN IMMEDIATE")
-    try:
+    conn.rollback()
+    with conn.begin():
         # Phase 1: 校验所有物品库存充足
         for item in items:
             if not check_stock(conn, item["item_id"], item["quantity"]):
-                conn.rollback()
                 raise ValueError(f"物品ID={item['item_id']} 库存不足，无法提交申请")
 
         # Phase 2: 生成单一单据号并创建记录
@@ -143,31 +132,36 @@ def submit_batch_borrow(
         record_ids = []
 
         for item in items:
-            cursor = conn.execute(
+            swid = item.get("warehouse_id")
+            if swid is None:
+                wh_row = conn.execute(text(
+                    "SELECT warehouse_id FROM warehouse_stocks WHERE item_id = :iid AND quantity > 0 ORDER BY quantity DESC LIMIT 1"
+                ), {"iid": item["item_id"]}).fetchone()
+                swid = wh_row[0] if wh_row else None
+            result = conn.execute(text(
                 """INSERT INTO records
                    (item_id, borrower_id, borrower_name, contact, quantity, borrow_date,
-                    expected_return_date, reason, status, approval_deadline, created_by, document_no)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, '待审核', ?, ?, ?)""",
-                (item["item_id"], borrower_id, borrower_name, contact,
-                 item["quantity"], borrow_date, expected_return_date,
-                 reason, deadline, borrower_id, document_no),
-            )
-            record_ids.append(cursor.lastrowid)
+                    expected_return_date, reason, status, approval_deadline, created_by, document_no, source_warehouse_id)
+                   VALUES (:iid, :bid, :bname, :contact, :qty, :bdate, :rdate,
+                           :reason, '待审核', :deadline, :cby, :dno, :swid)
+                   RETURNING id"""),
+                {"iid": item["item_id"], "bid": borrower_id, "bname": borrower_name,
+                 "contact": contact, "qty": item["quantity"], "bdate": borrow_date,
+                 "rdate": expected_return_date, "reason": reason, "deadline": deadline,
+                 "cby": borrower_id, "dno": document_no, "swid": swid})
+            record_id = result.fetchone()[0]
+            record_ids.append(record_id)
 
             update_item_status(conn, item["item_id"])
 
             log(conn, borrower_id, borrower_name, "batch_borrow", "record",
-                cursor.lastrowid,
+                record_id,
                 f"批量租借申请：物品ID={item['item_id']}，数量={item['quantity']}，"
                 f"预计归还={expected_return_date}")
 
-        conn.commit()
         return {
             "record_ids": record_ids,
             "document_no": document_no,
             "count": len(record_ids),
             "message": f"批量租借申请已提交（单据号: {document_no}），共 {len(record_ids)} 件物品，等待审核",
         }
-    except Exception:
-        conn.rollback()
-        raise

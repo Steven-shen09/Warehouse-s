@@ -22,7 +22,7 @@
         <strong>物品管理</strong>
       </div>
       <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
-        物品 CRUD、分类筛选、库存实时计算、低库存预警，支持上传物品图片。
+        物品 CRUD、多仓库库存分布、仓库级借出追踪、低库存预警、CSV/Excel 批量导入导出。
       </p>
     </div>
     <div style="padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius);">
@@ -63,6 +63,15 @@
     </div>
     <div style="padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius);">
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <i class="bi bi-buildings" style="font-size: 20px; color: var(--success);"></i>
+        <strong>多仓库 + 仓库级追踪</strong>
+      </div>
+      <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+        5 大仓库独立管理库存，借出精确记录来源仓库，按仓库展示借出量/剩余量，调拨跨仓转移。
+      </p>
+    </div>
+    <div style="padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius);">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
         <i class="bi bi-clock-history" style="font-size: 20px; color: var(--text-secondary);"></i>
         <strong>操作日志</strong>
       </div>
@@ -99,8 +108,8 @@
       </tr>
       <tr>
         <td><span class="status-badge" style="background: rgba(76,175,80,0.1); color: var(--success);">数据库</span></td>
-        <td>SQLite（WAL 模式）</td>
-        <td style="color: var(--text-secondary);">零配置、高性能、单文件部署</td>
+        <td>PostgreSQL 16（SQLAlchemy Core）</td>
+        <td style="color: var(--text-secondary);">连接池、事务保护、严格类型</td>
       </tr>
       <tr>
         <td><span class="status-badge" style="background: rgba(255,152,0,0.1); color: var(--warning);">前端</span></td>
@@ -217,6 +226,9 @@
   </div>
   <div style="background: var(--bg); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 12px;">
     <pre style="font-family: var(--font-mono); font-size: 13px; color: var(--text); margin: 0; line-height: 1.8;">
+# 配置 PostgreSQL 连接（.env）
+DATABASE_URL=postgresql+psycopg2://warehouse:warehouse123@localhost:5432/warehouse
+
 pip install -r requirements.txt
 python run.py
     </pre>
@@ -238,6 +250,10 @@ python run.py
     <div style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px;">
       <i class="bi bi-file-earmark-text" style="color: var(--primary);"></i>
       <span>DEV.md — 开发文档</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px;">
+      <i class="bi bi-database" style="color: var(--success);"></i>
+      <span>PostgreSQL + SQLAlchemy Core</span>
     </div>
     <div style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px;">
       <i class="bi bi-file-earmark-richtext" style="color: var(--warning);"></i>

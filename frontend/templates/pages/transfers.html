@@ -382,17 +382,31 @@ function showTransferDetail(transfer) {
 
 // ── 加载辅助数据 ──
 async function loadItemsForSelect(warehouseId) {
-  let url = '/api/v1/items/?page_size=999';
-  if (warehouseId) url += '&warehouse_id=' + warehouseId;
-  const resp = await api(url);
-  if (!resp.ok) return;
-  const data = await resp.json();
+  let url, data, items;
+  if (warehouseId) {
+    // 选择了源仓库：用仓库物品接口，显示该仓库实际库存
+    url = '/api/v1/warehouses/' + warehouseId + '/items';
+    const resp = await api(url);
+    if (!resp.ok) return;
+    data = await resp.json();
+    items = data.items || [];
+  } else {
+    // 未选源仓库：用全局物品列表，显示全局可用库存
+    url = '/api/v1/items/?page_size=999';
+    const resp = await api(url);
+    if (!resp.ok) return;
+    data = await resp.json();
+    items = data.items;
+  }
   const select = document.getElementById('transfer-item');
   select.innerHTML = '<option value="">请选择物品</option>';
-  data.items.forEach(item => {
+  items.forEach(item => {
     const opt = document.createElement('option');
     opt.value = item.id;
-    opt.textContent = item.name + (item.available_quantity !== undefined ? '（库存: ' + item.available_quantity + '）' : '');
+    // 有仓库ID时显示该仓库库存量，否则显示全局可用量
+    const stock = warehouseId ? (item.stock_quantity ?? 0) : item.available_quantity;
+    opt.textContent = item.name + '（库存: ' + stock + '）';
+    opt.setAttribute('data-stock', stock);
     select.appendChild(opt);
   });
 }
@@ -438,9 +452,12 @@ function addTransferItem() {
   const sel = document.getElementById('transfer-item');
   const qty = parseInt(document.getElementById('transfer-item-qty').value) || 1;
   const itemId = parseInt(sel.value);
-  const itemName = sel.options[sel.selectedIndex]?.text || '';
+  const selectedOpt = sel.options[sel.selectedIndex];
+  const itemName = selectedOpt?.text || '';
+  const maxStock = parseInt(selectedOpt?.getAttribute('data-stock') || '0');
   if (!itemId) { showToast('请选择物品', 'warning'); return; }
   if (transferItems.some(t => t.item_id === itemId)) { showToast('该物品已在清单中', 'warning'); return; }
+  if (maxStock > 0 && qty > maxStock) { showToast('源仓库库存不足（可用: ' + maxStock + '，需要: ' + qty + '）', 'warning'); return; }
   transferItems.push({ item_id: itemId, item_name: itemName, quantity: qty });
   sel.value = '';
   document.getElementById('transfer-item-qty').value = '1';

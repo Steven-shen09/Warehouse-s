@@ -1,6 +1,7 @@
 """FastAPI 依赖注入：数据库连接、认证、权限"""
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy import text
 from app.database import get_connection
 from app.utils.security import verify_token
 from app.config import settings
@@ -27,10 +28,9 @@ def get_current_user(
     except Exception:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
 
-    user = conn.execute(
-        "SELECT id, username, display_name, role, email, phone, is_active FROM users WHERE id = ?",
-        (int(payload["sub"]),),
-    ).fetchone()
+    user = conn.execute(text(
+        "SELECT id, username, display_name, role, email, phone, is_active FROM users WHERE id = :uid"
+    ), {"uid": int(payload["sub"])}).fetchone()
 
     if not user:
         raise HTTPException(status_code=401, detail="用户不存在")

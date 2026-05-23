@@ -4,6 +4,7 @@ import io
 import os
 import json
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
+from sqlalchemy import text
 from app.api.deps import get_db, get_current_user, require_role
 from app.schemas.warehouse import InventoryCountCreate, InventoryCountItemUpdate
 
@@ -20,21 +21,21 @@ def list_counts(
 ):
     """盘点列表"""
     where = "WHERE 1=1"
-    params = []
+    params = {}
     if status:
-        where += " AND c.status = ?"
-        params.append(status)
+        where += " AND c.status = :status"
+        params["status"] = status
 
-    total = conn.execute(f"SELECT COUNT(*) FROM inventory_counts c {where}", params).fetchone()[0]
+    total = conn.execute(text(f"SELECT COUNT(*) FROM inventory_counts c {where}"), params).fetchone()[0]
     offset = (page - 1) * page_size
 
     rows = conn.execute(
-        f"""SELECT c.*, w.name AS warehouse_name, u.display_name AS created_by_name
+        text(f"""SELECT c.*, w.name AS warehouse_name, u.display_name AS created_by_name
            FROM inventory_counts c
            JOIN warehouses w ON c.warehouse_id = w.id
            JOIN users u ON c.created_by = u.id
-           {where} ORDER BY c.id DESC LIMIT ? OFFSET ?""",
-        params + [page_size, offset],
+           {where} ORDER BY c.id DESC LIMIT :limit OFFSET :offset"""),
+        {**params, "limit": page_size, "offset": offset},
     ).fetchall()
 
     return {
@@ -52,28 +53,27 @@ def create_count(
     conn=Depends(get_db),
 ):
     """创建盘点 → 自动生成该仓库所有物品明细"""
-    wh = conn.execute("SELECT id FROM warehouses WHERE id = ?", (body.warehouse_id,)).fetchone()
+    wh = conn.execute(text("SELECT id FROM warehouses WHERE id = :wid"), {"wid": body.warehouse_id}).fetchone()
     if not wh:
         raise HTTPException(status_code=400, detail="仓库不存在")
 
-    conn.execute(
-        "INSERT INTO inventory_counts (warehouse_id, name, created_by) VALUES (?, ?, ?)",
-        (body.warehouse_id, body.name, current_user["id"]),
-    )
-    count_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    result = conn.execute(text(
+        "INSERT INTO inventory_counts (warehouse_id, name, created_by) VALUES (:wid, :nm, :cby) RETURNING id"
+    ), {"wid": body.warehouse_id, "nm": body.name, "cby": current_user["id"]})
+    count_id = result.fetchone()[0]
 
     # 自动生成该仓库所有物品的盘点明细
     stocks = conn.execute(
-        """SELECT ws.item_id, ws.quantity AS stock_qty, i.name
+        text("""SELECT ws.item_id, ws.quantity AS stock_qty, i.name
            FROM warehouse_stocks ws JOIN items i ON ws.item_id = i.id
-           WHERE ws.warehouse_id = ? AND ws.quantity > 0""",
-        (body.warehouse_id,),
+           WHERE ws.warehouse_id = :wid AND ws.quantity > 0"""),
+        {"wid": body.warehouse_id},
     ).fetchall()
 
     for s in stocks:
         conn.execute(
-            "INSERT INTO inventory_count_items (count_id, item_id, expected_quantity) VALUES (?, ?, ?)",
-            (count_id, s["item_id"], s["stock_qty"]),
+            text("INSERT INTO inventory_count_items (count_id, item_id, expected_quantity) VALUES (:cid, :iid, :qty)"),
+            {"cid": count_id, "iid": s["item_id"], "qty": s["stock_qty"]},
         )
 
     conn.commit()
@@ -87,21 +87,21 @@ def delete_count(
     conn=Depends(get_db),
 ):
     """删除盘点单（仅限进行中且无实盘数据）"""
-    c = conn.execute("SELECT id, status FROM inventory_counts WHERE id = ?", (count_id,)).fetchone()
+    c = conn.execute(text("SELECT id, status FROM inventory_counts WHERE id = :cid"), {"cid": count_id}).fetchone()
     if not c:
         raise HTTPException(status_code=404, detail="盘点不存在")
     if c["status"] != "进行中":
         raise HTTPException(status_code=400, detail="仅进行中的盘点可删除")
 
     counted = conn.execute(
-        "SELECT COUNT(*) FROM inventory_count_items WHERE count_id = ? AND actual_quantity IS NOT NULL",
-        (count_id,),
+        text("SELECT COUNT(*) FROM inventory_count_items WHERE count_id = :cid AND actual_quantity IS NOT NULL"),
+        {"cid": count_id},
     ).fetchone()[0]
     if counted > 0:
         raise HTTPException(status_code=400, detail="已录入实盘数据，无法删除")
 
-    conn.execute("DELETE FROM inventory_count_items WHERE count_id = ?", (count_id,))
-    conn.execute("DELETE FROM inventory_counts WHERE id = ?", (count_id,))
+    conn.execute(text("DELETE FROM inventory_count_items WHERE count_id = :cid"), {"cid": count_id})
+    conn.execute(text("DELETE FROM inventory_counts WHERE id = :cid"), {"cid": count_id})
     conn.commit()
     return {"message": "盘点单已删除"}
 
@@ -114,21 +114,21 @@ def get_count(
 ):
     """盘点详情（含明细列表）"""
     c = conn.execute(
-        """SELECT c.*, w.name AS warehouse_name, u.display_name AS created_by_name
+        text("""SELECT c.*, w.name AS warehouse_name, u.display_name AS created_by_name
            FROM inventory_counts c
            JOIN warehouses w ON c.warehouse_id = w.id
            JOIN users u ON c.created_by = u.id
-           WHERE c.id = ?""",
-        (count_id,),
+           WHERE c.id = :cid"""),
+        {"cid": count_id},
     ).fetchone()
     if not c:
         raise HTTPException(status_code=404, detail="盘点不存在")
 
     items = conn.execute(
-        """SELECT ci.*, i.name AS item_name, i.category, i.location
+        text("""SELECT ci.*, i.name AS item_name, i.category, i.location
            FROM inventory_count_items ci JOIN items i ON ci.item_id = i.id
-           WHERE ci.count_id = ? ORDER BY ci.id""",
-        (count_id,),
+           WHERE ci.count_id = :cid ORDER BY ci.id"""),
+        {"cid": count_id},
     ).fetchall()
 
     return {"count": dict(c), "items": [dict(r) for r in items]}
@@ -144,7 +144,7 @@ def update_count_item(
 ):
     """录入实盘数量"""
     c = conn.execute(
-        "SELECT id, status FROM inventory_counts WHERE id = ?", (count_id,)
+        text("SELECT id, status FROM inventory_counts WHERE id = :cid"), {"cid": count_id}
     ).fetchone()
     if not c:
         raise HTTPException(status_code=404, detail="盘点不存在")
@@ -152,8 +152,8 @@ def update_count_item(
         raise HTTPException(status_code=400, detail="盘点已完成或已确认")
 
     ci = conn.execute(
-        "SELECT id FROM inventory_count_items WHERE count_id = ? AND item_id = ?",
-        (count_id, item_id),
+        text("SELECT id FROM inventory_count_items WHERE count_id = :cid AND item_id = :iid"),
+        {"cid": count_id, "iid": item_id},
     ).fetchone()
     if not ci:
         raise HTTPException(status_code=404, detail="盘点明细不存在")
@@ -161,16 +161,16 @@ def update_count_item(
     diff = None
     if body.actual_quantity is not None:
         expected = conn.execute(
-            "SELECT expected_quantity FROM inventory_count_items WHERE count_id = ? AND item_id = ?",
-            (count_id, item_id),
+            text("SELECT expected_quantity FROM inventory_count_items WHERE count_id = :cid AND item_id = :iid"),
+            {"cid": count_id, "iid": item_id},
         ).fetchone()["expected_quantity"]
         diff = body.actual_quantity - expected
 
     conn.execute(
-        """UPDATE inventory_count_items
-           SET actual_quantity = ?, difference = ?, notes = ?, counted_at = datetime('now','localtime')
-           WHERE count_id = ? AND item_id = ?""",
-        (body.actual_quantity, diff, body.notes, count_id, item_id),
+        text("""UPDATE inventory_count_items
+           SET actual_quantity = :aqty, difference = :diff, notes = :notes, counted_at = NOW()
+           WHERE count_id = :cid AND item_id = :iid"""),
+        {"aqty": body.actual_quantity, "diff": diff, "notes": body.notes, "cid": count_id, "iid": item_id},
     )
     conn.commit()
     return {"message": "实盘数量已录入"}
@@ -184,7 +184,7 @@ def complete_count(
 ):
     """完成盘点"""
     c = conn.execute(
-        "SELECT id, status FROM inventory_counts WHERE id = ?", (count_id,)
+        text("SELECT id, status FROM inventory_counts WHERE id = :cid"), {"cid": count_id}
     ).fetchone()
     if not c:
         raise HTTPException(status_code=404, detail="盘点不存在")
@@ -192,8 +192,8 @@ def complete_count(
         raise HTTPException(status_code=400, detail="盘点已完成或已确认")
 
     conn.execute(
-        "UPDATE inventory_counts SET status = '已完成', completed_at = datetime('now','localtime'), updated_at = datetime('now','localtime') WHERE id = ?",
-        (count_id,),
+        text("UPDATE inventory_counts SET status = '已完成', completed_at = NOW(), updated_at = NOW() WHERE id = :cid"),
+        {"cid": count_id},
     )
     conn.commit()
     return {"message": "盘点已完成"}
@@ -207,7 +207,7 @@ def confirm_count(
 ):
     """确认盘点差异 → 更新库存"""
     c = conn.execute(
-        "SELECT id, status, warehouse_id FROM inventory_counts WHERE id = ?", (count_id,)
+        text("SELECT id, status, warehouse_id FROM inventory_counts WHERE id = :cid"), {"cid": count_id}
     ).fetchone()
     if not c:
         raise HTTPException(status_code=404, detail="盘点不存在")
@@ -215,32 +215,29 @@ def confirm_count(
         raise HTTPException(status_code=400, detail="请先完成盘点再确认")
 
     items = conn.execute(
-        "SELECT item_id, actual_quantity, difference FROM inventory_count_items WHERE count_id = ?",
-        (count_id,),
+        text("SELECT item_id, actual_quantity, difference FROM inventory_count_items WHERE count_id = :cid"),
+        {"cid": count_id},
     ).fetchall()
 
-    try:
-        conn.execute("BEGIN IMMEDIATE")
-        for item in items:
-            if item["actual_quantity"] is not None:
-                conn.execute(
-                    """UPDATE warehouse_stocks SET quantity = ?
-                       WHERE item_id = ? AND warehouse_id = ?""",
-                    (item["actual_quantity"], item["item_id"], c["warehouse_id"]),
-                )
-                # 更新 total_quantity
-                from app.api.transfers import _update_item_total
-                _update_item_total(conn, item["item_id"])
-
-        conn.execute(
-            "UPDATE inventory_counts SET status = '已确认', updated_at = datetime('now','localtime') WHERE id = ?",
-            (count_id,),
-        )
-        conn.commit()
-    except Exception:
+    conn.rollback()
+    with conn.begin():
         conn.rollback()
-        raise HTTPException(status_code=500, detail="盘点确认失败，已回滚")
+        with conn.begin():
+            for item in items:
+                if item["actual_quantity"] is not None:
+                    conn.execute(
+                        text("""UPDATE warehouse_stocks SET quantity = :qty
+                           WHERE item_id = :iid AND warehouse_id = :wid"""),
+                        {"qty": item["actual_quantity"], "iid": item["item_id"], "wid": c["warehouse_id"]},
+                    )
+                    # 更新 total_quantity
+                    from app.api.transfers import _update_item_total
+                    _update_item_total(conn, item["item_id"])
 
+            conn.execute(
+                text("UPDATE inventory_counts SET status = '已确认', updated_at = NOW() WHERE id = :cid"),
+                {"cid": count_id},
+            )
     return {"message": "盘点已确认，库存已更新"}
 
 
@@ -257,7 +254,7 @@ def count_import_preview(
     conn=Depends(get_db),
 ):
     """上传盘点实盘文件并预览"""
-    c = conn.execute("SELECT id, status FROM inventory_counts WHERE id = ?", (count_id,)).fetchone()
+    c = conn.execute(text("SELECT id, status FROM inventory_counts WHERE id = :cid"), {"cid": count_id}).fetchone()
     if not c:
         raise HTTPException(status_code=404, detail="盘点不存在")
     if c["status"] != "进行中":
@@ -309,10 +306,10 @@ def count_import_preview(
             continue
 
         ci = conn.execute(
-            """SELECT ci.id, ci.expected_quantity, i.name
+            text("""SELECT ci.id, ci.expected_quantity, i.name
                FROM inventory_count_items ci JOIN items i ON ci.item_id = i.id
-               WHERE ci.count_id = ? AND i.name = ?""",
-            (count_id, name),
+               WHERE ci.count_id = :cid AND i.name = :nm"""),
+            {"cid": count_id, "nm": name},
         ).fetchone()
         if not ci:
             result.append({"index": idx, "data": row, "status": "error", "message": f"物品「{name}」不在本次盘点范围内"})
@@ -345,7 +342,7 @@ def count_import_confirm(
     conn=Depends(get_db),
 ):
     """确认导入盘点实盘数据"""
-    c = conn.execute("SELECT id, status FROM inventory_counts WHERE id = ?", (count_id,)).fetchone()
+    c = conn.execute(text("SELECT id, status FROM inventory_counts WHERE id = :cid"), {"cid": count_id}).fetchone()
     if not c:
         raise HTTPException(status_code=404, detail="盘点不存在")
     if c["status"] != "进行中":
@@ -395,20 +392,20 @@ def count_import_confirm(
         qty = int(qty_str) if qty_str else 0
 
         ci = conn.execute(
-            """SELECT ci.id, ci.expected_quantity FROM inventory_count_items ci
+            text("""SELECT ci.id, ci.expected_quantity FROM inventory_count_items ci
                JOIN items i ON ci.item_id = i.id
-               WHERE ci.count_id = ? AND i.name = ?""",
-            (count_id, name),
+               WHERE ci.count_id = :cid AND i.name = :nm"""),
+            {"cid": count_id, "nm": name},
         ).fetchone()
         if not ci:
             continue
 
         diff = qty - ci["expected_quantity"]
         conn.execute(
-            """UPDATE inventory_count_items
-               SET actual_quantity = ?, difference = ?, notes = ?, counted_at = datetime('now','localtime')
-               WHERE id = ?""",
-            (qty, diff, notes, ci["id"]),
+            text("""UPDATE inventory_count_items
+               SET actual_quantity = :aqty, difference = :diff, notes = :notes, counted_at = NOW()
+               WHERE id = :iid"""),
+            {"aqty": qty, "diff": diff, "notes": notes, "iid": ci["id"]},
         )
         updated += 1
 

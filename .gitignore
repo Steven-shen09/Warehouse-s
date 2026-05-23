@@ -10,3 +10,8 @@ build/
 venv/
 data/
 .superpowers/
+dash/
+design-system/
+docs/
+screenshots/
+test_dual_model.py

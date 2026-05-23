@@ -196,7 +196,6 @@ async function loadApprovals(page) {
   let html = '';
   for (const doc of recDocs) {
     const hasDoc = doc.document_no !== null;
-    const key = hasDoc ? doc.document_no : doc.record_ids[0];
     const os = doc.is_overtime ? ' style="border-left:3px solid var(--danger);"' : '';
     html += '<div class="doc-group"' + os + '>';
     html += '<div class="doc-group-header" onclick="toggleDocGroup(this)">';
@@ -209,8 +208,10 @@ async function loadApprovals(page) {
     if (doc.is_overtime) html += '<span class="status-badge overdue">超时</span>';
     html += '</div>';
     html += '<div style="display:flex;align-items:center;gap:8px;">';
-    html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveByDocument(\'' + key + '\')">全部通过</button>';
-    html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();rejectByDocument(\'' + key + '\')">全部驳回</button>';
+    if (hasDoc) {
+      html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveByDocument(\'' + doc.document_no + '\')">全部通过</button>';
+      html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();rejectByDocument(\'' + doc.document_no + '\')">全部驳回</button>';
+    }
     html += '<span class="doc-group-toggle">▼</span></div></div>';
     html += '<div class="doc-group-body"><table class="table"><thead><tr><th>ID</th><th>物品</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>操作</th></tr></thead><tbody>';
     for (const r of doc.items) {

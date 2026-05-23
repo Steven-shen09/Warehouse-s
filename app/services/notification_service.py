@@ -1,6 +1,6 @@
 """通知服务：审核提醒、归还提醒、异常告警"""
-import sqlite3
 from datetime import datetime, timedelta
+from sqlalchemy import text
 from app.adapters.sms_adapter import AliyunSMSAdapter
 from app.adapters.null_adapter import NullSMSAdapter
 from app.config import settings
@@ -14,52 +14,42 @@ def _get_sms_adapter():
     return NullSMSAdapter()
 
 
-def check_overdue_approvals(conn: sqlite3.Connection) -> list:
-    """
-    检查超时未审核的记录。
-    返回超时记录列表。
-    """
+def check_overdue_approvals(conn) -> list:
+    """检查超时未审核的记录"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    rows = conn.execute(
+    rows = conn.execute(text(
         """SELECT r.id, r.item_id, r.borrower_name, r.approval_deadline,
                   i.name as item_name
            FROM records r JOIN items i ON r.item_id = i.id
-           WHERE r.status = '待审核' AND r.approval_deadline < ?""",
-        (now,),
-    ).fetchall()
+           WHERE r.status = '待审核' AND r.approval_deadline < :now"""
+    ), {"now": now}).fetchall()
     return [dict(r) for r in rows]
 
 
-def check_upcoming_returns(conn: sqlite3.Connection, days_before: int = 1) -> list:
-    """
-    检查即将到期的租借记录。
-    默认检查 1 天后到期的记录。
-    """
+def check_upcoming_returns(conn, days_before: int = 1) -> list:
+    """检查即将到期的租借记录"""
     target_date = (datetime.now() + timedelta(days=days_before)).strftime("%Y-%m-%d")
-    rows = conn.execute(
+    rows = conn.execute(text(
         """SELECT r.id, r.item_id, r.borrower_name, r.expected_return_date,
                   i.name as item_name
            FROM records r JOIN items i ON r.item_id = i.id
-           WHERE r.status = '借出中' AND r.expected_return_date = ?""",
-        (target_date,),
-    ).fetchall()
+           WHERE r.status = '借出中' AND r.expected_return_date = :td"""
+    ), {"td": target_date}).fetchall()
     return [dict(r) for r in rows]
 
 
-def check_overdue_records(conn: sqlite3.Connection) -> list:
-    """
-    检查已逾期的租借记录，并自动标记为逾期状态。
-    """
+def check_overdue_records(conn) -> list:
+    """检查已逾期的租借记录，并自动标记为逾期状态"""
     today = datetime.now().strftime("%Y-%m-%d")
-    rows = conn.execute(
+    rows = conn.execute(text(
         """SELECT id, item_id FROM records
-           WHERE status = '借出中' AND expected_return_date < ?""",
-        (today,),
-    ).fetchall()
+           WHERE status = '借出中' AND expected_return_date < :today"""
+    ), {"today": today}).fetchall()
 
     for row in rows:
-        conn.execute("UPDATE records SET status = '逾期', updated_at = datetime('now','localtime') WHERE id = ?",
-                     (row["id"],))
+        conn.execute(text(
+            "UPDATE records SET status = '逾期', updated_at = NOW() WHERE id = :rid"
+        ), {"rid": row["id"]})
         update_item_status(conn, row["item_id"])
 
     if rows:

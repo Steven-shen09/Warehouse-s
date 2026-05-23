@@ -1,5 +1,6 @@
 """租借记录路由"""
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from app.api.deps import get_db, get_current_user, require_role
 from app.schemas.record import BorrowRequest, ReturnRequest, BatchBorrowRequest, DocumentReturnRequest
 from app.services.borrow_service import submit_borrow, resubmit_borrow, submit_batch_borrow
@@ -21,37 +22,36 @@ def list_records(
 ):
     """租借记录列表"""
     where = "WHERE 1=1"
-    params = []
-
-    # 普通用户只能看自己的记录
+    params = {}
     if current_user["role"] == "user":
-        where += " AND r.borrower_id = ?"
-        params.append(current_user["id"])
-
+        where += " AND r.borrower_id = :bid"
+        params["bid"] = current_user["id"]
     if status:
-        where += " AND r.status = ?"
-        params.append(status)
+        where += " AND r.status = :st"
+        params["st"] = status
     if item_id:
-        where += " AND r.item_id = ?"
-        params.append(item_id)
+        where += " AND r.item_id = :iid"
+        params["iid"] = item_id
     if keyword:
-        where += " AND (r.borrower_name LIKE ? OR r.reason LIKE ?)"
-        params.extend([f"%{keyword}%", f"%{keyword}%"])
+        where += " AND (r.borrower_name LIKE :kw1 OR r.reason LIKE :kw2)"
+        params["kw1"] = f"%{keyword}%"
+        params["kw2"] = f"%{keyword}%"
     if document_no:
-        where += " AND r.document_no = ?"
-        params.append(document_no)
+        where += " AND r.document_no = :dno"
+        params["dno"] = document_no
 
-    total = conn.execute(
-        f"SELECT COUNT(*) FROM records r {where}", params
-    ).fetchone()[0]
+    total = conn.execute(text(f"SELECT COUNT(*) FROM records r {where}"), params).fetchone()[0]
     offset = (page - 1) * page_size
+    params["limit"] = page_size
+    params["offset"] = offset
 
-    rows = conn.execute(
-        f"""SELECT r.*, i.name as item_name, i.category as item_category
+    rows = conn.execute(text(
+        f"""SELECT r.*, i.name as item_name, i.category as item_category,
+                  COALESCE(w.name, '') as source_warehouse_name
            FROM records r JOIN items i ON r.item_id = i.id
-           {where} ORDER BY r.id DESC LIMIT ? OFFSET ?""",
-        params + [page_size, offset],
-    ).fetchall()
+           LEFT JOIN warehouses w ON r.source_warehouse_id = w.id
+           {where} ORDER BY r.id DESC LIMIT :limit OFFSET :offset"""
+    ), params).fetchall()
 
     return {
         "items": [dict(r) for r in rows],
@@ -92,11 +92,10 @@ def get_record(
     conn=Depends(get_db),
 ):
     """获取租借记录详情"""
-    row = conn.execute(
+    row = conn.execute(text(
         """SELECT r.*, i.name as item_name, i.category as item_category
-           FROM records r JOIN items i ON r.item_id = i.id WHERE r.id = ?""",
-        (record_id,),
-    ).fetchone()
+           FROM records r JOIN items i ON r.item_id = i.id WHERE r.id = :rid"""
+    ), {"rid": record_id}).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="记录不存在")
 

@@ -204,23 +204,25 @@ async function loadRecords(page = 1) {
           <strong>${label}</strong>
           <span>借用人: ${escapeHtml(firstItem.borrower_name)}</span>
           <span>${itemCount} 件物品</span>
-          <span>${firstItem.borrow_date} ~ ${firstItem.expected_return_date}</span>
+          <span>借出: ${firstItem.borrow_date} ~ ${firstItem.expected_return_date}</span>
+          <span class="text-muted" style="font-size:12px;">提交: ${(firstItem.created_at || '').split(' ')[0]}</span>
 
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          ${isStaff && anyReturnable ? `<button class="btn btn-success btn-sm" onclick="event.stopPropagation();returnByDocument('${docNo || firstItem.id}')">全部归还</button>` : ''}
+          ${isStaff && anyReturnable && docNo ? `<button class="btn btn-success btn-sm" onclick="event.stopPropagation();returnByDocument('${docNo}')">全部归还</button>` : ''}
           <span class="doc-group-toggle">▼</span>
         </div>
       </div>
       <div class="doc-group-body">
         <table class="table">
           <thead><tr>
-            <th>ID</th><th>物品</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>状态</th>
+            <th>ID</th><th>物品</th><th>来源仓库</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>状态</th>
             ${isStaff ? '<th>操作</th>' : ''}
           </tr></thead>
           <tbody>${items.map(r => `
             <tr>
               <td>${r.id}</td><td>${r.item_name}</td>
+              <td class="text-muted" style="font-size:12px;">${escapeHtml(r.source_warehouse_name || '-')}</td>
               <td>${r.quantity}</td><td>${r.borrow_date}</td><td>${r.expected_return_date}</td>
               <td><span class="status-badge ${r.status === '借出中' ? 'lent' : r.status === '已归还' ? 'returned' : r.status === '逾期' ? 'overdue' : r.status === '待审核' ? 'pending' : 'rejected'}">${r.status}</span></td>
               ${isStaff ? `<td>

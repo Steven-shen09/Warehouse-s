@@ -3,6 +3,7 @@ from typing import Optional
 import csv
 import io
 import os
+from sqlalchemy import text
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Response
 from app.api.deps import get_db, get_current_user, require_role
 from app.schemas.item import ItemCreate, ItemUpdate, ImportPreviewRow, ImportConfirmRow, ImportConfirmRequest, ImportResult
@@ -120,9 +121,9 @@ def validate_and_check_duplicates(conn, rows: list[dict]) -> list[dict]:
             continue
 
         # 检查同名重复
-        existing = conn.execute(
-            "SELECT id, name, total_quantity FROM items WHERE name = ?", (name,)
-        ).fetchone()
+        existing = conn.execute(text(
+            "SELECT id, name, total_quantity FROM items WHERE name = :nm"
+        ), {"nm": name}).fetchone()
 
         if existing:
             result.append({
@@ -158,24 +159,25 @@ def list_items(
 ):
     """物品列表（支持搜索、分类筛选、分页）"""
     where = "WHERE 1=1"
-    params = []
+    params = {}
     if keyword:
-        where += " AND (name LIKE ? OR description LIKE ?)"
-        params.extend([f"%{keyword}%", f"%{keyword}%"])
+        where += " AND (name LIKE :kw1 OR description LIKE :kw2)"
+        params["kw1"] = f"%{keyword}%"
+        params["kw2"] = f"%{keyword}%"
     if category:
-        where += " AND category = ?"
-        params.append(category)
+        where += " AND category = :cat"
+        params["cat"] = category
     if status:
-        where += " AND status = ?"
-        params.append(status)
+        where += " AND status = :st"
+        params["st"] = status
     if warehouse_id is not None and warehouse_id:
-        where += " AND id IN (SELECT item_id FROM warehouse_stocks WHERE warehouse_id = ? AND quantity > 0)"
-        params.append(warehouse_id)
+        where += " AND id IN (SELECT item_id FROM warehouse_stocks WHERE warehouse_id = :whid AND quantity > 0)"
+        params["whid"] = warehouse_id
 
     if low_stock:
-        items = conn.execute(
-            f"SELECT * FROM items {where} ORDER BY id DESC", params
-        ).fetchall()
+        items = conn.execute(text(
+            f"SELECT * FROM items {where} ORDER BY id DESC"
+        ), params).fetchall()
         from app.services.inventory_service import get_warehouse_stocks
         result = []
         for item in items:
@@ -190,19 +192,20 @@ def list_items(
         paged = result[offset:offset + page_size]
         return {"items": paged, "total": total, "page": page, "page_size": page_size}
 
-    total = conn.execute(f"SELECT COUNT(*) FROM items {where}", params).fetchone()[0]
+    total = conn.execute(text(f"SELECT COUNT(*) FROM items {where}"), params).fetchone()[0]
     offset = (page - 1) * page_size
+    params["limit"] = page_size
+    params["offset"] = offset
 
-    items = conn.execute(
-        f"SELECT * FROM items {where} ORDER BY id DESC LIMIT ? OFFSET ?",
-        params + [page_size, offset],
-    ).fetchall()
+    items = conn.execute(text(
+        f"SELECT * FROM items {where} ORDER BY id DESC LIMIT :limit OFFSET :offset"
+    ), params).fetchall()
 
     from app.services.inventory_service import get_warehouse_stocks
     result = []
     for item in items:
         item_dict = dict(item)
-        item_dict["available_quantity"] = get_available_quantity(conn, item["id"])
+        item_dict["available_quantity"] = get_available_quantity(conn, item["id"], warehouse_id)
         item_dict["warehouse_stocks"] = get_warehouse_stocks(conn, item["id"])
         result.append(item_dict)
 
@@ -215,7 +218,7 @@ def get_categories(
     conn=Depends(get_db),
 ):
     """获取所有物品分类列表"""
-    rows = conn.execute("SELECT DISTINCT category FROM items WHERE category != '' ORDER BY category").fetchall()
+    rows = conn.execute(text("SELECT DISTINCT category FROM items WHERE category != '' ORDER BY category")).fetchall()
     return {"categories": [r["category"] for r in rows]}
 
 
@@ -231,23 +234,24 @@ def export_items(
 ):
     """导出物品数据（不分页，支持筛选）"""
     where = "WHERE 1=1"
-    params = []
+    params = {}
     if keyword:
-        where += " AND (name LIKE ? OR description LIKE ?)"
-        params.extend([f"%{keyword}%", f"%{keyword}%"])
+        where += " AND (name LIKE :kw1 OR description LIKE :kw2)"
+        params["kw1"] = f"%{keyword}%"
+        params["kw2"] = f"%{keyword}%"
     if category:
-        where += " AND category = ?"
-        params.append(category)
+        where += " AND category = :cat"
+        params["cat"] = category
     if status:
-        where += " AND status = ?"
-        params.append(status)
+        where += " AND status = :st"
+        params["st"] = status
     if warehouse_id is not None and warehouse_id:
-        where += " AND id IN (SELECT item_id FROM warehouse_stocks WHERE warehouse_id = ? AND quantity > 0)"
-        params.append(warehouse_id)
+        where += " AND id IN (SELECT item_id FROM warehouse_stocks WHERE warehouse_id = :whid AND quantity > 0)"
+        params["whid"] = warehouse_id
 
-    items = conn.execute(
-        f"SELECT * FROM items {where} ORDER BY id DESC", params
-    ).fetchall()
+    items = conn.execute(text(
+        f"SELECT * FROM items {where} ORDER BY id DESC"
+    ), params).fetchall()
 
     from app.services.inventory_service import get_warehouse_stocks
 
@@ -307,7 +311,7 @@ def get_item(
     conn=Depends(get_db),
 ):
     """获取物品详情（含实时库存）"""
-    item = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,)).fetchone()
+    item = conn.execute(text("SELECT * FROM items WHERE id = :iid"), {"iid": item_id}).fetchone()
     if not item:
         raise HTTPException(status_code=404, detail="物品不存在")
     item_dict = dict(item)
@@ -322,32 +326,30 @@ def create_item(
     conn=Depends(get_db),
 ):
     """新增物品"""
-    conn.execute(
-        """INSERT INTO items (name, category, description, total_quantity, value, low_stock_threshold, image_url)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (body.name, body.category, body.description,
-         body.total_quantity, body.value, body.low_stock_threshold, body.image_url),
-    )
-    item_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.rollback()
+    with conn.begin():
+        result = conn.execute(text(
+            "INSERT INTO items (name, category, description, total_quantity, value, low_stock_threshold, image_url) "
+            "VALUES (:n, :c, :d, :q, :v, :t, :img) RETURNING id"
+        ), {"n": body.name, "c": body.category, "d": body.description,
+            "q": body.total_quantity, "v": body.value, "t": body.low_stock_threshold, "img": body.image_url})
+        item_id = result.fetchone()[0]
 
-    # 如果指定了仓库，写入 warehouse_stocks
-    if body.warehouse_id:
-        wh = conn.execute("SELECT id FROM warehouses WHERE id = ?", (body.warehouse_id,)).fetchone()
-        if wh:
-            conn.execute(
-                "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, ?, ?)",
-                (item_id, body.warehouse_id, body.total_quantity),
-            )
-    else:
-        # 默认分配到默认仓库
-        default_wh = conn.execute("SELECT id FROM warehouses ORDER BY id LIMIT 1").fetchone()
-        if default_wh:
-            conn.execute(
-                "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, ?, ?)",
-                (item_id, default_wh["id"], body.total_quantity),
-            )
+        # 如果指定了仓库，写入 warehouse_stocks
+        if body.warehouse_id:
+            wh = conn.execute(text("SELECT id FROM warehouses WHERE id = :wid"), {"wid": body.warehouse_id}).fetchone()
+            if wh:
+                conn.execute(text(
+                    "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (:iid, :wid, :qty)"
+                ), {"iid": item_id, "wid": body.warehouse_id, "qty": body.total_quantity})
+        else:
+            # 默认分配到默认仓库
+            default_wh = conn.execute(text("SELECT id FROM warehouses ORDER BY id LIMIT 1")).fetchone()
+            if default_wh:
+                conn.execute(text(
+                    "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (:iid, :wid, :qty)"
+                ), {"iid": item_id, "wid": default_wh["id"], "qty": body.total_quantity})
 
-    conn.commit()
     return {"message": "物品创建成功"}
 
 
@@ -359,7 +361,7 @@ def update_item(
     conn=Depends(get_db),
 ):
     """更新物品信息"""
-    item = conn.execute("SELECT id FROM items WHERE id = ?", (item_id,)).fetchone()
+    item = conn.execute(text("SELECT id FROM items WHERE id = :iid"), {"iid": item_id}).fetchone()
     if not item:
         raise HTTPException(status_code=404, detail="物品不存在")
 
@@ -369,16 +371,65 @@ def update_item(
         if val is not None:
             updates[field] = val
 
-    if updates:
-        set_clause = ", ".join(f"{k} = ?" for k in updates)
-        values = list(updates.values()) + [item_id]
-        conn.execute(
-            f"UPDATE items SET {set_clause}, updated_at = datetime('now','localtime') WHERE id = ?", values
-        )
-        conn.commit()
-        # 更新库存状态
-        update_item_status(conn, item_id)
-        conn.commit()
+    # 仓库变更需要单独处理（更新 warehouse_stocks）
+    warehouse_id = getattr(body, "warehouse_id", None)
+
+    if updates or (warehouse_id is not None):
+        conn.rollback()
+        with conn.begin():
+            if updates:
+                set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+                params = dict(updates)
+                params["iid"] = item_id
+                conn.execute(text(
+                    f"UPDATE items SET {set_clause}, updated_at = NOW() WHERE id = :iid"
+                ), params)
+
+            # 如果修改了总库存，同步更新 warehouse_stocks
+            if "total_quantity" in updates:
+                new_qty = updates["total_quantity"]
+                # 查找该物品在当前仓库的库存记录并更新
+                updated = conn.execute(text(
+                    "UPDATE warehouse_stocks SET quantity = :qty "
+                    "WHERE item_id = :iid AND id = (SELECT MIN(id) FROM warehouse_stocks WHERE item_id = :iid2)"
+                ), {"qty": new_qty, "iid": item_id, "iid2": item_id})
+                # 如果没有仓库记录，创建一条到默认仓库
+                if updated.rowcount == 0:
+                    default_wh = conn.execute(text(
+                        "SELECT id FROM warehouses ORDER BY id LIMIT 1"
+                    )).fetchone()
+                    if default_wh:
+                        conn.execute(text(
+                            "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (:iid, :wid, :qty)"
+                        ), {"iid": item_id, "wid": default_wh["id"], "qty": new_qty})
+
+            # 如果修改了仓库，更新 warehouse_stocks
+            if warehouse_id is not None:
+                wh = conn.execute(text("SELECT id FROM warehouses WHERE id = :wid"), {"wid": warehouse_id}).fetchone()
+                if wh:
+                    current_qty = conn.execute(text(
+                        "SELECT COALESCE(SUM(quantity), 0) FROM warehouse_stocks WHERE item_id = :iid"
+                    ), {"iid": item_id}).fetchone()[0]
+                    existing = conn.execute(text(
+                        "SELECT id, quantity FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id = :wid"
+                    ), {"iid": item_id, "wid": warehouse_id}).fetchone()
+                    if existing:
+                        conn.execute(text(
+                            "UPDATE warehouse_stocks SET quantity = quantity + :qty WHERE id = :stid"
+                        ), {"qty": current_qty, "stid": existing["id"]})
+                    else:
+                        conn.execute(text(
+                            "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (:iid, :wid, :qty)"
+                        ), {"iid": item_id, "wid": warehouse_id, "qty": current_qty or getattr(body, "total_quantity", 1) or 1})
+                    # 删除旧仓库的库存记录
+                    old_stocks = conn.execute(text(
+                        "SELECT id FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id != :wid"
+                    ), {"iid": item_id, "wid": warehouse_id}).fetchall()
+                    for old in old_stocks:
+                        conn.execute(text("DELETE FROM warehouse_stocks WHERE id = :stid"), {"stid": old["id"]})
+
+            # 更新库存状态
+            update_item_status(conn, item_id)
 
     return {"message": "物品信息更新成功"}
 
@@ -390,14 +441,13 @@ def delete_item(
     conn=Depends(get_db),
 ):
     """删除物品（前提：无活跃租借记录）"""
-    active = conn.execute(
-        "SELECT COUNT(*) FROM records WHERE item_id = ? AND status IN ('借出中', '逾期', '待审核')",
-        (item_id,),
-    ).fetchone()[0]
+    active = conn.execute(text(
+        "SELECT COUNT(*) FROM records WHERE item_id = :iid AND status IN ('借出中', '逾期', '待审核')"
+    ), {"iid": item_id}).fetchone()[0]
     if active > 0:
         raise HTTPException(status_code=400, detail="该物品存在活跃租借记录，无法删除")
 
-    conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
+    conn.execute(text("DELETE FROM items WHERE id = :iid"), {"iid": item_id})
     conn.commit()
     return {"message": "物品已删除"}
 
@@ -409,10 +459,10 @@ def mark_damaged(
     conn=Depends(get_db),
 ):
     """标记物品为损坏"""
-    item = conn.execute("SELECT id FROM items WHERE id = ?", (item_id,)).fetchone()
+    item = conn.execute(text("SELECT id FROM items WHERE id = :iid"), {"iid": item_id}).fetchone()
     if not item:
         raise HTTPException(status_code=404, detail="物品不存在")
-    conn.execute("UPDATE items SET status = '损坏', updated_at = datetime('now','localtime') WHERE id = ?", (item_id,))
+    conn.execute(text("UPDATE items SET status = '损坏', updated_at = NOW() WHERE id = :iid"), {"iid": item_id})
     conn.commit()
     return {"message": "物品已标记为损坏"}
 
@@ -424,10 +474,10 @@ def mark_available(
     conn=Depends(get_db),
 ):
     """恢复物品为可用"""
-    item = conn.execute("SELECT id FROM items WHERE id = ?", (item_id,)).fetchone()
+    item = conn.execute(text("SELECT id FROM items WHERE id = :iid"), {"iid": item_id}).fetchone()
     if not item:
         raise HTTPException(status_code=404, detail="物品不存在")
-    conn.execute("UPDATE items SET status = '可用', updated_at = datetime('now','localtime') WHERE id = ?", (item_id,))
+    conn.execute(text("UPDATE items SET status = '可用', updated_at = NOW() WHERE id = :iid"), {"iid": item_id})
     conn.commit()
     update_item_status(conn, item_id)
     conn.commit()
@@ -532,76 +582,75 @@ def import_confirm(
     imported = 0
     updated = 0
 
-    try:
-        conn.execute("BEGIN IMMEDIATE")
-
-        for row_data in preview_rows:
-            idx = row_data["index"]
-            if idx not in selection_map:
-                continue  # 跳过未勾选的行
-
-            sel = selection_map[idx]
-            data = row_data["data"]
-            name = data.get("名称", "").strip()
-            category = data.get("分类", "").strip()
-            description = data.get("描述", "").strip()
-            wh_name = data.get("存放仓库", "").strip()
-            total_quantity = int(data.get("总库存", "1").strip() or "1")
-            value = float(data.get("单价", "0").strip() or "0")
-            low_stock_threshold = int(data.get("预警阈值", "2").strip() or "2")
-
-            # 解析仓库
-            wh_id = None
-            if wh_name:
-                wh = conn.execute("SELECT id FROM warehouses WHERE name = ?", (wh_name,)).fetchone()
-                if wh:
-                    wh_id = wh["id"]
-            if not wh_id:
-                default_wh = conn.execute("SELECT id FROM warehouses ORDER BY id LIMIT 1").fetchone()
-                if default_wh:
-                    wh_id = default_wh["id"]
-
-            if sel.get("action") == "add_to_existing":
-                # 校验：该行必须是服务端确认的重复行
-                if row_data["status"] != "duplicate" or not row_data.get("duplicate_item"):
-                    raise HTTPException(status_code=400, detail=f"第{idx}行不是重复物品，无法累加")
-                if sel.get("item_id") != row_data["duplicate_item"]["id"]:
-                    raise HTTPException(status_code=400, detail=f"第{idx}行目标物品ID不匹配")
-                # 验证目标物品存在
-                target = conn.execute("SELECT id FROM items WHERE id = ?", (sel["item_id"],)).fetchone()
-                if not target:
-                    raise HTTPException(status_code=400, detail=f"目标物品(ID:{sel['item_id']})不存在")
-                # 累加到已有物品
-                conn.execute(
-                    "UPDATE items SET total_quantity = total_quantity + ?, updated_at = datetime('now','localtime') WHERE id = ?",
-                    (total_quantity, sel["item_id"]),
-                )
-                if wh_id:
-                    existing_stock = conn.execute("SELECT id FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = ?", (sel["item_id"], wh_id)).fetchone()
-                    if existing_stock:
-                        conn.execute("UPDATE warehouse_stocks SET quantity = quantity + ? WHERE item_id = ? AND warehouse_id = ?", (total_quantity, sel["item_id"], wh_id))
-                    else:
-                        conn.execute("INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, ?, ?)", (sel["item_id"], wh_id, total_quantity))
-                updated += 1
-            else:
-                # 创建新物品
-                conn.execute(
-                    """INSERT INTO items (name, category, description, total_quantity, value, low_stock_threshold)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (name, category, description, total_quantity, value, low_stock_threshold),
-                )
-                new_item_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                if wh_id:
-                    conn.execute("INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, ?, ?)", (new_item_id, wh_id, total_quantity))
-                imported += 1
-
-        conn.commit()
-    except HTTPException:
+    conn.rollback()
+    with conn.begin():
         conn.rollback()
-        raise
-    except Exception:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail="导入失败，已回滚所有更改")
+        with conn.begin():
+            for row_data in preview_rows:
+                idx = row_data["index"]
+                if idx not in selection_map:
+                    continue  # 跳过未勾选的行
+
+                sel = selection_map[idx]
+                data = row_data["data"]
+                name = data.get("名称", "").strip()
+                category = data.get("分类", "").strip()
+                description = data.get("描述", "").strip()
+                wh_name = data.get("存放仓库", "").strip()
+                total_quantity = int(data.get("总库存", "1").strip() or "1")
+                value = float(data.get("单价", "0").strip() or "0")
+                low_stock_threshold = int(data.get("预警阈值", "2").strip() or "2")
+
+                # 解析仓库
+                wh_id = None
+                if wh_name:
+                    wh = conn.execute(text("SELECT id FROM warehouses WHERE name = :wn"), {"wn": wh_name}).fetchone()
+                    if wh:
+                        wh_id = wh["id"]
+                if not wh_id:
+                    default_wh = conn.execute(text("SELECT id FROM warehouses ORDER BY id LIMIT 1")).fetchone()
+                    if default_wh:
+                        wh_id = default_wh["id"]
+
+                if sel.get("action") == "add_to_existing":
+                    # 校验：该行必须是服务端确认的重复行
+                    if row_data["status"] != "duplicate" or not row_data.get("duplicate_item"):
+                        raise HTTPException(status_code=400, detail=f"第{idx}行不是重复物品，无法累加")
+                    if sel.get("item_id") != row_data["duplicate_item"]["id"]:
+                        raise HTTPException(status_code=400, detail=f"第{idx}行目标物品ID不匹配")
+                    # 验证目标物品存在
+                    target = conn.execute(text("SELECT id FROM items WHERE id = :tid"), {"tid": sel["item_id"]}).fetchone()
+                    if not target:
+                        raise HTTPException(status_code=400, detail=f"目标物品(ID:{sel['item_id']})不存在")
+                    # 累加到已有物品
+                    conn.execute(text(
+                        "UPDATE items SET total_quantity = total_quantity + :qty, updated_at = NOW() WHERE id = :tid"
+                    ), {"qty": total_quantity, "tid": sel["item_id"]})
+                    if wh_id:
+                        existing_stock = conn.execute(text(
+                            "SELECT id FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id = :wid"
+                        ), {"iid": sel["item_id"], "wid": wh_id}).fetchone()
+                        if existing_stock:
+                            conn.execute(text(
+                                "UPDATE warehouse_stocks SET quantity = quantity + :qty WHERE item_id = :iid AND warehouse_id = :wid"
+                            ), {"qty": total_quantity, "iid": sel["item_id"], "wid": wh_id})
+                        else:
+                            conn.execute(text(
+                                "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (:iid, :wid, :qty)"
+                            ), {"iid": sel["item_id"], "wid": wh_id, "qty": total_quantity})
+                    updated += 1
+                else:
+                    # 创建新物品
+                    result = conn.execute(text(
+                        "INSERT INTO items (name, category, description, total_quantity, value, low_stock_threshold) "
+                        "VALUES (:n, :c, :d, :q, :v, :t) RETURNING id"
+                    ), {"n": name, "c": category, "d": description, "q": total_quantity, "v": value, "t": low_stock_threshold})
+                    new_item_id = result.fetchone()[0]
+                    if wh_id:
+                        conn.execute(text(
+                            "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (:iid, :wid, :qty)"
+                        ), {"iid": new_item_id, "wid": wh_id, "qty": total_quantity})
+                    imported += 1
 
     skipped = len(preview_rows) - imported - updated
 

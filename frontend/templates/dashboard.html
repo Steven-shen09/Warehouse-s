@@ -384,7 +384,7 @@
         <span style="font-size:11px;color:var(--text-muted)">本周</span>
       </div>
       {% raw %}
-      <svg id="topBorrowedSvg" viewBox="0 0 240 160" style="width:100%"></svg>
+      <svg id="topBorrowedSvg" viewBox="0 0 240 220" style="width:100%"></svg>
       {% endraw %}
     </div>
   </div>
@@ -777,37 +777,36 @@ function topBorrowed() {
       const items = this.items;
       if (!items.length) return;
       const ns = 'http://www.w3.org/2000/svg';
-      const max = Math.max(...items.map(i => i.count || 0), 1);
-      const barMaxW = 220;
-      items.forEach((item, idx) => {
-        const w = Math.max(20, (item.count / max) * barMaxW);
-        const y = idx * 15 + 1;
-        const color = this.colors[idx % this.colors.length];
-        const name = item.name.length > 6 ? item.name.slice(0,6)+'..' : item.name;
-        const g = document.createElementNS(ns, 'g');
-        g.classList.add('bar-g');
-        const r = document.createElementNS(ns, 'rect');
-        r.setAttribute('x', '0'); r.setAttribute('y', y);
-        r.setAttribute('width', w); r.setAttribute('height', '13');
-        r.setAttribute('rx', '3'); r.setAttribute('fill', color);
-        r.setAttribute('opacity', '.85');
-        g.appendChild(r);
-        const tn = document.createElementNS(ns, 'text');
-        tn.setAttribute('x', '4'); tn.setAttribute('y', y + 10);
-        tn.setAttribute('font-size', '9'); tn.setAttribute('fill', '#fff');
-        tn.setAttribute('font-weight', '500');
-        tn.textContent = name;
-        g.appendChild(tn);
-        const tc = document.createElementNS(ns, 'text');
-        tc.setAttribute('x', '236'); tc.setAttribute('y', y + 10);
-        tc.setAttribute('text-anchor', 'end');
-        tc.setAttribute('font-size', '9'); tc.setAttribute('fill', color);
-        tc.setAttribute('font-weight', '600');
-        tc.textContent = item.count;
-        g.appendChild(tc);
-        svg.appendChild(g);
-      });
-    }
+      const maxCount = Math.max(...items.map(i => i.count || 0), 1);
+        const barMaxW = 140;
+        items.forEach((item, idx) => {
+          const w = Math.max(20, (item.count / maxCount) * barMaxW);
+          const y = idx * 18 + 1;
+          const color = this.colors[idx % this.colors.length];
+          const name = item.name.length > 6 ? item.name.slice(0,6)+'..' : item.name;
+          const g = document.createElementNS(ns, 'g');
+          g.classList.add('bar-g');
+          const r = document.createElementNS(ns, 'rect');
+          r.setAttribute('x', '0'); r.setAttribute('y', y);
+          r.setAttribute('width', w); r.setAttribute('height', '14');
+          r.setAttribute('rx', '3'); r.setAttribute('fill', color);
+          r.setAttribute('opacity', '.85');
+          g.appendChild(r);
+          const tn = document.createElementNS(ns, 'text');
+          tn.setAttribute('x', '4'); tn.setAttribute('y', y + 11);
+          tn.setAttribute('font-size', '9'); tn.setAttribute('fill', '#fff');
+          tn.setAttribute('font-weight', '500');
+          tn.textContent = name + ' ' + (item.total_qty || 0);
+          g.appendChild(tn);
+          const tc = document.createElementNS(ns, 'text');
+          tc.setAttribute('x', '148'); tc.setAttribute('y', y + 11);
+          tc.setAttribute('text-anchor', 'start');
+          tc.setAttribute('font-size', '9'); tc.setAttribute('fill', color);
+          tc.setAttribute('font-weight', '600');
+          tc.textContent = item.count;
+          g.appendChild(tc);
+          svg.appendChild(g);
+        });    }
   };
 }
 </script>

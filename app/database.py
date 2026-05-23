@@ -1,260 +1,249 @@
-"""SQLite 数据库连接管理"""
-import sqlite3
-import os
-from contextlib import contextmanager
+"""PostgreSQL 数据库连接管理（SQLAlchemy Core）"""
+from sqlalchemy import create_engine, text
+from sqlalchemy.pool import QueuePool
 from app.config import settings
 
-
-def get_db_path() -> str:
-    """获取数据库文件路径，确保目录存在"""
-    db_path = settings.DATABASE_PATH
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    return db_path
+# ── 兼容性补丁：修复 SQLAlchemy 2.0.36 C 扩展在 Python 3.12 上 Row 对象不支持字符串 key 访问的 bug ──
+from sqlalchemy.engine.row import Row
+_orig_row_getitem = Row.__getitem__
+_orig_row_iter = Row.__iter__
 
 
-def get_connection() -> sqlite3.Connection:
-    """创建新的数据库连接"""
-    conn = sqlite3.connect(get_db_path(), timeout=20, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+def _patched_row_getitem(self, key):
+    if isinstance(key, (int, slice)):
+        return _orig_row_getitem(self, key)
+    return self._mapping[key]
+
+
+def _patched_row_iter(self):
+    return iter(self._mapping.items())
+
+
+Row.__getitem__ = _patched_row_getitem
+Row.__iter__ = _patched_row_iter
+
+_engine = None
+
+
+def get_engine():
+    global _engine
+    if _engine is None:
+        _engine = create_engine(
+            settings.DATABASE_URL,
+            poolclass=QueuePool,
+            pool_size=5,
+            max_overflow=10,
+            echo=False,
+                    )
+    return _engine
+
+
+def get_db():
+    """数据库连接依赖注入 — FastAPI Depends(get_db)"""
+    with get_engine().connect() as conn:
+        # 每条连接初始时确保无残留事务
+        if conn.in_transaction():
+            conn.rollback()
+        yield conn
 
 
 def init_db():
     """初始化数据库：创建所有表并插入种子数据"""
-    conn = get_connection()
-    try:
-        _create_tables(conn)
-        _seed_data(conn)
-        conn.commit()
-    finally:
-        conn.close()
+    engine = get_engine()
+    with engine.connect() as conn:
+        conn.rollback()
+        with conn.begin():
+            _create_tables(conn)
+            _seed_data(conn)
 
 
-def _create_tables(conn: sqlite3.Connection):
-    """创建所有数据表"""
-    conn.executescript("""
-        -- 用户表
+def _create_tables(conn):
+    """创建所有数据表（PostgreSQL 语法）"""
+    conn.execute(text("""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
-            display_name TEXT NOT NULL DEFAULT '',
-            role TEXT NOT NULL CHECK(role IN ('admin', 'approver', 'user')) DEFAULT 'user',
-            email TEXT DEFAULT '',
-            phone TEXT DEFAULT '',
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            display_name VARCHAR(100) NOT NULL DEFAULT '',
+            role VARCHAR(20) NOT NULL CHECK(role IN ('admin', 'approver', 'user')) DEFAULT 'user',
+            email VARCHAR(200) DEFAULT '',
+            phone VARCHAR(50) DEFAULT '',
+            is_active SMALLINT NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
 
-        -- 物品表
         CREATE TABLE IF NOT EXISTS items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            category TEXT DEFAULT '',
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(200) NOT NULL,
+            category VARCHAR(100) DEFAULT '',
             description TEXT DEFAULT '',
-            location TEXT DEFAULT '',
+            location VARCHAR(200) DEFAULT '',
             image_url TEXT DEFAULT '',
             total_quantity INTEGER NOT NULL DEFAULT 1,
-            status TEXT NOT NULL CHECK(status IN ('可用', '租借中', '损坏')) DEFAULT '可用',
-            value REAL NOT NULL DEFAULT 0,
+            status VARCHAR(20) NOT NULL CHECK(status IN ('可用', '租借中', '损坏')) DEFAULT '可用',
+            value DOUBLE PRECISION NOT NULL DEFAULT 0,
             low_stock_threshold INTEGER DEFAULT 2,
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
 
-        -- 租借记录表
         CREATE TABLE IF NOT EXISTS records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             item_id INTEGER NOT NULL REFERENCES items(id),
             borrower_id INTEGER NOT NULL REFERENCES users(id),
-            borrower_name TEXT NOT NULL,
-            contact TEXT DEFAULT '',
+            borrower_name VARCHAR(200) NOT NULL,
+            contact VARCHAR(200) DEFAULT '',
             quantity INTEGER NOT NULL,
-            borrow_date TEXT NOT NULL,
-            expected_return_date TEXT NOT NULL,
-            actual_return_date TEXT DEFAULT NULL,
+            borrow_date DATE NOT NULL,
+            expected_return_date DATE NOT NULL,
+            actual_return_date DATE DEFAULT NULL,
             reason TEXT DEFAULT '',
             return_notes TEXT DEFAULT '',
-            status TEXT NOT NULL CHECK(status IN ('待审核', '借出中', '已拒绝', '已归还', '逾期')) DEFAULT '待审核',
-            approval_deadline TEXT DEFAULT NULL,
+            status VARCHAR(20) NOT NULL CHECK(status IN ('待审核', '借出中', '已拒绝', '已归还', '逾期')) DEFAULT '待审核',
+            approval_deadline TIMESTAMP DEFAULT NULL,
             original_record_id INTEGER DEFAULT NULL REFERENCES records(id),
+            document_no VARCHAR(50) DEFAULT NULL,
+            source_warehouse_id INTEGER DEFAULT NULL REFERENCES warehouses(id),
             created_by INTEGER NOT NULL REFERENCES users(id),
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
 
-        -- 审核记录表
         CREATE TABLE IF NOT EXISTS approvals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             record_id INTEGER NOT NULL REFERENCES records(id),
             approver_id INTEGER NOT NULL REFERENCES users(id),
-            action TEXT NOT NULL CHECK(action IN ('approved', 'rejected')),
+            action VARCHAR(20) NOT NULL CHECK(action IN ('approved', 'rejected')),
             comment TEXT DEFAULT '',
             ai_suggestion TEXT DEFAULT '',
-            deadline TEXT DEFAULT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            deadline TIMESTAMP DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
 
-        -- 操作日志表
         CREATE TABLE IF NOT EXISTS audit_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id),
-            username TEXT NOT NULL,
-            action TEXT NOT NULL,
-            target_type TEXT NOT NULL,
+            username VARCHAR(200) NOT NULL,
+            action VARCHAR(100) NOT NULL,
+            target_type VARCHAR(50) NOT NULL,
             target_id INTEGER NOT NULL,
             detail TEXT DEFAULT '',
-            ip_address TEXT DEFAULT '',
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            ip_address VARCHAR(50) DEFAULT '',
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
 
-        -- 仓库表
         CREATE TABLE IF NOT EXISTS warehouses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(200) NOT NULL,
             location TEXT DEFAULT '',
             description TEXT DEFAULT '',
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
 
-        -- 分仓库存表
         CREATE TABLE IF NOT EXISTS warehouse_stocks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             item_id INTEGER NOT NULL REFERENCES items(id),
             warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
             quantity INTEGER NOT NULL DEFAULT 0,
             UNIQUE(item_id, warehouse_id)
         );
 
-        -- 调拨记录表
         CREATE TABLE IF NOT EXISTS transfers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             item_id INTEGER NOT NULL REFERENCES items(id),
             from_warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
             to_warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
             quantity INTEGER NOT NULL,
             reason TEXT DEFAULT '',
-            status TEXT NOT NULL CHECK(status IN ('待审核', '已通过', '已驳回')) DEFAULT '待审核',
-            document_no TEXT DEFAULT NULL,
+            status VARCHAR(20) NOT NULL CHECK(status IN ('待审核', '已通过', '已驳回')) DEFAULT '待审核',
+            document_no VARCHAR(50) DEFAULT NULL,
             created_by INTEGER NOT NULL REFERENCES users(id),
             approved_by INTEGER REFERENCES users(id),
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
 
-        -- 盘点记录表
         CREATE TABLE IF NOT EXISTS inventory_counts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             warehouse_id INTEGER NOT NULL REFERENCES warehouses(id),
-            name TEXT NOT NULL,
-            status TEXT NOT NULL CHECK(status IN ('进行中', '已完成', '已确认')) DEFAULT '进行中',
+            name VARCHAR(200) NOT NULL,
+            status VARCHAR(20) NOT NULL CHECK(status IN ('进行中', '已完成', '已确认')) DEFAULT '进行中',
             created_by INTEGER NOT NULL REFERENCES users(id),
-            completed_at TEXT DEFAULT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            completed_at TIMESTAMP DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
 
-        -- 盘点明细表
         CREATE TABLE IF NOT EXISTS inventory_count_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             count_id INTEGER NOT NULL REFERENCES inventory_counts(id),
             item_id INTEGER NOT NULL REFERENCES items(id),
             expected_quantity INTEGER NOT NULL DEFAULT 0,
             actual_quantity INTEGER DEFAULT NULL,
             difference INTEGER DEFAULT NULL,
             notes TEXT DEFAULT '',
-            counted_at TEXT DEFAULT NULL
+            counted_at TIMESTAMP DEFAULT NULL
         );
+    """))
 
-        -- 索引
-        CREATE INDEX IF NOT EXISTS idx_records_status ON records(status);
-        CREATE INDEX IF NOT EXISTS idx_records_item_id ON records(item_id);
-        CREATE INDEX IF NOT EXISTS idx_records_borrower_id ON records(borrower_id);
-        CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
-        CREATE INDEX IF NOT EXISTS idx_approvals_record_id ON approvals(record_id);
-    """)
+    # 索引
+    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_records_status ON records(status)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_records_item_id ON records(item_id)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_records_borrower_id ON records(borrower_id)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_records_document_no ON records(document_no)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_approvals_record_id ON approvals(record_id)"))
 
-    # 迁移：添加单据号字段（兼容旧数据，允许 NULL）
-    try:
-        conn.execute("ALTER TABLE records ADD COLUMN document_no TEXT DEFAULT NULL")
-    except sqlite3.OperationalError:
-        pass  # 字段已存在
-
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_records_document_no ON records(document_no)")
-
-    # 迁移：创建默认仓库并迁移现有物品库存
-    _migrate_warehouse_data(conn)
+    # 默认仓库
+    existing = conn.execute(text("SELECT COUNT(*) FROM warehouses")).fetchone()[0]
+    if existing == 0:
+        conn.execute(text(
+            "INSERT INTO warehouses (name, location, description) VALUES ('默认仓库', '', '系统自动创建的默认仓库')"
+        ))
 
 
-def _migrate_warehouse_data(conn: sqlite3.Connection):
-    """创建默认仓库，将现有物品库存迁移到 warehouse_stocks"""
-    existing_wh = conn.execute("SELECT COUNT(*) FROM warehouses").fetchone()[0]
-    if existing_wh > 0:
-        return
-
-    conn.execute(
-        "INSERT INTO warehouses (id, name, location, description) VALUES (1, '默认仓库', '', '系统自动创建的默认仓库')"
-    )
-    items = conn.execute("SELECT id, total_quantity FROM items").fetchall()
-    for item in items:
-        conn.execute(
-            "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, 1, ?)",
-            (item["id"], item["total_quantity"]),
-        )
-
-
-def _seed_data(conn: sqlite3.Connection):
+def _seed_data(conn):
     """插入预置种子数据"""
     from app.utils.security import hash_password
 
-    # 检查是否已有数据
-    existing = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    existing = conn.execute(text("SELECT COUNT(*) FROM users")).fetchone()[0]
     if existing > 0:
         return
 
-    # 预置用户
-    users = [
-        (1, "admin", hash_password("admin123"), "管理员", "admin", "admin@example.com", "13800000001"),
-        (2, "approver1", hash_password("123456"), "审核员李", "approver", "approver1@example.com", "13800000002"),
-        (3, "user1", hash_password("123456"), "用户张", "user", "user1@example.com", "13800000003"),
+    users_data = [
+        {"id": 1, "username": "admin", "password_hash": hash_password("admin123"), "display_name": "管理员", "role": "admin", "email": "admin@example.com", "phone": "13800000001"},
+        {"id": 2, "username": "approver1", "password_hash": hash_password("123456"), "display_name": "审核员李", "role": "approver", "email": "approver1@example.com", "phone": "13800000002"},
+        {"id": 3, "username": "user1", "password_hash": hash_password("123456"), "display_name": "用户张", "role": "user", "email": "user1@example.com", "phone": "13800000003"},
     ]
-    conn.executemany(
-        "INSERT INTO users (id, username, password_hash, display_name, role, email, phone) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        users,
-    )
+    for u in users_data:
+        conn.execute(text(
+            "INSERT INTO users (id, username, password_hash, display_name, role, email, phone) "
+            "VALUES (:id, :username, :password_hash, :display_name, :role, :email, :phone)"
+        ), u)
 
-    # 预置物品
-    items = [
-        ("投影仪", "电子设备", "会议室用投影仪", "A-101", 5, 1500.00),
-        ("笔记本电脑", "电子设备", "办公笔记本电脑", "A-102", 10, 5000.00),
-        ("折叠椅", "家具", "可折叠办公椅", "B-201", 20, 80.00),
-        ("白板", "办公用品", "可移动白板", "B-202", 8, 200.00),
-        ("工具箱", "工具", "常用维修工具箱", "C-301", 3, 300.00),
+    items_data = [
+        {"name": "投影仪", "category": "电子设备", "description": "会议室用投影仪", "location": "A-101", "total_quantity": 5, "value": 1500.00},
+        {"name": "笔记本电脑", "category": "电子设备", "description": "办公笔记本电脑", "location": "A-102", "total_quantity": 10, "value": 5000.00},
+        {"name": "折叠椅", "category": "家具", "description": "可折叠办公椅", "location": "B-201", "total_quantity": 20, "value": 80.00},
+        {"name": "白板", "category": "办公用品", "description": "可移动白板", "location": "B-202", "total_quantity": 8, "value": 200.00},
+        {"name": "工具箱", "category": "工具", "description": "常用维修工具箱", "location": "C-301", "total_quantity": 3, "value": 300.00},
     ]
-    conn.executemany(
-        "INSERT INTO items (name, category, description, location, total_quantity, value) VALUES (?, ?, ?, ?, ?, ?)",
-        items,
-    )
+    for item in items_data:
+        conn.execute(text(
+            "INSERT INTO items (name, category, description, location, total_quantity, value) "
+            "VALUES (:name, :category, :description, :location, :total_quantity, :value)"
+        ), item)
 
-    # 种子数据：确保默认仓库存在
-    existing_wh = conn.execute("SELECT COUNT(*) FROM warehouses").fetchone()[0]
-    if existing_wh == 0:
-        conn.execute(
-            "INSERT INTO warehouses (id, name, location, description) VALUES (1, '默认仓库', '', '系统自动创建的默认仓库')"
-        )
+    # 种子物品库存分配到默认仓库
+    seed_items = conn.execute(text("SELECT id, total_quantity FROM items")).fetchall()
+    for row in seed_items:
+        conn.execute(text(
+            "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (:iid, 1, :qty) ON CONFLICT DO NOTHING"
+        ), {"iid": row[0], "qty": row[1]})
 
-    # 将种子物品库存分配到默认仓库
-    seed_items = conn.execute("SELECT id, total_quantity FROM items").fetchall()
-    for item in seed_items:
-        existing_stock = conn.execute(
-            "SELECT id FROM warehouse_stocks WHERE item_id = ? AND warehouse_id = 1", (item["id"],)
-        ).fetchone()
-        if not existing_stock:
-            conn.execute(
-                "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (?, 1, ?)",
-                (item["id"], item["total_quantity"]),
-            )
+
+# 向后兼容 — 供 seed_test_data.py 等直接脚本使用
+def get_connection():
+    return get_engine().connect()

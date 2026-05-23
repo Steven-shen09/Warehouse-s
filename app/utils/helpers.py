@@ -1,5 +1,6 @@
 """通用辅助函数"""
 from datetime import datetime, timedelta
+from sqlalchemy import text
 
 
 def now_str() -> str:
@@ -28,16 +29,18 @@ def is_overdue(expected_date_str: str) -> bool:
     return datetime.now() > expected
 
 
-def generate_document_no(conn) -> str:
-    """生成单据号: DJ-20260515-0001（每天从 0001 开始自增）"""
+def generate_document_no(conn):
+    from datetime import datetime
     today = datetime.now().strftime("%Y%m%d")
     prefix = f"DJ-{today}-"
-    row = conn.execute(
-        "SELECT MAX(document_no) FROM records WHERE document_no LIKE ?",
-        (f"{prefix}%",)
-    ).fetchone()
+    row = conn.execute(text(
+        "SELECT MAX(document_no) FROM records WHERE document_no ~ :pat"
+    ), {"pat": f"^{prefix}[0-9]+$"}).fetchone()
     if row and row[0]:
-        seq = int(row[0].split("-")[-1]) + 1
+        try:
+            seq = int(row[0].split("-")[-1]) + 1
+        except (ValueError, IndexError):
+            seq = 1
     else:
         seq = 1
     return f"{prefix}{seq:04d}"
