@@ -224,9 +224,16 @@ async function returnAsset(aid) {
 
 async function openTransfer(aid) {
   currentAssetId = aid;
-  const r = await api('/api/v1/users?page_size=200');
-  const data = await r.json();
-  document.getElementById('assignUser').innerHTML = (data.items||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
+  const [usersR, assetR] = await Promise.all([
+    api('/api/v1/users?page_size=200'),
+    api(`/api/v1/assets/${aid}`)
+  ]);
+  const usersData = await usersR.json();
+  const assetData = await assetR.json();
+  document.getElementById('assignUser').innerHTML = (usersData.items||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
+  if (assetData.current_user_id) {
+    document.getElementById('assignUser').value = assetData.current_user_id;
+  }
   document.getElementById('assignNotes').value = '';
   document.getElementById('assignDateGroup').style.display = 'none';
   document.getElementById('assignReturnGroup').style.display = 'none';
