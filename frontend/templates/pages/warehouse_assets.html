@@ -86,17 +86,19 @@ const cart = {
 };
 
 async function loadCategories() {
-  const res = await api('/api/v1/warehouse-items/categories?item_type=fixed_asset');
+  const r = await api('/api/v1/warehouse-items/categories?item_type=fixed_asset');
+  const data = await r.json();
   document.getElementById('categoryFilter').innerHTML = '<option value="">全部分类</option>'
-    + res.categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    + data.categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 }
 
 async function loadAssets(page = 1) {
   currentPage = page;
   const kw = document.getElementById('searchInput').value;
   const cat = document.getElementById('categoryFilter').value;
-  const res = await api(`/api/v1/warehouse-items/assets?keyword=${encodeURIComponent(kw)}&category=${encodeURIComponent(cat)}&page=${page}`);
-  document.getElementById('assetTableBody').innerHTML = res.assets.map(a => `
+  const r = await api(`/api/v1/warehouse-items/assets?keyword=${encodeURIComponent(kw)}&category=${encodeURIComponent(cat)}&page=${page}`);
+  const data = await r.json();
+  document.getElementById('assetTableBody').innerHTML = data.assets.map(a => `
     <tr>
       <td><span class="status-badge">${esc(a.asset_code||'-')}</span></td>
       <td>${esc(a.item_name)}</td><td>${esc(a.category||'-')}</td>
@@ -106,7 +108,7 @@ async function loadAssets(page = 1) {
         <button class="btn btn-primary btn-sm" onclick="cart.add({id:${a.id},name:'${esc(a.item_name).replace(/'/g, "\\'")}',asset_code:'${esc(a.asset_code||'').replace(/'/g, "\\'")}'})">选择</button>
       </td>
     </tr>`).join('');
-  renderPagination(res.total, page, 'loadAssets');
+  renderPagination(data.total, page, 'loadAssets');
 }
 
 async function submitCart() {
@@ -124,26 +126,27 @@ async function submitCart() {
       let url = `/api/v1/assets/${it.id}/request-assign?assigned_to_user_id=${uid}&assigned_to_department_id=${did}&notes=${encodeURIComponent(notes)}`;
       if (ad) url += `&assignment_date=${ad}`;
       if (erd) url += `&expected_return_date=${erd}`;
-      await api(url, 'POST');
-      success++;
+      const r = await api(url, 'POST');
+      const data = await r.json();
+      if (r.ok) { success++; }
+      else { fail++; }
     } catch(e) { fail++; }
   }
-  if (fail === 0) {
-    showToast(`${success}件资产领用申请已提交`);
-  } else {
-    showToast(`${success}件成功，${fail}件失败`, 'warning');
-  }
+  if (fail === 0) { showToast(`${success}件资产领用申请已提交`); }
+  else { showToast(`${success}件成功，${fail}件失败`, 'warning'); }
   cart.clear();
   loadAssets(currentPage);
 }
 
 async function loadUserDeptOptions() {
-  const [usersR, deptsR] = await Promise.all([
+  const [uR, dR] = await Promise.all([
     api('/api/v1/users?page_size=200'),
     api('/api/v1/departments')
   ]);
-  document.getElementById('assignUser').innerHTML = (usersR.users||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
-  document.getElementById('assignDept').innerHTML = (deptsR.departments||[]).map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+  const uData = await uR.json();
+  const dData = await dR.json();
+  document.getElementById('assignUser').innerHTML = (uData.users||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
+  document.getElementById('assignDept').innerHTML = (dData.departments||[]).map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
