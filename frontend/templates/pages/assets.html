@@ -53,6 +53,22 @@
     </div>
   </div>
 </div>
+<!-- 领用/转移模态框 -->
+<div class="modal-overlay" id="assign-modal">
+  <div class="modal">
+    <div class="modal-header"><span>领用/转移资产</span><button class="btn btn-outline btn-sm" onclick="closeModal('assign-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">使用人 *</label><select id="assignUser" class="form-input"></select></div>
+      <div class="form-group" id="assignDateGroup"><label class="form-label">日期</label><input type="date" id="assignDate" class="form-input"></div>
+      <div class="form-group" id="assignReturnGroup"><label class="form-label">预计归还日期</label><input type="date" id="assignReturnDate" class="form-input"></div>
+      <div class="form-group"><label class="form-label">备注</label><input type="text" id="assignNotes" class="form-input"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('assign-modal')">取消</button>
+      <button class="btn btn-primary" id="assignBtn" onclick="doAssign()">确认</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -172,8 +188,8 @@ async function openAssign(aid) {
   const r = await api('/api/v1/users?page_size=200');
   const data = await r.json();
   document.getElementById('assignUser').innerHTML = (data.items||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
-  document.getElementById('assignDate').style.display = '';
-  document.getElementById('assignReturnDate').style.display = '';
+  document.getElementById('assignDateGroup').style.display = '';
+  document.getElementById('assignReturnGroup').style.display = '';
   document.getElementById('assignDate').value = new Date().toISOString().slice(0,10);
   document.getElementById('assignReturnDate').value = '';
   document.getElementById('assignNotes').value = '';
@@ -212,8 +228,8 @@ async function openTransfer(aid) {
   const data = await r.json();
   document.getElementById('assignUser').innerHTML = (data.items||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
   document.getElementById('assignNotes').value = '';
-  document.getElementById('assignReturnDate').style.display = 'none';
-  document.getElementById('assignDate').style.display = 'none';
+  document.getElementById('assignDateGroup').style.display = 'none';
+  document.getElementById('assignReturnGroup').style.display = 'none';
   document.getElementById('assignBtn').textContent = '确认转移';
   document.getElementById('assignBtn').onclick = async () => {
     const uid = document.getElementById('assignUser').value;
@@ -224,8 +240,8 @@ async function openTransfer(aid) {
     else { showToast(d.detail || '转移失败', 'error'); }
     document.getElementById('assignBtn').textContent = '确认领用';
     document.getElementById('assignBtn').onclick = doAssign;
-    document.getElementById('assignReturnDate').style.display = '';
-    document.getElementById('assignDate').style.display = '';
+    document.getElementById('assignDateGroup').style.display = '';
+    document.getElementById('assignReturnGroup').style.display = '';
   };
   openModal('assign-modal');
 }
