@@ -222,7 +222,8 @@ def reject_disposal(conn, disposal_id: int):
 
 def request_assign_asset(conn, asset_instance_id: int, user_id: int,
                          department_id: int, expected_return_date=None,
-                         notes: str = "", created_by: int = None):
+                         notes: str = "", created_by: int = None,
+                         user_name: str = "", department_name: str = ""):
     """用户发起固产领用申请（待审核）"""
     asset = conn.execute(text(
         "SELECT * FROM asset_instances WHERE id = :aid"
@@ -236,12 +237,13 @@ def request_assign_asset(conn, asset_instance_id: int, user_id: int,
     conn.execute(text(
         "INSERT INTO asset_assignments (asset_instance_id, assigned_to_user_id, "
         "assigned_to_department_id, assignment_date, expected_return_date, "
-        "status, notes, created_by) "
-        "VALUES (:aiid, :auid, :adid, :ad, :erd, '待审核', :nt, :cb)"
+        "status, notes, created_by, user_name, department_name) "
+        "VALUES (:aiid, :auid, :adid, :ad, :erd, '待审核', :nt, :cb, :un, :dn)"
     ), {
         "aiid": asset_instance_id, "auid": user_id, "adid": department_id,
         "ad": dt_date.today(), "erd": expected_return_date,
         "nt": notes, "cb": created_by or user_id,
+        "un": user_name, "dn": department_name,
     })
 
     return {"message": "领用申请已提交，等待审核"}

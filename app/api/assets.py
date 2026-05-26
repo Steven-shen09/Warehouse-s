@@ -148,20 +148,23 @@ def batch_generate(
 @router.post("/{asset_id}/request-assign")
 def do_request_assign(
     asset_id: int,
-    assigned_to_user_id: int = Query(...),
-    assigned_to_department_id: int = Query(...),
+    assigned_to_user_id: int = Query(default=None),
+    assigned_to_department_id: int = Query(default=None),
+    user_name: str = Query(default=""),
+    department_name: str = Query(default=""),
     expected_return_date: Optional[date] = Query(default=None),
     notes: str = Query(default=""),
     current_user: dict = Depends(get_current_user),
     conn=Depends(get_db),
 ):
-    """用户发起固产领用申请"""
+    """用户发起固产领用申请（支持手动输入使用人和部门名称）"""
     conn.rollback()
     with conn.begin():
         try:
             result = request_assign_asset(
-                conn, asset_id, assigned_to_user_id, assigned_to_department_id,
-                expected_return_date, notes, current_user["id"]
+                conn, asset_id, assigned_to_user_id or current_user["id"],
+                assigned_to_department_id or 0, expected_return_date,
+                notes, current_user["id"], user_name, department_name,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

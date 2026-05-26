@@ -89,6 +89,12 @@ def _extend_existing_tables(conn):
         "ALTER TABLE consumable_records DROP CONSTRAINT IF EXISTS consumable_records_document_no_key"
     ))
 
+    # asset_assignments: 允许手动输入使用人/部门名称
+    conn.execute(text("ALTER TABLE asset_assignments ALTER COLUMN assigned_to_user_id DROP NOT NULL"))
+    conn.execute(text("ALTER TABLE asset_assignments ALTER COLUMN assigned_to_department_id DROP NOT NULL"))
+    conn.execute(text("ALTER TABLE asset_assignments ADD COLUMN IF NOT EXISTS user_name VARCHAR(100) DEFAULT ''"))
+    conn.execute(text("ALTER TABLE asset_assignments ADD COLUMN IF NOT EXISTS department_name VARCHAR(100) DEFAULT ''"))
+
 
 def _create_tables(conn):
     """创建所有数据表（PostgreSQL 语法）"""
@@ -407,18 +413,6 @@ def _seed_data(conn):
             "INSERT INTO users (id, username, password_hash, display_name, role, email, phone) "
             "VALUES (:id, :username, :password_hash, :display_name, :role, :email, :phone)"
         ), u)
-
-    # 种子部门
-    departments_data = [
-        {"name": "技术部", "description": "研发中心"},
-        {"name": "产品部", "description": "产品设计与规划"},
-        {"name": "行政部", "description": "行政后勤管理"},
-        {"name": "运维部", "description": "IT基础设施运维"},
-    ]
-    for d in departments_data:
-        conn.execute(text(
-            "INSERT INTO departments (name, description) VALUES (:n, :d)"
-        ), {"n": d["name"], "d": d["description"]})
 
     # 种子供应商
     suppliers_data = [

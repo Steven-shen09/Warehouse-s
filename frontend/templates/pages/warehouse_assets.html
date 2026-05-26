@@ -36,10 +36,9 @@
       </div>
       <div id="cartSummary" style="display: none;">
         <hr>
-        <div class="form-group"><label class="form-label">使用人 *</label><select id="assignUser" class="form-input"></select></div>
-        <div class="form-group"><label class="form-label">部门 *</label><select id="assignDept" class="form-input"></select></div>
+        <div class="form-group"><label class="form-label">使用人 *</label><input type="text" id="assignUser" class="form-input" placeholder="输入姓名"></div>
+        <div class="form-group"><label class="form-label">部门 *</label><input type="text" id="assignDept" class="form-input" placeholder="输入部门名称"></div>
         <div class="form-group"><label class="form-label">领用日期</label><input type="date" id="assignDate" class="form-input"></div>
-        <div class="form-group"><label class="form-label">预计归还日期</label><input type="date" id="assignReturnDate" class="form-input"></div>
         <div class="form-group"><label class="form-label">备注</label><input type="text" id="assignNotes" class="form-input"></div>
         <button class="btn btn-primary" style="width: 100%;" onclick="submitCart()">提交领用清单（<span id="cartCount">0</span>件）</button>
       </div>
@@ -112,20 +111,18 @@ async function loadAssets(page = 1) {
 }
 
 async function submitCart() {
-  const uid = document.getElementById('assignUser').value;
-  const did = document.getElementById('assignDept').value;
-  if (!uid || !did) { showToast('请选择使用人和部门', 'error'); return; }
+  const userName = document.getElementById('assignUser').value.trim();
+  const deptName = document.getElementById('assignDept').value.trim();
+  if (!userName || !deptName) { showToast('请填写使用人和部门', 'error'); return; }
   if (cart.isEmpty()) { showToast('请先选择要领用的资产', 'error'); return; }
   const ad = document.getElementById('assignDate').value;
-  const erd = document.getElementById('assignReturnDate').value;
   const notes = document.getElementById('assignNotes').value;
 
   let success = 0, fail = 0;
   for (const it of Object.values(cart.items)) {
     try {
-      let url = `/api/v1/assets/${it.id}/request-assign?assigned_to_user_id=${uid}&assigned_to_department_id=${did}&notes=${encodeURIComponent(notes)}`;
+      let url = `/api/v1/assets/${it.id}/request-assign?user_name=${encodeURIComponent(userName)}&department_name=${encodeURIComponent(deptName)}&notes=${encodeURIComponent(notes)}`;
       if (ad) url += `&assignment_date=${ad}`;
-      if (erd) url += `&expected_return_date=${erd}`;
       const r = await api(url, { method: 'POST' });
       const data = await r.json();
       if (r.ok) { success++; }
@@ -138,21 +135,9 @@ async function submitCart() {
   loadAssets(currentPage);
 }
 
-async function loadUserDeptOptions() {
-  const [uR, dR] = await Promise.all([
-    api('/api/v1/users?page_size=200'),
-    api('/api/v1/departments')
-  ]);
-  const uData = await uR.json();
-  const dData = await dR.json();
-  document.getElementById('assignUser').innerHTML = (uData.users||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
-  document.getElementById('assignDept').innerHTML = (dData.departments||[]).map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
-}
-
 document.addEventListener('DOMContentLoaded', () => {
   loadCategories();
   loadAssets();
-  loadUserDeptOptions();
   document.getElementById('assignDate').value = new Date().toISOString().slice(0,10);
 });
 </script>

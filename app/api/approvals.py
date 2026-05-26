@@ -233,7 +233,8 @@ def list_pending_assignments(
 
     rows = conn.execute(text(
         "SELECT aa.*, ai.asset_code, i.name AS item_name, i.specification, i.brand, "
-        "u.display_name AS user_name, d.name AS department_name "
+        "COALESCE(u.display_name, aa.user_name) AS user_name, "
+        "COALESCE(d.name, aa.department_name) AS department_name "
         "FROM asset_assignments aa "
         "JOIN asset_instances ai ON aa.asset_instance_id = ai.id "
         "JOIN items i ON ai.item_id = i.id "
