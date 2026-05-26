@@ -113,7 +113,7 @@ def batch_generate_codes(conn):
         # 查找该批次已有多少资产实例
         existing_count = conn.execute(text(
             "SELECT COUNT(*) FROM asset_instances "
-            "WHERE item_id = :iid AND purchase_date = :pd::date AND asset_code IS NOT NULL AND asset_code != ''"
+            "WHERE item_id = :iid AND purchase_date = CAST(:pd AS DATE) AND asset_code IS NOT NULL AND asset_code != ''"
         ), {"iid": row["item_id"], "pd": date_str}).fetchone()[0]
 
         code = generate_asset_code(conn, item, purchase_date, batch_no, existing_count + 1)
