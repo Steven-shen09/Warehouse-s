@@ -149,7 +149,7 @@ async function submitCart() {
     item_id: it.id, quantity: it.quantity, source_warehouse_id: it.warehouse_id
   })));
   try {
-    const r = await api(`/api/v1/consumable-records/batch?items_json=${encodeURIComponent(itemsJson)}&pickup_date=${pd}&reason=${encodeURIComponent(document.getElementById('reason').value)}`, 'POST');
+    const r = await api(`/api/v1/consumable-records/batch?items_json=${encodeURIComponent(itemsJson)}&pickup_date=${pd}&reason=${encodeURIComponent(document.getElementById('reason').value)}`, { method: 'POST' });
     const data = await r.json();
     if (r.ok) { showToast(data.message || '提交成功'); cart.clear(); setTimeout(() => location.href = '/consumable-records', 1500); }
     else { showToast(data.detail || '提交失败', 'error'); }
@@ -182,7 +182,7 @@ async function createItem() {
     total_quantity: document.getElementById('newItemQty').value || 1,
     value: document.getElementById('newItemValue').value || 0,
   });
-  const r = await api(`/api/v1/items/?${params.toString()}`, 'POST');
+  const r = await api(`/api/v1/items/?${params.toString()}`, { method: 'POST' });
   const data = await r.json();
   if (r.ok) { showToast('耗材创建成功'); closeModal('create-item-modal'); loadItems(currentPage); }
   else { showToast(data.detail || '创建失败', 'error'); }

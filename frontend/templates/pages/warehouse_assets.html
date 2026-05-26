@@ -126,7 +126,7 @@ async function submitCart() {
       let url = `/api/v1/assets/${it.id}/request-assign?assigned_to_user_id=${uid}&assigned_to_department_id=${did}&notes=${encodeURIComponent(notes)}`;
       if (ad) url += `&assignment_date=${ad}`;
       if (erd) url += `&expected_return_date=${erd}`;
-      const r = await api(url, 'POST');
+      const r = await api(url, { method: 'POST' });
       const data = await r.json();
       if (r.ok) { success++; }
       else { fail++; }

@@ -152,12 +152,15 @@ async function submitCart() {
     item_id: it.id, quantity: it.quantity
   }));
   try {
-    const r = await api('/api/v1/records/batch-borrow', 'POST', {
-      items: items,
-      borrow_date: bd,
-      expected_return_date: rd,
-      reason: document.getElementById('reason').value,
-      contact: document.getElementById('contact').value
+    const r = await api('/api/v1/records/batch-borrow', {
+      method: 'POST',
+      body: JSON.stringify({
+        items: items,
+        borrow_date: bd,
+        expected_return_date: rd,
+        reason: document.getElementById('reason').value,
+        contact: document.getElementById('contact').value
+      })
     });
     const data = await r.json();
     if (r.ok) { showToast(data.message || '提交成功'); cart.clear(); setTimeout(() => location.href = '/records', 1500); }
@@ -191,7 +194,7 @@ async function createItem() {
     total_quantity: document.getElementById('newItemQty').value || 1,
     value: document.getElementById('newItemValue').value || 0,
   });
-  const r = await api(`/api/v1/items/?${params.toString()}`, 'POST');
+  const r = await api(`/api/v1/items/?${params.toString()}`, { method: 'POST' });
   const data = await r.json();
   if (r.ok) { showToast('工具创建成功'); closeModal('create-item-modal'); loadItems(currentPage); }
   else { showToast(data.detail || '创建失败', 'error'); }
