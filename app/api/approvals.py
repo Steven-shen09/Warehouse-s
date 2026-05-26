@@ -7,7 +7,10 @@ from app.services.approval_service import (
     approve, reject, get_pending_approvals, get_overdue_approvals_count,
     approve_by_document, reject_by_document, get_pending_approvals_grouped,
 )
-from app.services.asset_service import approve_assignment, reject_assignment
+from app.services.asset_service import (
+    approve_assignment, reject_assignment,
+    approve_assignments_by_document, reject_assignments_by_document,
+)
 
 router = APIRouter(prefix="/api/v1/approvals", tags=["审核管理"])
 
@@ -297,3 +300,36 @@ def reject_assignment_endpoint(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     return {"message": "固产领用已驳回"}
+
+
+@router.put("/assignments/by-document/{document_no}/approve")
+def approve_assignments_document(
+    document_no: str,
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """按单据号批量通过固产领用"""
+    conn.rollback()
+    with conn.begin():
+        try:
+            result = approve_assignments_by_document(conn, document_no, current_user["id"])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    return result
+
+
+@router.put("/assignments/by-document/{document_no}/reject")
+def reject_assignments_document(
+    document_no: str,
+    comment: str = Query(..., min_length=1),
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """按单据号批量驳回固产领用"""
+    conn.rollback()
+    with conn.begin():
+        try:
+            result = reject_assignments_by_document(conn, document_no)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    return result

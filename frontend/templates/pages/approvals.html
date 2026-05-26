@@ -202,6 +202,20 @@ function showRejectAssignmentForId(id) {
     else { const d = await r.json(); showToast(d.detail, 'error'); }
   });
 }
+async function approveAssignmentDocument(docNo) {
+  showConfirmDialog('全部通过', '确定通过单据 ' + docNo + ' 的所有固产领用申请吗？', async () => {
+    const r = await api('/api/v1/approvals/assignments/by-document/' + encodeURIComponent(docNo) + '/approve', { method: 'PUT' });
+    if (r.ok) { const d = await r.json(); showToast(d.message || '已全部通过'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await r.json(); showToast(d.detail, 'error'); }
+  });
+}
+function showRejectAssignmentDocument(docNo) {
+  showRejectDialog('全部驳回', '确定驳回单据 ' + docNo + ' 的所有固产领用申请吗？', async (reason) => {
+    const r = await api('/api/v1/approvals/assignments/by-document/' + encodeURIComponent(docNo) + '/reject?comment=' + encodeURIComponent(reason), { method: 'PUT' });
+    if (r.ok) { showToast('已全部驳回'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await r.json(); showToast(d.detail, 'error'); }
+  });
+}
 
 // ── 主加载 ──
 async function loadApprovals(page) {
@@ -291,8 +305,8 @@ async function loadApprovals(page) {
     html += '<span>' + g.count + ' 件资产</span>';
     html += '</div>';
     html += '<div style="display:flex;align-items:center;gap:8px;">';
-    html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();doApproveAssignment(' + g.items[0].id + ')">通过首件</button>';
-    html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();showRejectAssignmentForId(' + g.items[0].id + ')">驳回首件</button>';
+    html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveAssignmentDocument(\'' + escapeHtml(g.document_no) + '\')">全部通过</button>';
+    html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();showRejectAssignmentDocument(\'' + escapeHtml(g.document_no) + '\')">全部驳回</button>';
     html += '<span class="doc-group-toggle">▼</span></div></div>';
     html += '<div class="doc-group-body"><table class="table"><thead><tr><th>资产编号</th><th>物品</th><th>规格</th><th>品牌</th><th>操作</th></tr></thead><tbody>';
     for (const aa of g.items) {

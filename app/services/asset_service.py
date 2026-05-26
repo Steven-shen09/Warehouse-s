@@ -319,3 +319,31 @@ def reject_assignment(conn, assignment_id: int):
     conn.execute(text(
         "UPDATE asset_assignments SET status = '已驳回', updated_at = NOW() WHERE id = :aid"
     ), {"aid": assignment_id})
+
+
+def approve_assignments_by_document(conn, document_no: str, approved_by: int):
+    """按单据号批量审核通过固产领用"""
+    rows = conn.execute(text(
+        "SELECT id FROM asset_assignments WHERE document_no = :dn AND status = '待审核'"
+    ), {"dn": document_no}).fetchall()
+    if not rows:
+        raise ValueError("未找到待审核的领用记录")
+    count = 0
+    for row in rows:
+        approve_assignment(conn, row[0], approved_by)
+        count += 1
+    return {"message": f"已通过 {count} 件固产领用", "count": count}
+
+
+def reject_assignments_by_document(conn, document_no: str):
+    """按单据号批量驳回固产领用"""
+    rows = conn.execute(text(
+        "SELECT id FROM asset_assignments WHERE document_no = :dn AND status = '待审核'"
+    ), {"dn": document_no}).fetchall()
+    if not rows:
+        raise ValueError("未找到待审核的领用记录")
+    count = 0
+    for row in rows:
+        reject_assignment(conn, row[0])
+        count += 1
+    return {"message": f"已驳回 {count} 件固产领用", "count": count}
