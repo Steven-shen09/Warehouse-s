@@ -84,6 +84,11 @@ def _extend_existing_tables(conn):
         "CHECK(status IN ('待审核', '使用中', '已交回', '已驳回'))"
     ))
 
+    # consumable_records 修复：移除 document_no 唯一约束，支持批量单据
+    conn.execute(text(
+        "ALTER TABLE consumable_records DROP CONSTRAINT IF EXISTS consumable_records_document_no_key"
+    ))
+
 
 def _create_tables(conn):
     """创建所有数据表（PostgreSQL 语法）"""
@@ -322,7 +327,7 @@ def _create_tables(conn):
         -- 消耗品领用记录
         CREATE TABLE IF NOT EXISTS consumable_records (
             id SERIAL PRIMARY KEY,
-            document_no VARCHAR(50) NOT NULL UNIQUE,
+            document_no VARCHAR(50) NOT NULL,
             item_id INTEGER NOT NULL REFERENCES items(id),
             user_id INTEGER NOT NULL REFERENCES users(id),
             quantity INTEGER NOT NULL CHECK(quantity > 0),
