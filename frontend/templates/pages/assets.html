@@ -172,9 +172,13 @@ async function openAssign(aid) {
   const r = await api('/api/v1/users?page_size=200');
   const data = await r.json();
   document.getElementById('assignUser').innerHTML = (data.users||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
+  document.getElementById('assignDate').style.display = '';
+  document.getElementById('assignReturnDate').style.display = '';
   document.getElementById('assignDate').value = new Date().toISOString().slice(0,10);
   document.getElementById('assignReturnDate').value = '';
   document.getElementById('assignNotes').value = '';
+  document.getElementById('assignBtn').textContent = '确认领用';
+  document.getElementById('assignBtn').onclick = doAssign;
   currentAssetId = aid;
   openModal('assign-modal');
 }
@@ -208,6 +212,8 @@ async function openTransfer(aid) {
   const data = await r.json();
   document.getElementById('assignUser').innerHTML = (data.users||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
   document.getElementById('assignNotes').value = '';
+  document.getElementById('assignReturnDate').style.display = 'none';
+  document.getElementById('assignDate').style.display = 'none';
   document.getElementById('assignBtn').textContent = '确认转移';
   document.getElementById('assignBtn').onclick = async () => {
     const uid = document.getElementById('assignUser').value;
@@ -218,9 +224,9 @@ async function openTransfer(aid) {
     else { showToast(d.detail || '转移失败', 'error'); }
     document.getElementById('assignBtn').textContent = '确认领用';
     document.getElementById('assignBtn').onclick = doAssign;
+    document.getElementById('assignReturnDate').style.display = '';
+    document.getElementById('assignDate').style.display = '';
   };
-  document.getElementById('assignDate').value = '';
-  document.getElementById('assignReturnDate').value = '';
   openModal('assign-modal');
 }
 

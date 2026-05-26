@@ -349,7 +349,7 @@ def do_return(
 def do_transfer(
     asset_id: int,
     new_user_id: int = Query(...),
-    new_department_id: int = Query(...),
+    new_department_id: int = Query(default=None),
     notes: str = Query(default=""),
     current_user: dict = Depends(require_role("admin", "approver")),
     conn=Depends(get_db),
