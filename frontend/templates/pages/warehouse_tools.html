@@ -146,11 +146,17 @@ async function submitCart() {
   const rd = document.getElementById('returnDate').value;
   if (!bd || !rd) { showToast('请填写借出日期和预计归还日期', 'error'); return; }
   if (cart.isEmpty()) { showToast('请先选择要租借的工具', 'error'); return; }
-  const itemsJson = JSON.stringify(Object.values(cart.items).map(it => ({
-    item_id: it.id, quantity: it.quantity, warehouse_id: it.warehouse_id
-  })));
+  const items = Object.values(cart.items).map(it => ({
+    item_id: it.id, quantity: it.quantity
+  }));
   try {
-    const res = await api(`/api/v1/records/batch-borrow?items_json=${encodeURIComponent(itemsJson)}&borrow_date=${bd}&expected_return_date=${rd}&reason=${encodeURIComponent(document.getElementById('reason').value)}&contact=${encodeURIComponent(document.getElementById('contact').value)}`, 'POST');
+    const res = await api('/api/v1/records/batch-borrow', 'POST', {
+      items: items,
+      borrow_date: bd,
+      expected_return_date: rd,
+      reason: document.getElementById('reason').value,
+      contact: document.getElementById('contact').value
+    });
     showToast(res.message || '提交成功');
     cart.clear();
     setTimeout(() => location.href = '/records', 1500);
