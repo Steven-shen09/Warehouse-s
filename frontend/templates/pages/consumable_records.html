@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}消耗品领用 - Warehouse-s{% endblock %}
+{% block title %}耗材领用记录 - Warehouse-s{% endblock %}
 {% block content %}
-<h2>消耗品领用管理</h2>
+<h2>耗材领用记录</h2>
 
 <div class="card" style="margin-bottom: 20px;">
   <div class="card-body" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
@@ -11,36 +11,36 @@
       <option value="已领取">已领取</option>
       <option value="已拒绝">已拒绝</option>
     </select>
-    <button class="btn btn-primary" onclick="openPickupModal()"><i class="bi bi-cart-plus"></i> 领用申请</button>
   </div>
 </div>
 
-<div class="card">
-  <div class="card-body">
-    <div class="table-wrapper">
-      <table class="table">
-        <thead><tr><th>单号</th><th>物品</th><th>数量</th><th>领用人</th><th>仓库</th><th>日期</th><th>状态</th><th>操作</th></tr></thead>
-        <tbody id="recordTableBody"></tbody>
-      </table>
+<div id="records-container">
+  <div style="text-align:center;padding:48px;color:var(--text-muted);">加载中...</div>
+</div>
+
+<!-- 通用确认弹窗 -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <div class="modal-header"><span id="confirm-title">确认操作</span><button class="btn btn-outline btn-sm" onclick="closeModal('confirm-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body"><p id="confirm-message" style="color:var(--text-secondary);"></p><div id="confirm-extra"></div></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('confirm-modal')">取消</button>
+      <button class="btn btn-success" id="confirm-btn">确认</button>
     </div>
-    <div id="pagination" style="margin-top: 12px; display: flex; gap: 8px; justify-content: center;"></div>
   </div>
 </div>
 
-<!-- 领用申请模态框 -->
-<div class="modal-overlay" id="pickup-modal">
-  <div class="modal" style="max-width: 600px;">
-    <div class="modal-header"><span>消耗品领用申请</span><button class="btn btn-outline btn-sm" onclick="closeModal('pickup-modal')"><i class="bi bi-x-lg"></i></button></div>
+<!-- 驳回弹窗 -->
+<div class="modal-overlay" id="reject-modal">
+  <div class="modal">
+    <div class="modal-header"><span id="reject-title">驳回申请</span><button class="btn btn-outline btn-sm" onclick="closeModal('reject-modal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body">
-      <div class="form-group"><label class="form-label">消耗品 *</label><select id="pickupItem" class="form-input" onchange="onItemChange()"></select></div>
-      <div class="form-group"><label class="form-label">数量 *</label><input type="number" id="pickupQty" class="form-input" min="1" value="1" style="max-width: 120px;"></div>
-      <div class="form-group"><label class="form-label">仓库 *</label><select id="pickupWarehouse" class="form-input"></select></div>
-      <div class="form-group"><label class="form-label">领用日期 *</label><input type="date" id="pickupDate" class="form-input"></div>
-      <div class="form-group"><label class="form-label">事由</label><input type="text" id="pickupReason" class="form-input"></div>
+      <p id="reject-message" style="color:var(--text-secondary);"></p>
+      <div class="form-group" style="margin-top:12px;"><label class="form-label">驳回原因 *</label><textarea id="reject-reason" class="form-input" rows="2" placeholder="请填写驳回原因（必填）"></textarea></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('pickup-modal')">取消</button>
-      <button class="btn btn-primary" onclick="submitPickup()">提交申请</button>
+      <button class="btn btn-outline" onclick="closeModal('reject-modal')">取消</button>
+      <button class="btn btn-danger" id="reject-btn">确认驳回</button>
     </div>
   </div>
 </div>
@@ -48,85 +48,126 @@
 
 {% block scripts %}
 <script>
-let currentPage = 1;
+let _confirmCb = null, _rejectCb = null;
 
-async function initPickupForm() {
-  const [itemsRes, warehousesRes] = await Promise.all([
-    api('/api/v1/items?page_size=500&item_type=consumable'),
-    api('/api/v1/warehouses')
-  ]);
-  // 筛选消耗品
-  const consumables = (itemsRes.items || []).filter(i => i.item_type === 'consumable');
-  window._consumables = consumables;
-  document.getElementById('pickupItem').innerHTML = consumables.map(i => `<option value="${i.id}">${esc(i.name)}（可用：${i.available_quantity}）</option>`).join('');
-  document.getElementById('pickupWarehouse').innerHTML = warehouses.warehouses.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('');
+document.getElementById('confirm-btn').addEventListener('click', () => {
+  if (_confirmCb) { closeModal('confirm-modal'); _confirmCb(); _confirmCb = null; }
+});
+document.getElementById('reject-btn').addEventListener('click', () => {
+  const reason = document.getElementById('reject-reason').value.trim();
+  if (!reason) { showToast('请填写驳回原因', 'error'); return; }
+  if (_rejectCb) { closeModal('reject-modal'); _rejectCb(reason); _rejectCb = null; }
+});
+
+function showConfirm(title, msg, cb) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-message').textContent = msg;
+  document.getElementById('confirm-extra').innerHTML = '';
+  _confirmCb = cb;
+  openModal('confirm-modal');
 }
 
-function onItemChange() {
-  const itemId = parseInt(document.getElementById('pickupItem').value);
-  const item = (window._consumables || []).find(i => i.id === itemId);
-  if (item && item.warehouse_stocks && item.warehouse_stocks.length > 0) {
-    document.getElementById('pickupWarehouse').value = item.warehouse_stocks[0].warehouse_id;
-  }
+function showReject(title, msg, cb) {
+  document.getElementById('reject-title').textContent = title;
+  document.getElementById('reject-message').textContent = msg;
+  document.getElementById('reject-reason').value = '';
+  _rejectCb = cb;
+  openModal('reject-modal');
 }
 
-async function loadRecords(page = 1) {
-  currentPage = page;
+function toggleDocGroup(h) {
+  const b = h.nextElementSibling, t = h.querySelector('.doc-group-toggle');
+  if (b.style.display === 'none') { b.style.display = ''; t.textContent = '▼'; }
+  else { b.style.display = 'none'; t.textContent = '▶'; }
+}
+
+async function loadRecords() {
   const st = document.getElementById('statusFilter').value;
-  const res = await api(`/api/v1/consumable-records?status=${st}&page=${page}`);
-  document.getElementById('recordTableBody').innerHTML = res.records.map(r => `
-    <tr>
-      <td><span class="status-badge">${esc(r.document_no)}</span></td>
-      <td>${esc(r.item_name)}</td><td>${r.quantity}</td><td>${esc(r.user_name)}</td>
-      <td>${esc(r.warehouse_name)}</td><td>${r.pickup_date}</td>
-      <td><span class="status-badge ${r.status === '已领取' ? 'returned' : r.status === '已拒绝' ? 'rejected' : 'pending'}">${r.status}</span></td>
-      <td>
-        {% if current_user.role in ('admin', 'approver') %}
-        ${r.status === '待审核' ? `<button class="btn btn-success btn-sm" onclick="approveRecord(${r.id})">通过</button><button class="btn btn-danger btn-sm" onclick="rejectRecord(${r.id})">驳回</button>` : ''}
-        {% endif %}
-      </td>
-    </tr>`).join('');
-  renderPagination(res.total, page, 'loadRecords');
-}
+  const r = await api(`/api/v1/consumable-records?status=${encodeURIComponent(st)}&page_size=200`);
+  const data = await r.json();
+  const records = data.records || [];
 
-function openPickupModal() {
-  document.getElementById('pickupDate').value = new Date().toISOString().slice(0,10);
-  document.getElementById('pickupQty').value = 1;
-  document.getElementById('pickupReason').value = '';
-  initPickupForm();
-  openModal('pickup-modal');
-}
+  const container = document.getElementById('records-container');
+  if (records.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-inbox"></i></div><p>暂无耗材领用记录</p></div>';
+    return;
+  }
 
-async function submitPickup() {
-  const itemId = parseInt(document.getElementById('pickupItem').value);
-  const qty = parseInt(document.getElementById('pickupQty').value);
-  const wid = parseInt(document.getElementById('pickupWarehouse').value);
-  const pdate = document.getElementById('pickupDate').value;
-  const reason = document.getElementById('pickupReason').value;
-  if (!itemId || !qty || !wid || !pdate) { showToast('请完整填写信息', 'error'); return; }
-  try {
-    const res = await api(`/api/v1/consumable-records?item_id=${itemId}&quantity=${qty}&source_warehouse_id=${wid}&pickup_date=${pdate}&reason=${encodeURIComponent(reason)}`, 'POST');
-    showToast(`领用申请已提交（${res.document_no}）`);
-    closeModal('pickup-modal');
-    loadRecords();
-  } catch(e) { showToast('提交失败：' + (e.message || ''), 'error'); }
+  // 按单据号分组
+  const groups = {};
+  for (const rec of records) {
+    const key = rec.document_no || 'LY-' + rec.id;
+    if (!groups[key]) {
+      groups[key] = {
+        document_no: key,
+        user_name: rec.user_name,
+        pickup_date: rec.pickup_date,
+        items: [],
+        count: 0,
+        anyPending: false,
+        allRejected: true,
+        allPicked: true,
+      };
+    }
+    groups[key].items.push(rec);
+    groups[key].count += rec.quantity;
+    if (rec.status === '待审核') groups[key].anyPending = true;
+    if (rec.status !== '已拒绝') groups[key].allRejected = false;
+    if (rec.status !== '已领取') groups[key].allPicked = false;
+  }
+
+  let html = '';
+  for (const [docNo, g] of Object.entries(groups)) {
+    const gStatus = g.allPicked ? '已领取' : (g.allRejected ? '已拒绝' : (g.anyPending ? '待审核' : '已领取'));
+    const badgeClass = gStatus === '已领取' ? 'returned' : (gStatus === '已拒绝' ? 'rejected' : 'pending');
+
+    html += '<div class="doc-group">';
+    html += '<div class="doc-group-header" onclick="toggleDocGroup(this)">';
+    html += '<div class="doc-group-meta">';
+    html += '<strong>单据号: ' + esc(g.document_no) + '</strong>';
+    html += '<span class="status-badge ' + badgeClass + '" style="font-size:11px;">' + gStatus + '</span>';
+    html += '<span>申领人: ' + esc(g.user_name || '') + '</span>';
+    html += '<span>' + g.items.length + ' 种物品 / 共 ' + g.count + ' 件</span>';
+    html += '<span>' + (g.pickup_date || '') + '</span>';
+    html += '</div>';
+    html += '<span class="doc-group-toggle">▼</span></div>';
+    html += '<div class="doc-group-body"><table class="table"><thead><tr><th>物品</th><th>仓库</th><th>数量</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+    for (const rec of g.items) {
+      html += '<tr>';
+      html += '<td>' + esc(rec.item_name || '') + '</td>';
+      html += '<td>' + esc(rec.warehouse_name || '-') + '</td>';
+      html += '<td>' + rec.quantity + '</td>';
+      html += '<td><span class="status-badge ' + (rec.status === '已领取' ? 'returned' : rec.status === '已拒绝' ? 'rejected' : 'pending') + '">' + rec.status + '</span></td>';
+      html += '<td>';
+      {% if current_user.role in ('admin', 'approver') %}
+      if (rec.status === '待审核') {
+        html += '<button class="btn btn-success btn-sm" onclick="approveRecord(' + rec.id + ')">通过</button> ';
+        html += '<button class="btn btn-danger btn-sm" onclick="rejectRecord(' + rec.id + ')">驳回</button>';
+      }
+      {% endif %}
+      html += '</td></tr>';
+    }
+    html += '</tbody></table></div></div>';
+  }
+  container.innerHTML = html;
 }
 
 async function approveRecord(id) {
-  showConfirmDialog('审核通过', '确认通过该领用申请？（库存将被永久扣减）', async () => {
-    await api(`/api/v1/consumable-records/${id}/approve`, 'PUT');
-    showToast('领用已通过，库存已扣减');
-    loadRecords(currentPage);
+  showConfirm('确认通过', '确定通过该耗材领用申请？（库存将被永久扣减）', async () => {
+    const r = await api('/api/v1/consumable-records/' + id + '/approve?comment=', { method: 'PUT' });
+    const d = await r.json();
+    if (r.ok) { showToast(d.message || '已通过'); loadRecords(); }
+    else { showToast(d.detail || '操作失败', 'error'); }
   });
 }
 
 async function rejectRecord(id) {
-  showConfirmDialog('驳回申请', '<textarea id="rejectComment" class="form-input" rows="2" placeholder="请填写驳回原因"></textarea>', async () => {
-    const comment = document.getElementById('rejectComment').value;
-    if (!comment) { showToast('请填写驳回原因', 'error'); return; }
-    await api(`/api/v1/consumable-records/${id}/reject?comment=${encodeURIComponent(comment)}`, 'PUT');
-    showToast('已驳回'); loadRecords(currentPage);
-  }, { html: true });
+  showReject('驳回领用', '确定驳回该耗材领用申请吗？', async (reason) => {
+    const r = await api('/api/v1/consumable-records/' + id + '/reject?comment=' + encodeURIComponent(reason), { method: 'PUT' });
+    const d = await r.json();
+    if (r.ok) { showToast(d.message || '已驳回'); loadRecords(); }
+    else { showToast(d.detail || '操作失败', 'error'); }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', () => loadRecords());
