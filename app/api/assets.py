@@ -249,6 +249,8 @@ def update_asset(
     notes: str = Query(default=None),
     current_user_id: int = Query(default=None),
     current_department_id: int = Query(default=None),
+    user_name: str = Query(default=None),
+    department_name: str = Query(default=None),
     current_user: dict = Depends(require_role("admin", "approver")),
     conn=Depends(get_db),
 ):
@@ -275,6 +277,10 @@ def update_asset(
         updates["current_user_id"] = current_user_id
     if current_department_id is not None:
         updates["current_department_id"] = current_department_id
+    if user_name is not None:
+        updates["user_name"] = user_name
+    if department_name is not None:
+        updates["department_name"] = department_name
 
     if updates:
         set_clause = ", ".join(f"{k} = :{k}" for k in updates)
