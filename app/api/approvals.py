@@ -1,5 +1,5 @@
 """审核路由"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from app.api.deps import get_db, get_current_user, require_role
 from app.schemas.approval import ApproveRequest, RejectRequest
@@ -7,6 +7,7 @@ from app.services.approval_service import (
     approve, reject, get_pending_approvals, get_overdue_approvals_count,
     approve_by_document, reject_by_document, get_pending_approvals_grouped,
 )
+from app.services.asset_service import approve_assignment, reject_assignment
 
 router = APIRouter(prefix="/api/v1/approvals", tags=["审核管理"])
 
@@ -30,6 +31,12 @@ def approval_stats(
     """审核统计数据"""
     total_pending = conn.execute(text("SELECT COUNT(*) FROM records WHERE status = '待审核'")).fetchone()[0]
     transfer_pending = conn.execute(text("SELECT COUNT(*) FROM transfers WHERE status = '待审核'")).fetchone()[0]
+    consumable_pending = conn.execute(text(
+        "SELECT COUNT(*) FROM consumable_records WHERE status = '待审核'"
+    )).fetchone()[0]
+    asset_pending = conn.execute(text(
+        "SELECT COUNT(*) FROM asset_assignments WHERE status = '待审核'"
+    )).fetchone()[0]
     total_overtime = get_overdue_approvals_count(conn)
     today_processed = conn.execute(text(
         "SELECT COUNT(*) FROM approvals WHERE date(created_at) = CURRENT_DATE"
@@ -40,6 +47,8 @@ def approval_stats(
     return {
         "total_pending": total_pending,
         "transfer_pending": transfer_pending,
+        "consumable_pending": consumable_pending,
+        "asset_pending": asset_pending,
         "total_overtime": total_overtime,
         "today_processed": today_processed,
         "to_return": to_return,
@@ -207,3 +216,64 @@ def list_pending_transfers(
     paged = all_groups[offset:offset + page_size]
 
     return {"groups": paged, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/pending-assignments")
+def list_pending_assignments(
+    page: int = 1,
+    page_size: int = 20,
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """待审核固产领用列表"""
+    total = conn.execute(text(
+        "SELECT COUNT(*) FROM asset_assignments WHERE status = '待审核'"
+    )).fetchone()[0]
+    offset = (page - 1) * page_size
+
+    rows = conn.execute(text(
+        "SELECT aa.*, ai.asset_code, i.name AS item_name, i.specification, i.brand, "
+        "u.display_name AS user_name, d.name AS department_name "
+        "FROM asset_assignments aa "
+        "JOIN asset_instances ai ON aa.asset_instance_id = ai.id "
+        "JOIN items i ON ai.item_id = i.id "
+        "LEFT JOIN users u ON aa.assigned_to_user_id = u.id "
+        "LEFT JOIN departments d ON aa.assigned_to_department_id = d.id "
+        "WHERE aa.status = '待审核' ORDER BY aa.id DESC LIMIT :limit OFFSET :offset"
+    ), {"limit": page_size, "offset": offset}).fetchall()
+
+    return {"assignments": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
+
+
+@router.put("/assignments/{assignment_id}/approve")
+def approve_assignment_endpoint(
+    assignment_id: int,
+    comment: str = Query(default=""),
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """审核通过固产领用"""
+    conn.rollback()
+    with conn.begin():
+        try:
+            approve_assignment(conn, assignment_id, current_user["id"])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    return {"message": "固产领用审核通过"}
+
+
+@router.put("/assignments/{assignment_id}/reject")
+def reject_assignment_endpoint(
+    assignment_id: int,
+    comment: str = Query(..., min_length=1),
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """驳回固产领用"""
+    conn.rollback()
+    with conn.begin():
+        try:
+            reject_assignment(conn, assignment_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    return {"message": "固产领用已驳回"}

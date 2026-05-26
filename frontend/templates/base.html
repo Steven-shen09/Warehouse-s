@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
   <title>{% block title %}Warehouse-s 物品租借系统{% endblock %}</title>
   <link rel="stylesheet" href="/static/css/bootstrap-icons.css">
   <link rel="stylesheet" href="/static/css/style.css">
@@ -34,10 +35,19 @@
       <a href="/dashboard" class="{{ 'active' if active_page == 'dashboard' }}">
         <i class="bi bi-speedometer2"></i> 仪表盘
       </a>
-      <a href="/items" class="{{ 'active' if active_page == 'items' }}">
-        <i class="bi bi-box"></i> 物品管理
+      <a href="/warehouse/consumables" class="{{ 'active' if active_page == 'warehouse-consumables' }}">
+        <i class="bi bi-droplet"></i> 耗材仓库
+      </a>
+      <a href="/warehouse/tools" class="{{ 'active' if active_page == 'warehouse-tools' }}">
+        <i class="bi bi-tools"></i> 工具仓库
+      </a>
+      <a href="/warehouse/assets" class="{{ 'active' if active_page == 'warehouse-assets' }}">
+        <i class="bi bi-pc-display"></i> 固产仓库
       </a>
       {% if current_user.role in ('admin', 'approver') %}
+      <a href="/purchase-orders" class="{{ 'active' if active_page == 'purchase-orders' }}">
+        <i class="bi bi-cart-plus"></i> 采购入库
+      </a>
       <a href="/warehouses" class="{{ 'active' if active_page == 'warehouses' }}">
         <i class="bi bi-building"></i> 仓库管理
       </a>
@@ -47,13 +57,17 @@
       <a href="/inventory-counts" class="{{ 'active' if active_page == 'inventory-counts' }}">
         <i class="bi bi-clipboard-check"></i> 盘点管理
       </a>
-      {% endif %}
-      <a href="/records" class="{{ 'active' if active_page == 'records' }}">
-        <i class="bi bi-journal-text"></i> 租借记录
-      </a>
-      {% if current_user.role in ('admin', 'approver') %}
       <a href="/approvals" class="{{ 'active' if active_page == 'approvals' }}">
         <i class="bi bi-check-circle"></i> 审核管理
+      </a>
+      <a href="/records" class="{{ 'active' if active_page == 'records' }}">
+        <i class="bi bi-journal-text"></i> 工具租借记录
+      </a>
+      <a href="/consumable-records" class="{{ 'active' if active_page == 'consumable-records' }}">
+        <i class="bi bi-droplet"></i> 耗材领用记录
+      </a>
+      <a href="/assets" class="{{ 'active' if active_page == 'assets' }}">
+        <i class="bi bi-pc-display"></i> 固定资产管理
       </a>
       {% endif %}
       {% if current_user.role == 'admin' %}

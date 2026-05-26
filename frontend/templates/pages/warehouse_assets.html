@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}固产仓库 - Warehouse-s{% endblock %}
+{% block content %}
+<h2>固产仓库</h2>
+
+<div class="card" style="margin-bottom: 20px;">
+  <div class="card-body" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+    <input type="text" id="searchInput" class="form-input" placeholder="搜索名称/资产编号..." style="max-width: 240px;" oninput="loadAssets()">
+    <select id="categoryFilter" class="form-input" style="max-width: 140px;" onchange="loadAssets()">
+      <option value="">全部分类</option>
+    </select>
+  </div>
+</div>
+
+<div style="display: flex; gap: 20px;">
+  <div class="card" style="flex: 1;">
+    <div class="card-body">
+      <div class="table-wrapper">
+        <table class="table">
+          <thead><tr><th>资产编号</th><th>名称</th><th>分类</th><th>规格</th><th>品牌</th><th>仓库</th><th>操作</th></tr></thead>
+          <tbody id="assetTableBody"></tbody>
+        </table>
+      </div>
+      <div id="pagination" style="margin-top: 12px; display: flex; gap: 8px; justify-content: center;"></div>
+    </div>
+  </div>
+
+  <div class="card" id="cart-panel" style="width: 360px; flex-shrink: 0; position: sticky; top: 80px; align-self: flex-start;">
+    <div class="card-body">
+      <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+        领用清单
+        <button class="btn btn-outline btn-sm" onclick="cart.clear(); cart.render();">清空</button>
+      </div>
+      <div id="cartItems" style="max-height: 300px; overflow-y: auto;">
+        <p style="color: var(--text-muted); text-align: center; padding: 40px 0;">购物车为空</p>
+      </div>
+      <div id="cartSummary" style="display: none;">
+        <hr>
+        <div class="form-group"><label class="form-label">使用人 *</label><select id="assignUser" class="form-input"></select></div>
+        <div class="form-group"><label class="form-label">部门 *</label><select id="assignDept" class="form-input"></select></div>
+        <div class="form-group"><label class="form-label">领用日期</label><input type="date" id="assignDate" class="form-input"></div>
+        <div class="form-group"><label class="form-label">预计归还日期</label><input type="date" id="assignReturnDate" class="form-input"></div>
+        <div class="form-group"><label class="form-label">备注</label><input type="text" id="assignNotes" class="form-input"></div>
+        <button class="btn btn-primary" style="width: 100%;" onclick="submitCart()">提交领用清单（<span id="cartCount">0</span>件）</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+const cart = {
+  items: {},
+  add(item) {
+    if (!this.items[item.id]) {
+      this.items[item.id] = { id: item.id, name: item.name, asset_code: item.asset_code };
+    }
+    this.render();
+  },
+  remove(itemId) { delete this.items[itemId]; this.render(); },
+  clear() { this.items = {}; this.render(); },
+  get count() { return Object.keys(this.items).length; },
+  get totalItems() { return this.count; },
+  isEmpty() { return this.count === 0; },
+  render() {
+    const container = document.getElementById('cartItems');
+    const summary = document.getElementById('cartSummary');
+    if (this.isEmpty()) {
+      container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 40px 0;">购物车为空</p>';
+      summary.style.display = 'none';
+      return;
+    }
+    container.innerHTML = Object.values(this.items).map(it => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg);">
+        <div style="flex:1;">
+          <strong>${esc(it.name)}</strong>
+          <span style="color:var(--text-muted);font-size:12px;display:block;">${esc(it.asset_code||'无编号')}</span>
+        </div>
+        <button class="btn btn-outline btn-sm" style="color:var(--danger);" onclick="cart.remove(${it.id})"><i class="bi bi-trash"></i></button>
+      </div>`).join('');
+    summary.style.display = 'block';
+    document.getElementById('cartCount').textContent = this.totalItems;
+  }
+};
+
+async function loadCategories() {
+  const res = await api('/api/v1/warehouse-items/categories?item_type=fixed_asset');
+  document.getElementById('categoryFilter').innerHTML = '<option value="">全部分类</option>'
+    + res.categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+}
+
+async function loadAssets(page = 1) {
+  currentPage = page;
+  const kw = document.getElementById('searchInput').value;
+  const cat = document.getElementById('categoryFilter').value;
+  const res = await api(`/api/v1/warehouse-items/assets?keyword=${encodeURIComponent(kw)}&category=${encodeURIComponent(cat)}&page=${page}`);
+  document.getElementById('assetTableBody').innerHTML = res.assets.map(a => `
+    <tr>
+      <td><span class="status-badge">${esc(a.asset_code||'-')}</span></td>
+      <td>${esc(a.item_name)}</td><td>${esc(a.category||'-')}</td>
+      <td>${esc(a.specification||'-')}</td><td>${esc(a.brand||'-')}</td>
+      <td>${esc(a.warehouse_name||'-')}</td>
+      <td>
+        <button class="btn btn-primary btn-sm" onclick="cart.add({id:${a.id},name:'${esc(a.item_name).replace(/'/g, "\\'")}',asset_code:'${esc(a.asset_code||'').replace(/'/g, "\\'")}'})">选择</button>
+      </td>
+    </tr>`).join('');
+  renderPagination(res.total, page, 'loadAssets');
+}
+
+async function submitCart() {
+  const uid = document.getElementById('assignUser').value;
+  const did = document.getElementById('assignDept').value;
+  if (!uid || !did) { showToast('请选择使用人和部门', 'error'); return; }
+  if (cart.isEmpty()) { showToast('请先选择要领用的资产', 'error'); return; }
+  const ad = document.getElementById('assignDate').value;
+  const erd = document.getElementById('assignReturnDate').value;
+  const notes = document.getElementById('assignNotes').value;
+
+  let success = 0, fail = 0;
+  for (const it of Object.values(cart.items)) {
+    try {
+      let url = `/api/v1/assets/${it.id}/request-assign?assigned_to_user_id=${uid}&assigned_to_department_id=${did}&notes=${encodeURIComponent(notes)}`;
+      if (ad) url += `&assignment_date=${ad}`;
+      if (erd) url += `&expected_return_date=${erd}`;
+      await api(url, 'POST');
+      success++;
+    } catch(e) { fail++; }
+  }
+  if (fail === 0) {
+    showToast(`${success}件资产领用申请已提交`);
+  } else {
+    showToast(`${success}件成功，${fail}件失败`, 'warning');
+  }
+  cart.clear();
+  loadAssets(currentPage);
+}
+
+async function loadUserDeptOptions() {
+  const [usersR, deptsR] = await Promise.all([
+    api('/api/v1/users?page_size=200'),
+    api('/api/v1/departments')
+  ]);
+  document.getElementById('assignUser').innerHTML = (usersR.users||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
+  document.getElementById('assignDept').innerHTML = (deptsR.departments||[]).map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadCategories();
+  loadAssets();
+  loadUserDeptOptions();
+  document.getElementById('assignDate').value = new Date().toISOString().slice(0,10);
+});
+</script>
+{% endblock %}

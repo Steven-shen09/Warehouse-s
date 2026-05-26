@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}工具仓库 - Warehouse-s{% endblock %}
+{% block content %}
+<h2>工具仓库</h2>
+
+<div class="card" style="margin-bottom: 20px;">
+  <div class="card-body" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+    <input type="text" id="searchInput" class="form-input" placeholder="搜索工具名称..." style="max-width: 220px;" oninput="loadItems()">
+    <select id="categoryFilter" class="form-input" style="max-width: 140px;" onchange="loadItems()">
+      <option value="">全部分类</option>
+    </select>
+    {% if current_user.role in ('admin', 'approver') %}
+    <button class="btn btn-primary btn-sm" onclick="openCreateModal()">新增工具</button>
+    {% endif %}
+  </div>
+</div>
+
+<div style="display: flex; gap: 20px;">
+  <div class="card" style="flex: 1;">
+    <div class="card-body">
+      <div class="table-wrapper">
+        <table class="table">
+          <thead><tr><th>名称</th><th>分类</th><th>规格</th><th>品牌</th><th>可用数量</th><th>操作</th></tr></thead>
+          <tbody id="itemTableBody"></tbody>
+        </table>
+      </div>
+      <div id="pagination" style="margin-top: 12px; display: flex; gap: 8px; justify-content: center;"></div>
+    </div>
+  </div>
+
+  <div class="card" id="cart-panel" style="width: 340px; flex-shrink: 0; position: sticky; top: 80px; align-self: flex-start;">
+    <div class="card-body">
+      <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+        租借清单
+        <button class="btn btn-outline btn-sm" onclick="cart.clear(); cart.render();">清空</button>
+      </div>
+      <div id="cartItems" style="max-height: 360px; overflow-y: auto;">
+        <p style="color: var(--text-muted); text-align: center; padding: 40px 0;">购物车为空</p>
+      </div>
+      <div id="cartSummary" style="display: none;">
+        <hr>
+        <div class="form-group"><label class="form-label">借出日期 *</label><input type="date" id="borrowDate" class="form-input"></div>
+        <div class="form-group"><label class="form-label">预计归还日期 *</label><input type="date" id="returnDate" class="form-input"></div>
+        <div class="form-group"><label class="form-label">联系方式</label><input type="text" id="contact" class="form-input" value="{{ current_user.phone or '' }}"></div>
+        <div class="form-group"><label class="form-label">租借事由</label><input type="text" id="reason" class="form-input"></div>
+        <button class="btn btn-primary" style="width: 100%;" onclick="submitCart()">提交租借清单（<span id="cartCount">0</span>件）</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="create-item-modal">
+  <div class="modal">
+    <div class="modal-header"><span>新增工具</span><button class="btn btn-outline btn-sm" onclick="closeModal('create-item-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">名称 *</label><input type="text" id="newItemName" class="form-input"></div>
+      <div class="form-group"><label class="form-label">分类</label><input type="text" id="newItemCategory" class="form-input"></div>
+      <div class="form-group"><label class="form-label">规格</label><input type="text" id="newItemSpec" class="form-input"></div>
+      <div class="form-group"><label class="form-label">品牌</label><input type="text" id="newItemBrand" class="form-input"></div>
+      <div class="form-group"><label class="form-label">总数量</label><input type="number" id="newItemQty" class="form-input" value="1" min="1"></div>
+      <div class="form-group"><label class="form-label">单价（元）</label><input type="number" id="newItemValue" class="form-input" value="0" step="0.01"></div>
+      <div class="form-group"><label class="form-label">存放仓库</label><select id="newItemWarehouse" class="form-input"></select></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('create-item-modal')">取消</button>
+      <button class="btn btn-primary" onclick="createItem()">创建</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+const cart = {
+  items: {},
+  add(item) {
+    if (this.items[item.id]) {
+      if (this.items[item.id].quantity < item.max) this.items[item.id].quantity++;
+    } else {
+      this.items[item.id] = { id: item.id, name: item.name, max: item.max, quantity: 1, warehouse_id: item.warehouse_id };
+    }
+    this.render();
+  },
+  remove(itemId) { delete this.items[itemId]; this.render(); },
+  updateQuantity(itemId, delta) {
+    const it = this.items[itemId];
+    if (!it) return;
+    it.quantity += delta;
+    if (it.quantity <= 0) { delete this.items[itemId]; }
+    else if (it.quantity > it.max) { it.quantity = it.max; }
+    this.render();
+  },
+  clear() { this.items = {}; this.render(); },
+  get count() { return Object.keys(this.items).length; },
+  get totalItems() { return Object.values(this.items).reduce((s, it) => s + it.quantity, 0); },
+  isEmpty() { return this.count === 0; },
+  render() {
+    const container = document.getElementById('cartItems');
+    const summary = document.getElementById('cartSummary');
+    if (this.isEmpty()) {
+      container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 40px 0;">购物车为空</p>';
+      summary.style.display = 'none';
+      return;
+    }
+    container.innerHTML = Object.values(this.items).map(it => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg);">
+        <div style="flex:1;"><strong>${esc(it.name)}</strong></div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="cart.updateQuantity(${it.id},-1)">-</button>
+          <span style="min-width:24px;text-align:center;">${it.quantity}</span>
+          <button class="btn btn-outline btn-sm" onclick="cart.updateQuantity(${it.id},1)">+</button>
+          <button class="btn btn-outline btn-sm" style="color:var(--danger);" onclick="cart.remove(${it.id})"><i class="bi bi-trash"></i></button>
+        </div>
+      </div>`).join('');
+    summary.style.display = 'block';
+    document.getElementById('cartCount').textContent = this.totalItems;
+  }
+};
+
+async function loadCategories() {
+  const res = await api('/api/v1/warehouse-items/categories?item_type=tool');
+  document.getElementById('categoryFilter').innerHTML = '<option value="">全部分类</option>'
+    + res.categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+}
+
+async function loadItems(page = 1) {
+  currentPage = page;
+  const kw = document.getElementById('searchInput').value;
+  const cat = document.getElementById('categoryFilter').value;
+  const res = await api(`/api/v1/warehouse-items/tools?keyword=${encodeURIComponent(kw)}&category=${encodeURIComponent(cat)}&page=${page}`);
+  document.getElementById('itemTableBody').innerHTML = res.items.map(it => `
+    <tr>
+      <td>${esc(it.name)}</td><td>${esc(it.category||'-')}</td>
+      <td>${esc(it.specification||'-')}</td><td>${esc(it.brand||'-')}</td>
+      <td><span class="status-badge ${(it.stock_quantity||0) > 0 ? 'available' : 'damaged'}">${it.stock_quantity||0}</span></td>
+      <td>
+        ${(it.stock_quantity||0) > 0 ? `<button class="btn btn-primary btn-sm" onclick="cart.add({id:${it.id},name:'${esc(it.name).replace(/'/g, "\\'")}',max:${it.stock_quantity||0},warehouse_id:${it.warehouse_id||0}})">加入</button>` : '<span style="color:var(--text-muted);">无库存</span>'}
+      </td>
+    </tr>`).join('');
+  renderPagination(res.total, page, 'loadItems');
+}
+
+async function submitCart() {
+  const bd = document.getElementById('borrowDate').value;
+  const rd = document.getElementById('returnDate').value;
+  if (!bd || !rd) { showToast('请填写借出日期和预计归还日期', 'error'); return; }
+  if (cart.isEmpty()) { showToast('请先选择要租借的工具', 'error'); return; }
+  const itemsJson = JSON.stringify(Object.values(cart.items).map(it => ({
+    item_id: it.id, quantity: it.quantity, warehouse_id: it.warehouse_id
+  })));
+  try {
+    const res = await api(`/api/v1/records/batch-borrow?items_json=${encodeURIComponent(itemsJson)}&borrow_date=${bd}&expected_return_date=${rd}&reason=${encodeURIComponent(document.getElementById('reason').value)}&contact=${encodeURIComponent(document.getElementById('contact').value)}`, 'POST');
+    showToast(res.message || '提交成功');
+    cart.clear();
+    setTimeout(() => location.href = '/records', 1500);
+  } catch(e) { showToast('提交失败：' + (e.message||''), 'error'); }
+}
+
+async function openCreateModal() {
+  const res = await api('/api/v1/warehouses/');
+  document.getElementById('newItemWarehouse').innerHTML = res.warehouses
+    .filter(w => w.warehouse_type === 'tool' || w.warehouse_type === 'mixed')
+    .map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('');
+  document.getElementById('newItemName').value = '';
+  document.getElementById('newItemCategory').value = '';
+  document.getElementById('newItemSpec').value = '';
+  document.getElementById('newItemBrand').value = '';
+  document.getElementById('newItemQty').value = '1';
+  document.getElementById('newItemValue').value = '0';
+  openModal('create-item-modal');
+}
+
+async function createItem() {
+  const name = document.getElementById('newItemName').value.trim();
+  if (!name) { showToast('请输入名称', 'error'); return; }
+  const params = new URLSearchParams({
+    name, item_type: 'tool',
+    category: document.getElementById('newItemCategory').value,
+    specification: document.getElementById('newItemSpec').value,
+    brand: document.getElementById('newItemBrand').value,
+    total_quantity: document.getElementById('newItemQty').value || 1,
+    value: document.getElementById('newItemValue').value || 0,
+  });
+  await api(`/api/v1/items/?${params.toString()}`, 'POST');
+  showToast('工具创建成功'); closeModal('create-item-modal'); loadItems(currentPage);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadCategories();
+  loadItems();
+  document.getElementById('borrowDate').value = new Date().toISOString().slice(0,10);
+  const nextMonth = new Date(); nextMonth.setMonth(nextMonth.getMonth()+1);
+  document.getElementById('returnDate').value = nextMonth.toISOString().slice(0,10);
+});
+</script>
+{% endblock %}

@@ -6,16 +6,18 @@
 
 <div class="stats-grid" style="margin-bottom:20px;">
   <div class="stat-card"><div class="stat-value" id="stat-pending">--</div><div class="stat-label">租借待审</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-consumable">--</div><div class="stat-label">耗材待审</div></div>
+  <div class="stat-card"><div class="stat-value" id="stat-asset">--</div><div class="stat-label">固产待审</div></div>
   <div class="stat-card"><div class="stat-value" id="stat-transfer">--</div><div class="stat-label">调拨待审</div></div>
-  <div class="stat-card" style="cursor:pointer;" onclick="window.location.href='/records'" title="点击查看所有租借记录"><div class="stat-value" id="stat-to-return">--</div><div class="stat-label">待归还 (借出中+逾期)</div></div>
-  <div class="stat-card"><div class="stat-value" id="stat-overtime">--</div><div class="stat-label">已超时</div></div>
-  <div class="stat-card"><div class="stat-value" id="stat-today">--</div><div class="stat-label">今日处理</div></div>
+  <div class="stat-card" style="cursor:pointer;" onclick="window.location.href='/records'" title="点击查看所有租借记录"><div class="stat-value" id="stat-to-return">--</div><div class="stat-label">待归还</div></div>
 </div>
 
 <div class="filter-bar" style="margin-bottom:16px;">
   <select id="approval-type" class="form-select" onchange="loadApprovals(1)">
     <option value="all">全部待审核</option>
     <option value="records">物品租借</option>
+    <option value="consumable">消耗品领用</option>
+    <option value="asset">固产领用</option>
     <option value="transfers">仓库调拨</option>
   </select>
 </div>
@@ -106,10 +108,10 @@ async function loadStats() {
   if (!r.ok) return;
   const d = await r.json();
   document.getElementById('stat-pending').textContent = d.total_pending;
+  document.getElementById('stat-consumable').textContent = d.consumable_pending || 0;
+  document.getElementById('stat-asset').textContent = d.asset_pending || 0;
   document.getElementById('stat-transfer').textContent = d.transfer_pending || 0;
   document.getElementById('stat-to-return').textContent = d.to_return || 0;
-  document.getElementById('stat-overtime').textContent = d.total_overtime;
-  document.getElementById('stat-today').textContent = d.today_processed;
 }
 
 // ── 租借审核操作 ──
@@ -169,38 +171,76 @@ function showRejectTransferDialog(docNo) {
   });
 }
 
+// ── 耗材审核操作 ──
+async function doApproveConsumable(id) {
+  showConfirmDialog('确认通过', '确定通过该耗材领用申请吗？', async () => {
+    const r = await api('/api/v1/consumable-records/' + id + '/approve?comment=', { method: 'PUT' });
+    if (r.ok) { showToast('已通过，库存已扣减'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await r.json(); showToast(d.detail, 'error'); }
+  });
+}
+function showRejectConsumableForId(id) {
+  showRejectDialog('驳回领用', '确定驳回该耗材领用申请吗？', async (reason) => {
+    const r = await api('/api/v1/consumable-records/' + id + '/reject?comment=' + encodeURIComponent(reason), { method: 'PUT' });
+    if (r.ok) { showToast('已驳回'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await r.json(); showToast(d.detail, 'error'); }
+  });
+}
+
+// ── 固产审核操作 ──
+async function doApproveAssignment(id) {
+  showConfirmDialog('确认通过', '确定通过该固产领用申请吗？', async () => {
+    const r = await api('/api/v1/approvals/assignments/' + id + '/approve?comment=', { method: 'PUT' });
+    if (r.ok) { showToast('已通过'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await r.json(); showToast(d.detail, 'error'); }
+  });
+}
+function showRejectAssignmentForId(id) {
+  showRejectDialog('驳回领用', '确定驳回该固产领用申请吗？', async (reason) => {
+    const r = await api('/api/v1/approvals/assignments/' + id + '/reject?comment=' + encodeURIComponent(reason), { method: 'PUT' });
+    if (r.ok) { showToast('已驳回'); loadApprovals(approvalPage); loadStats(); }
+    else { const d = await r.json(); showToast(d.detail, 'error'); }
+  });
+}
+
 // ── 主加载 ──
 async function loadApprovals(page) {
   approvalPage = page || 1;
   const type = document.getElementById('approval-type').value;
   const container = document.getElementById('approvals-table-container');
-  let recData = null, trData = null;
+  let recDocs = [], trDocs = [], conDocs = [], astDocs = [];
 
-  if (type !== 'transfers') {
-    const r = await api('/api/v1/approvals/pending-grouped?page=' + approvalPage + '&page_size=15');
-    if (r.ok) recData = await r.json();
+  if (type === 'all' || type === 'records') {
+    const r = await api('/api/v1/approvals/pending-grouped?page=1&page_size=50');
+    if (r.ok) { const d = await r.json(); recDocs = d.documents || []; }
   }
-  if (type !== 'records') {
-    const r = await api('/api/v1/approvals/pending-transfers?page=' + approvalPage + '&page_size=15');
-    if (r.ok) trData = await r.json();
+  if (type === 'all' || type === 'consumable') {
+    const r = await api('/api/v1/consumable-records?status=待审核&page_size=50');
+    if (r.ok) { const d = await r.json(); conDocs = d.records || []; }
+  }
+  if (type === 'all' || type === 'asset') {
+    const r = await api('/api/v1/approvals/pending-assignments?page_size=50');
+    if (r.ok) { const d = await r.json(); astDocs = d.assignments || []; }
+  }
+  if (type === 'all' || type === 'transfers') {
+    const r = await api('/api/v1/approvals/pending-transfers?page=1&page_size=50');
+    if (r.ok) { const d = await r.json(); trDocs = d.groups || []; }
   }
 
-  const recDocs = recData ? (recData.documents || []) : [];
-  const trDocs = trData ? (trData.groups || []) : [];
-
-  if (recDocs.length === 0 && trDocs.length === 0) {
+  if (recDocs.length === 0 && trDocs.length === 0 && conDocs.length === 0 && astDocs.length === 0) {
     container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-clipboard-check"></i></div><p>暂无待审核记录</p></div>';
     return;
   }
 
   let html = '';
+
   for (const doc of recDocs) {
     const hasDoc = doc.document_no !== null;
     const os = doc.is_overtime ? ' style="border-left:3px solid var(--danger);"' : '';
     html += '<div class="doc-group"' + os + '>';
     html += '<div class="doc-group-header" onclick="toggleDocGroup(this)">';
     html += '<div class="doc-group-meta">';
-    html += '<strong>' + (hasDoc ? '单据号: ' + doc.document_no : '单条记录') + '</strong>';
+    html += '<strong>' + (hasDoc ? '单据号: ' + escapeHtml(doc.document_no) : '单条记录') + '</strong>';
     html += '<span class="status-badge approved" style="font-size:11px;">物品租借</span>';
     html += '<span>借用人: ' + escapeHtml(doc.borrower_name || '') + '</span>';
     html += '<span>' + doc.item_count + ' 件物品</span>';
@@ -209,15 +249,55 @@ async function loadApprovals(page) {
     html += '</div>';
     html += '<div style="display:flex;align-items:center;gap:8px;">';
     if (hasDoc) {
-      html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveByDocument(\'' + doc.document_no + '\')">全部通过</button>';
-      html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();rejectByDocument(\'' + doc.document_no + '\')">全部驳回</button>';
+      html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveByDocument(\'' + escapeHtml(doc.document_no) + '\')">全部通过</button>';
+      html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();rejectByDocument(\'' + escapeHtml(doc.document_no) + '\')">全部驳回</button>';
     }
     html += '<span class="doc-group-toggle">▼</span></div></div>';
-    html += '<div class="doc-group-body"><table class="table"><thead><tr><th>ID</th><th>物品</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>操作</th></tr></thead><tbody>';
+    html += '<div class="doc-group-body"><table class="table"><thead><tr><th>ID</th><th>物品</th><th>来源仓库</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>操作</th></tr></thead><tbody>';
     for (const r of doc.items) {
-      html += '<tr><td>' + r.id + '</td><td>' + escapeHtml(r.item_name || '') + '</td><td>' + r.quantity + '</td><td>' + (r.borrow_date || '') + '</td><td>' + (r.expected_return_date || '') + '</td>';
+      html += '<tr><td>' + r.id + '</td><td>' + escapeHtml(r.item_name || '') + '</td><td class="text-muted" style="font-size:12px;">' + escapeHtml(r.source_warehouse_name || '-') + '</td><td>' + r.quantity + '</td><td>' + (r.borrow_date || '') + '</td><td>' + (r.expected_return_date || '') + '</td>';
       html += '<td><div class="btn-group"><button class="btn btn-success btn-sm" onclick="doApproveWithConfirm(' + r.id + ')">通过</button><button class="btn btn-danger btn-sm" onclick="showRejectDialogForId(' + r.id + ')">驳回</button></div></td></tr>';
     }
+    html += '</tbody></table></div></div>';
+  }
+
+  for (const cr of conDocs) {
+    html += '<div class="doc-group">';
+    html += '<div class="doc-group-header" onclick="toggleDocGroup(this)">';
+    html += '<div class="doc-group-meta">';
+    html += '<strong>单据号: ' + escapeHtml(cr.document_no || 'LY-' + cr.id) + '</strong>';
+    html += '<span class="status-badge pending" style="font-size:11px;">消耗品领用</span>';
+    html += '<span>申领人: ' + escapeHtml(cr.user_name || '') + '</span>';
+    html += '<span>物品: ' + escapeHtml(cr.item_name || '') + '</span>';
+    html += '<span>数量: ' + cr.quantity + '</span>';
+    html += '<span>' + (cr.pickup_date || '') + '</span>';
+    html += '</div>';
+    html += '<div style="display:flex;align-items:center;gap:8px;">';
+    html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();doApproveConsumable(' + cr.id + ')">通过</button>';
+    html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();showRejectConsumableForId(' + cr.id + ')">驳回</button>';
+    html += '<span class="doc-group-toggle">▼</span></div></div>';
+    html += '<div class="doc-group-body"><table class="table"><thead><tr><th>ID</th><th>物品</th><th>仓库</th><th>数量</th><th>领用日期</th><th>事由</th></tr></thead><tbody>';
+    html += '<tr><td>' + cr.id + '</td><td>' + escapeHtml(cr.item_name || '') + '</td><td>' + escapeHtml(cr.warehouse_name || '-') + '</td><td>' + cr.quantity + '</td><td>' + (cr.pickup_date || '') + '</td><td>' + escapeHtml(cr.reason || '') + '</td></tr>';
+    html += '</tbody></table></div></div>';
+  }
+
+  for (const aa of astDocs) {
+    html += '<div class="doc-group">';
+    html += '<div class="doc-group-header" onclick="toggleDocGroup(this)">';
+    html += '<div class="doc-group-meta">';
+    html += '<strong>固产领用 #' + aa.id + '</strong>';
+    html += '<span class="status-badge pending" style="font-size:11px;">固产领用</span>';
+    html += '<span>资产编号: ' + escapeHtml(aa.asset_code || '-') + '</span>';
+    html += '<span>物品: ' + escapeHtml(aa.item_name || '') + '</span>';
+    html += '<span>申领人: ' + escapeHtml(aa.user_name || '') + ' (' + escapeHtml(aa.department_name || '') + ')</span>';
+    html += '<span>' + (aa.assignment_date || '') + '</span>';
+    html += '</div>';
+    html += '<div style="display:flex;align-items:center;gap:8px;">';
+    html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();doApproveAssignment(' + aa.id + ')">通过</button>';
+    html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();showRejectAssignmentForId(' + aa.id + ')">驳回</button>';
+    html += '<span class="doc-group-toggle">▼</span></div></div>';
+    html += '<div class="doc-group-body"><table class="table"><thead><tr><th>规格</th><th>品牌</th><th>申领人</th><th>部门</th><th>预计归还</th></tr></thead><tbody>';
+    html += '<tr><td>' + escapeHtml(aa.specification || '-') + '</td><td>' + escapeHtml(aa.brand || '-') + '</td><td>' + escapeHtml(aa.user_name || '') + '</td><td>' + escapeHtml(aa.department_name || '') + '</td><td>' + (aa.expected_return_date || '未指定') + '</td></tr>';
     html += '</tbody></table></div></div>';
   }
 
@@ -230,7 +310,6 @@ async function loadApprovals(page) {
     html += '<span><i class="bi bi-building"></i> ' + escapeHtml(g.from_warehouse_name || '') + ' <i class="bi bi-arrow-right"></i> ' + escapeHtml(g.to_warehouse_name || '') + '</span>';
     html += '<span>' + g.count + ' 件物品</span>';
     html += '<span>' + escapeHtml(g.created_by_name || '') + '</span>';
-    html += '<span>' + (g.created_at || '') + '</span>';
     html += '</div>';
     html += '<div style="display:flex;align-items:center;gap:8px;">';
     html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();approveTransferDocument(\'' + escapeHtml(g.document_no || '') + '\')">全部通过</button>';
@@ -247,14 +326,6 @@ async function loadApprovals(page) {
   }
 
   container.innerHTML = html;
-  const pages = Math.ceil((recDocs.length + trDocs.length) / 15);
-  if (pages > 1) {
-    let pg = '<div class="pagination">';
-    pg += '<button onclick="loadApprovals(' + (approvalPage - 1) + ')" ' + (approvalPage === 1 ? 'disabled' : '') + '>上一页</button>';
-    for (let i = 1; i <= pages; i++) pg += '<button class="' + (i === approvalPage ? 'active' : '') + '" onclick="loadApprovals(' + i + ')">' + i + '</button>';
-    pg += '<button onclick="loadApprovals(' + (approvalPage + 1) + ')" ' + (approvalPage === pages ? 'disabled' : '') + '>下一页</button></div>';
-    container.innerHTML += pg;
-  }
 }
 
 document.addEventListener('DOMContentLoaded', () => { loadStats(); loadApprovals(1); });

@@ -136,22 +136,6 @@ async def dashboard_page(request: Request):
     return _render(request, "dashboard.html", {"current_user": user, "active_page": "dashboard"})
 
 
-@router.get("/items", response_class=HTMLResponse)
-async def items_page(request: Request):
-    user = await get_optional_user(request)
-    if not user:
-        return RedirectResponse(url="/login")
-    return _render(request, "pages/items.html", {"current_user": user, "active_page": "items"})
-
-
-@router.get("/items/{item_id}", response_class=HTMLResponse)
-async def item_detail_page(request: Request, item_id: int):
-    user = await get_optional_user(request)
-    if not user:
-        return RedirectResponse(url="/login")
-    return _render(request, "pages/items.html", {"current_user": user, "active_page": "items"})
-
-
 @router.get("/records", response_class=HTMLResponse)
 async def records_page(request: Request):
     user = await get_optional_user(request)
@@ -214,7 +198,63 @@ async def inventory_counts_page(request: Request):
     return _render(request, "pages/inventory_counts.html", {"current_user": user, "active_page": "inventory-counts"})
 
 
+# ── 仓库购物车页面路由 ──
+
+@router.get("/warehouse/tools", response_class=HTMLResponse)
+async def warehouse_tools_page(request: Request):
+    user = await get_optional_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
+    return _render(request, "pages/warehouse_tools.html", {"current_user": user, "active_page": "warehouse-tools"})
+
+
+@router.get("/warehouse/consumables", response_class=HTMLResponse)
+async def warehouse_consumables_page(request: Request):
+    user = await get_optional_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
+    return _render(request, "pages/warehouse_consumables.html", {"current_user": user, "active_page": "warehouse-consumables"})
+
+
+@router.get("/warehouse/assets", response_class=HTMLResponse)
+async def warehouse_assets_page(request: Request):
+    user = await get_optional_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
+    return _render(request, "pages/warehouse_assets.html", {"current_user": user, "active_page": "warehouse-assets"})
+
+
 @router.get("/about", response_class=HTMLResponse)
 async def about_page(request: Request):
     user = await get_optional_user(request)
     return _render(request, "pages/about.html", {"current_user": user, "active_page": "about"})
+
+
+# ── 新增资产管理页面路由 ──
+
+@router.get("/purchase-orders", response_class=HTMLResponse)
+async def purchase_orders_page(request: Request):
+    user = await get_optional_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
+    if user["role"] not in ("admin", "approver"):
+        return RedirectResponse(url="/dashboard")
+    return _render(request, "pages/purchase_orders.html", {"current_user": user, "active_page": "purchase-orders"})
+
+
+@router.get("/assets", response_class=HTMLResponse)
+async def assets_page(request: Request):
+    user = await get_optional_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
+    if user["role"] not in ("admin", "approver"):
+        return RedirectResponse(url="/dashboard")
+    return _render(request, "pages/assets.html", {"current_user": user, "active_page": "assets"})
+
+
+@router.get("/consumable-records", response_class=HTMLResponse)
+async def consumable_records_page(request: Request):
+    user = await get_optional_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
+    return _render(request, "pages/consumable_records.html", {"current_user": user, "active_page": "consumable-records"})
