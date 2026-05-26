@@ -75,7 +75,7 @@ def _compute_batch_serial(conn, item_id: int, purchase_date_str: str) -> str:
     count = conn.execute(text(
         "SELECT COUNT(DISTINCT poi.purchase_order_id) FROM purchase_order_items poi "
         "JOIN purchase_orders po ON poi.purchase_order_id = po.id "
-        "WHERE poi.item_id = :iid AND po.purchase_date = :pdate::date"
+        "WHERE poi.item_id = :iid AND po.purchase_date = CAST(:pdate AS DATE)"
     ), {"iid": item_id, "pdate": purchase_date_str}).fetchone()[0]
     return f"{count:03d}"
 

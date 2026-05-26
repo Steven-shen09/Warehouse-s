@@ -26,7 +26,7 @@ def list_assets(
     conn=Depends(get_db),
 ):
     """固定资产实例列表"""
-    where = "WHERE 1=1"
+    where = "WHERE ai.status != '在库'"
     params = {}
     if status:
         where += " AND ai.status = :st"
@@ -79,7 +79,7 @@ def asset_ledger(
     conn=Depends(get_db),
 ):
     """资产台账（含更多字段）"""
-    where = "WHERE 1=1"
+    where = "WHERE ai.status != '在库'"
     params = {}
     if status:
         where += " AND ai.status = :st"
