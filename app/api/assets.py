@@ -163,8 +163,10 @@ def do_request_assign(
     with conn.begin():
         try:
             result = request_assign_asset(
-                conn, asset_id, assigned_to_user_id or current_user["id"],
-                assigned_to_department_id or 0, expected_return_date,
+                conn, asset_id,
+                assigned_to_user_id or current_user["id"],
+                assigned_to_department_id or None,
+                expected_return_date,
                 notes, current_user["id"], user_name, department_name,
             )
         except ValueError as e:

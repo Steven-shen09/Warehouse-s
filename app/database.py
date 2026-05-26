@@ -92,6 +92,8 @@ def _extend_existing_tables(conn):
     # asset_assignments: 允许手动输入使用人/部门名称
     conn.execute(text("ALTER TABLE asset_assignments ALTER COLUMN assigned_to_user_id DROP NOT NULL"))
     conn.execute(text("ALTER TABLE asset_assignments ALTER COLUMN assigned_to_department_id DROP NOT NULL"))
+    conn.execute(text("ALTER TABLE asset_assignments DROP CONSTRAINT IF EXISTS asset_assignments_assigned_to_department_id_fkey"))
+    conn.execute(text("ALTER TABLE asset_assignments DROP CONSTRAINT IF EXISTS asset_assignments_assigned_to_user_id_fkey"))
     conn.execute(text("ALTER TABLE asset_assignments ADD COLUMN IF NOT EXISTS user_name VARCHAR(100) DEFAULT ''"))
     conn.execute(text("ALTER TABLE asset_assignments ADD COLUMN IF NOT EXISTS department_name VARCHAR(100) DEFAULT ''"))
 
@@ -301,8 +303,8 @@ def _create_tables(conn):
         CREATE TABLE IF NOT EXISTS asset_assignments (
             id SERIAL PRIMARY KEY,
             asset_instance_id INTEGER NOT NULL REFERENCES asset_instances(id),
-            assigned_to_user_id INTEGER NOT NULL REFERENCES users(id),
-            assigned_to_department_id INTEGER NOT NULL REFERENCES departments(id),
+            assigned_to_user_id INTEGER,
+            assigned_to_department_id INTEGER,
             assignment_date DATE NOT NULL,
             expected_return_date DATE,
             actual_return_date DATE,
