@@ -133,31 +133,58 @@ def submit_batch_borrow(
 
         for item in items:
             swid = item.get("warehouse_id")
-            if swid is None:
-                wh_row = conn.execute(text(
-                    "SELECT warehouse_id FROM warehouse_stocks WHERE item_id = :iid AND quantity > 0 ORDER BY quantity DESC LIMIT 1"
-                ), {"iid": item["item_id"]}).fetchone()
-                swid = wh_row[0] if wh_row else None
-            result = conn.execute(text(
-                """INSERT INTO records
-                   (item_id, borrower_id, borrower_name, contact, quantity, borrow_date,
-                    expected_return_date, reason, status, approval_deadline, created_by, document_no, source_warehouse_id)
-                   VALUES (:iid, :bid, :bname, :contact, :qty, :bdate, :rdate,
-                           :reason, '待审核', :deadline, :cby, :dno, :swid)
-                   RETURNING id"""),
-                {"iid": item["item_id"], "bid": borrower_id, "bname": borrower_name,
-                 "contact": contact, "qty": item["quantity"], "bdate": borrow_date,
-                 "rdate": expected_return_date, "reason": reason, "deadline": deadline,
-                 "cby": borrower_id, "dno": document_no, "swid": swid})
-            record_id = result.fetchone()[0]
-            record_ids.append(record_id)
-
-            update_item_status(conn, item["item_id"])
-
-            log(conn, borrower_id, borrower_name, "batch_borrow", "record",
-                record_id,
-                f"批量租借申请：物品ID={item['item_id']}，数量={item['quantity']}，"
-                f"预计归还={expected_return_date}")
+            if swid is not None:
+                # 指定了仓库：整单从该仓库出
+                result = conn.execute(text(
+                    """INSERT INTO records
+                       (item_id, borrower_id, borrower_name, contact, quantity, borrow_date,
+                        expected_return_date, reason, status, approval_deadline, created_by, document_no, source_warehouse_id)
+                       VALUES (:iid, :bid, :bname, :contact, :qty, :bdate, :rdate,
+                               :reason, '待审核', :deadline, :cby, :dno, :swid)
+                       RETURNING id"""),
+                    {"iid": item["item_id"], "bid": borrower_id, "bname": borrower_name,
+                     "contact": contact, "qty": item["quantity"], "bdate": borrow_date,
+                     "rdate": expected_return_date, "reason": reason, "deadline": deadline,
+                     "cby": borrower_id, "dno": document_no, "swid": swid})
+                record_id = result.fetchone()[0]
+                record_ids.append(record_id)
+                update_item_status(conn, item["item_id"])
+                log(conn, borrower_id, borrower_name, "batch_borrow", "record",
+                    record_id,
+                    f"批量租借申请：物品ID={item['item_id']}，数量={item['quantity']}，"
+                    f"预计归还={expected_return_date}")
+            else:
+                # 未指定仓库：按各仓库库存比例分流
+                wh_stocks = conn.execute(text(
+                    "SELECT warehouse_id, quantity FROM warehouse_stocks WHERE item_id = :iid AND quantity > 0 ORDER BY quantity DESC"
+                ), {"iid": item["item_id"]}).fetchall()
+                remaining = item["quantity"]
+                total_stock = sum(s[1] for s in wh_stocks)
+                for s in wh_stocks:
+                    wh_id, wh_qty = s[0], s[1]
+                    if remaining <= 0:
+                        break
+                    alloc = max(1, round(item["quantity"] * wh_qty / total_stock))
+                    alloc = min(alloc, remaining, wh_qty)
+                    result = conn.execute(text(
+                        """INSERT INTO records
+                           (item_id, borrower_id, borrower_name, contact, quantity, borrow_date,
+                            expected_return_date, reason, status, approval_deadline, created_by, document_no, source_warehouse_id)
+                           VALUES (:iid, :bid, :bname, :contact, :qty, :bdate, :rdate,
+                                   :reason, '待审核', :deadline, :cby, :dno, :swid)
+                           RETURNING id"""),
+                        {"iid": item["item_id"], "bid": borrower_id, "bname": borrower_name,
+                         "contact": contact, "qty": alloc, "bdate": borrow_date,
+                         "rdate": expected_return_date, "reason": reason, "deadline": deadline,
+                         "cby": borrower_id, "dno": document_no, "swid": wh_id})
+                    record_id = result.fetchone()[0]
+                    record_ids.append(record_id)
+                    remaining -= alloc
+                    update_item_status(conn, item["item_id"])
+                    log(conn, borrower_id, borrower_name, "batch_borrow", "record",
+                        record_id,
+                        f"批量租借申请：物品ID={item['item_id']}，数量={alloc}(来自仓库{wh_id})，"
+                        f"预计归还={expected_return_date}")
 
         return {
             "record_ids": record_ids,

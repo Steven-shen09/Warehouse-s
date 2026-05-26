@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}固定资产管理 - Warehouse-s{% endblock %}
+{% block content %}
+<h2>固定资产管理</h2>
+
+<div class="card" style="margin-bottom: 20px;">
+  <div class="card-body" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+    <input type="text" id="searchInput" class="form-input" placeholder="搜索名称/资产编号/序列号..." style="max-width: 240px;" oninput="loadAssets()">
+    <select id="statusFilter" class="form-input" style="max-width: 120px;" onchange="loadAssets()">
+      <option value="">全部状态</option>
+      <option value="在库">在库</option>
+      <option value="使用中">使用中</option>
+      <option value="维修中">维修中</option>
+      <option value="已报废">已报废</option>
+    </select>
+    <select id="deptFilter" class="form-input" style="max-width: 160px;" onchange="loadAssets()"><option value="">全部部门</option></select>
+    {% if current_user.role in ('admin', 'approver') %}
+    <button class="btn btn-primary" onclick="batchGenerateCodes()"><i class="bi bi-upc-scan"></i> 批量生成编号</button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="table-wrapper">
+      <table class="table">
+        <thead><tr><th>资产编号</th><th>物品名称</th><th>规格</th><th>品牌</th><th>状态</th><th>使用人</th><th>部门</th><th>仓库</th><th>操作</th></tr></thead>
+        <tbody id="assetTableBody"></tbody>
+      </table>
+    </div>
+    <div id="pagination" style="margin-top: 12px; display: flex; gap: 8px; justify-content: center;"></div>
+  </div>
+</div>
+
+<!-- 编辑/详情模态框 -->
+<div class="modal-overlay" id="asset-modal">
+  <div class="modal" style="max-width: 650px;">
+    <div class="modal-header"><span>资产详情</span><button class="btn btn-outline btn-sm" onclick="closeModal('asset-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body" id="assetDetailBody"></div>
+    <div class="modal-footer" id="assetDetailFooter">
+      <button class="btn btn-outline" onclick="closeModal('asset-modal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 领用模态框 -->
+<div class="modal-overlay" id="assign-modal">
+  <div class="modal">
+    <div class="modal-header"><span>领用资产</span><button class="btn btn-outline btn-sm" onclick="closeModal('assign-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">使用人 *</label><select id="assignUser" class="form-input"></select></div>
+      <div class="form-group"><label class="form-label">部门 *</label><select id="assignDept" class="form-input"></select></div>
+      <div class="form-group"><label class="form-label">领用日期</label><input type="date" id="assignDate" class="form-input"></div>
+      <div class="form-group"><label class="form-label">预计归还日期</label><input type="date" id="assignReturnDate" class="form-input"></div>
+      <div class="form-group"><label class="form-label">备注</label><input type="text" id="assignNotes" class="form-input"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('assign-modal')">取消</button>
+      <button class="btn btn-primary" id="assignBtn" onclick="doAssign()">确认领用</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+let currentAssetId = null;
+
+async function loadDeptOptions() {
+  const res = await api('/api/v1/departments');
+  document.getElementById('deptFilter').innerHTML = '<option value="">全部部门</option>' + res.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+}
+
+async function loadAssets(page = 1) {
+  currentPage = page;
+  const kw = document.getElementById('searchInput').value;
+  const st = document.getElementById('statusFilter').value;
+  const did = document.getElementById('deptFilter').value;
+  const res = await api(`/api/v1/assets?keyword=${encodeURIComponent(kw)}&status=${st}&department_id=${did}&page=${page}`);
+  document.getElementById('assetTableBody').innerHTML = res.assets.map(a => `
+    <tr>
+      <td><span class="status-badge">${esc(a.asset_code || '-')}</span></td>
+      <td>${esc(a.item_name)}</td><td>${esc(a.specification || '-')}</td><td>${esc(a.brand || '-')}</td>
+      <td><span class="status-badge ${a.status === '在库' ? 'available' : a.status === '使用中' ? 'lent' : a.status === '维修中' ? 'damaged' : 'rejected'}">${a.status}</span></td>
+      <td>${esc(a.user_name || '-')}</td><td>${esc(a.department_name || '-')}</td><td>${esc(a.warehouse_name || '-')}</td>
+      <td style="white-space: nowrap;">
+        <button class="btn btn-outline btn-sm" onclick='showAssetDetail(${a.id})'><i class="bi bi-eye"></i></button>
+        {% if current_user.role in ('admin', 'approver') %}
+        ${a.status === '在库' ? `<button class="btn btn-primary btn-sm" onclick="openAssign(${a.id})">领用</button>` : ''}
+        ${a.status === '使用中' ? `<button class="btn btn-success btn-sm" onclick="returnAsset(${a.id})">交回</button><button class="btn btn-outline btn-sm" onclick="openTransfer(${a.id})">转移</button>` : ''}
+        ${a.status === '在库' || a.status === '使用中' ? `<button class="btn btn-outline btn-sm" onclick="repairAsset(${a.id})">送修</button>` : ''}
+        ${a.status === '维修中' ? `<button class="btn btn-success btn-sm" onclick="repairDone(${a.id})">修复完成</button>` : ''}
+        ${a.status !== '已报废' ? `<button class="btn btn-danger btn-sm" onclick="openDisposal(${a.id})">报废</button>` : ''}
+        {% endif %}
+      </td>
+    </tr>`).join('');
+  renderPagination(res.total, page, 'loadAssets');
+}
+
+async function showAssetDetail(aid) {
+  const a = await api(`/api/v1/assets/${aid}`);
+  document.getElementById('assetDetailBody').innerHTML = `
+    <p><strong>资产编号：</strong>${esc(a.asset_code || '-')} | <strong>序列号：</strong>${esc(a.serial_number || '-')}</p>
+    <p><strong>物品：</strong>${esc(a.item_name)} | <strong>分类：</strong>${esc(a.category)} | <strong>规格：</strong>${esc(a.specification || '-')} | <strong>品牌：</strong>${esc(a.brand || '-')}</p>
+    <p><strong>状态：</strong>${a.status} | <strong>仓库：</strong>${esc(a.warehouse_name)} | <strong>价值：</strong>¥${(a.value||0).toFixed(2)}</p>
+    <p><strong>使用人：</strong>${esc(a.user_name || '-')} | <strong>部门：</strong>${esc(a.department_name || '-')}</p>
+    <p><strong>采购日期：</strong>${a.purchase_date} | <strong>备注：</strong>${esc(a.notes || '-')}</p>
+    <hr>
+    <strong>领用历史</strong>
+    <table class="table"><thead><tr><th>使用人</th><th>部门</th><th>领用日期</th><th>归还日期</th><th>状态</th></tr></thead>
+    <tbody>${(a.assignments||[]).map(h => `<tr><td>${esc(h.user_name)}</td><td>${esc(h.department_name)}</td><td>${h.assignment_date}</td><td>${h.actual_return_date || '-'}</td><td>${h.status}</td></tr>`).join('')}</tbody></table>
+  `;
+  document.getElementById('assetDetailFooter').innerHTML = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;width:100%;margin-bottom:8px;">
+      <div class="form-group" style="flex:1;min-width:140px;"><label class="form-label">资产编号</label><input type="text" id="editAssetCode" class="form-input" value="${esc(a.asset_code || '')}" placeholder="手动输入"></div>
+      <div class="form-group" style="flex:1;min-width:140px;"><label class="form-label">序列号</label><input type="text" id="editSerialNo" class="form-input" value="${esc(a.serial_number || '')}"></div>
+      <div class="form-group" style="flex:1;min-width:140px;"><label class="form-label">使用人</label><select id="editUserId" class="form-input">${window._userOptions || ''}</select></div>
+      <div class="form-group" style="flex:1;min-width:140px;"><label class="form-label">部门</label><select id="editDeptId" class="form-input">${window._deptOptions || ''}</select></div>
+    </div>
+    <button class="btn btn-outline" onclick="closeModal('asset-modal')">关闭</button>
+    <button class="btn btn-primary" onclick="saveAsset(${aid}, ${a.current_user_id || 'null'}, ${a.current_department_id || 'null'})">保存</button>`;
+  // 回填当前值
+  if (a.current_user_id) { const u = document.getElementById('editUserId'); if (u) u.value = a.current_user_id; }
+  if (a.current_department_id) { const d = document.getElementById('editDeptId'); if (d) d.value = a.current_department_id; }
+  openModal('asset-modal');
+}
+
+async function saveAsset(aid, prevUid, prevDid) {
+  const code = document.getElementById('editAssetCode').value.trim();
+  const sn = document.getElementById('editSerialNo').value.trim();
+  const uid = parseInt(document.getElementById('editUserId').value) || null;
+  const did = parseInt(document.getElementById('editDeptId').value) || null;
+  let url = `/api/v1/assets/${aid}?asset_code=${encodeURIComponent(code)}&serial_number=${encodeURIComponent(sn)}`;
+  if (uid) url += `&current_user_id=${uid}`;
+  if (did) url += `&current_department_id=${did}`;
+  try {
+    await api(url, 'PUT');
+    showToast('保存成功'); closeModal('asset-modal'); loadAssets(currentPage);
+  } catch(e) { showToast('保存失败：' + (e.message || ''), 'error'); }
+}
+
+async function openAssign(aid) {
+  currentAssetId = aid;
+  const [users, depts] = await Promise.all([
+    api('/api/v1/users?page_size=200'),
+    api('/api/v1/departments')
+  ]);
+  document.getElementById('assignUser').innerHTML = users.users.map(u => `<option value="${u.id}">${esc(u.display_name || u.username)}</option>`).join('');
+  document.getElementById('assignDept').innerHTML = depts.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+  document.getElementById('assignDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('assignReturnDate').value = '';
+  document.getElementById('assignNotes').value = '';
+  openModal('assign-modal');
+}
+
+async function doAssign() {
+  const uid = document.getElementById('assignUser').value;
+  const did = document.getElementById('assignDept').value;
+  const ad = document.getElementById('assignDate').value;
+  const erd = document.getElementById('assignReturnDate').value;
+  const notes = document.getElementById('assignNotes').value;
+  if (!uid || !did || !ad) { showToast('请填写使用人、部门和日期', 'error'); return; }
+  let url = `/api/v1/assets/${currentAssetId}/assign?assigned_to_user_id=${uid}&assigned_to_department_id=${did}&assignment_date=${ad}&notes=${encodeURIComponent(notes)}`;
+  if (erd) url += `&expected_return_date=${erd}`;
+  await api(url, 'POST');
+  showToast('领用成功'); closeModal('assign-modal'); loadAssets(currentPage);
+}
+
+async function returnAsset(aid) {
+  showConfirmDialog('交回资产', '确认将该资产交回仓库？', async () => {
+    await api(`/api/v1/assets/${aid}/return`, 'POST');
+    showToast('资产已交回'); loadAssets(currentPage);
+  });
+}
+
+async function openTransfer(aid) {
+  currentAssetId = aid;
+  const [users, depts] = await Promise.all([
+    api('/api/v1/users?page_size=200'),
+    api('/api/v1/departments')
+  ]);
+  document.getElementById('assignUser').innerHTML = users.users.map(u => `<option value="${u.id}">${esc(u.display_name || u.username)}</option>`).join('');
+  document.getElementById('assignDept').innerHTML = depts.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+  document.getElementById('assignNotes').value = '';
+  document.getElementById('assignBtn').textContent = '确认转移';
+  document.getElementById('assignBtn').onclick = async () => {
+    const uid = document.getElementById('assignUser').value;
+    const did = document.getElementById('assignDept').value;
+    if (!uid || !did) { showToast('请填写使用人和部门', 'error'); return; }
+    await api(`/api/v1/assets/${currentAssetId}/transfer?new_user_id=${uid}&new_department_id=${did}&notes=${encodeURIComponent(document.getElementById('assignNotes').value)}`, 'POST');
+    showToast('转移成功'); closeModal('assign-modal'); loadAssets(currentPage);
+    document.getElementById('assignBtn').textContent = '确认领用';
+    document.getElementById('assignBtn').onclick = doAssign;
+  };
+  document.getElementById('assignDate').value = '';
+  document.getElementById('assignReturnDate').value = '';
+  openModal('assign-modal');
+}
+
+async function repairAsset(aid) {
+  showConfirmDialog('送修资产', '确认将该资产送修？', async () => {
+    await api(`/api/v1/assets/${aid}/repair`, 'POST');
+    showToast('资产已送修'); loadAssets(currentPage);
+  });
+}
+
+async function repairDone(aid) {
+  showConfirmDialog('修复完成', '确认该资产已修复完成？', async () => {
+    await api(`/api/v1/assets/${aid}/repair-done`, 'POST');
+    showToast('资产已恢复'); loadAssets(currentPage);
+  });
+}
+
+async function openDisposal(aid) {
+  showConfirmDialog('报废资产', `
+    <div class="form-group"><label>报废类型</label><select id="disposalType" class="form-input"><option value="报废">报废</option><option value="出售">出售</option><option value="捐赠">捐赠</option><option value="丢失">丢失</option></select></div>
+    <div class="form-group"><label>原因</label><textarea id="disposalReason" class="form-input" rows="2"></textarea></div>
+  `, async () => {
+    const dt = document.getElementById('disposalType').value;
+    const reason = document.getElementById('disposalReason').value;
+    await api(`/api/v1/asset-disposals?asset_instance_id=${aid}&disposal_type=${dt}&reason=${encodeURIComponent(reason)}`, 'POST');
+    showToast('报废申请已提交'); loadAssets(currentPage);
+  }, { html: true });
+}
+
+async function batchGenerateCodes() {
+  showConfirmDialog('批量生成编号', '将为所有无编号的资产自动生成编号，确认？', async () => {
+    const res = await api('/api/v1/assets/batch-generate-codes', 'POST');
+    showToast(res.message); loadAssets(currentPage);
+  });
+}
+
+async function loadUserDeptOptions() {
+  try {
+    const [usersR, deptsR] = await Promise.all([
+      api('/api/v1/users?page_size=200'),
+      api('/api/v1/departments')
+    ]);
+    window._userOptions = '<option value="">未指定</option>' + (usersR.users||[]).map(u => `<option value="${u.id}">${esc(u.display_name || u.username)}</option>`).join('');
+    window._deptOptions = '<option value="">未指定</option>' + (deptsR.departments||[]).map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+  } catch(e) { console.log('Failed to load users/depts:', e); }
+}
+
+document.addEventListener('DOMContentLoaded', () => { loadDeptOptions(); loadUserDeptOptions(); loadAssets(); });
+</script>
+{% endblock %}

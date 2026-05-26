@@ -11,14 +11,51 @@ def get_total_quantity(conn, item_id: int) -> int:
 
 
 def get_available_quantity(conn, item_id: int, warehouse_id: int = None) -> int:
-    """计算物品的实时可用库存：总库存 - 已占用（借出中 + 逾期 + 待审核）"""
-    item = conn.execute(text("SELECT status FROM items WHERE id = :iid"), {"iid": item_id}).fetchone()
+    """计算物品的实时可用库存（根据 item_type 区分计算方式）"""
+    item = conn.execute(text(
+        "SELECT status, item_type FROM items WHERE id = :iid"
+    ), {"iid": item_id}).fetchone()
     if not item:
         return 0
 
     if item["status"] == "损坏":
         return 0
 
+    item_type = item["item_type"] if item["item_type"] else "tool"
+
+    # 固定资产：可用 = 仓库中状态为"在库"的实例数
+    if item_type == "fixed_asset":
+        if warehouse_id:
+            count = conn.execute(text(
+                "SELECT COUNT(*) FROM asset_instances "
+                "WHERE item_id = :iid AND warehouse_id = :wid AND status = '在库'"
+            ), {"iid": item_id, "wid": warehouse_id}).fetchone()[0]
+        else:
+            count = conn.execute(text(
+                "SELECT COUNT(*) FROM asset_instances "
+                "WHERE item_id = :iid AND status = '在库'"
+            ), {"iid": item_id}).fetchone()[0]
+        return count
+
+    # 消耗品：可用 = 仓库库存 - 待审核领用
+    if item_type == "consumable":
+        if warehouse_id:
+            total = conn.execute(text(
+                "SELECT COALESCE(SUM(quantity), 0) FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id = :wid"
+            ), {"iid": item_id, "wid": warehouse_id}).fetchone()[0]
+            pending = conn.execute(text(
+                "SELECT COALESCE(SUM(quantity), 0) FROM consumable_records "
+                "WHERE item_id = :iid AND source_warehouse_id = :wid AND status = '待审核'"
+            ), {"iid": item_id, "wid": warehouse_id}).fetchone()[0]
+        else:
+            total = get_total_quantity(conn, item_id)
+            pending = conn.execute(text(
+                "SELECT COALESCE(SUM(quantity), 0) FROM consumable_records "
+                "WHERE item_id = :iid AND status = '待审核'"
+            ), {"iid": item_id}).fetchone()[0]
+        return max(0, total - pending)
+
+    # 工具类：可用 = 总库存 - 已占用（借出中 + 逾期 + 待审核）
     if warehouse_id:
         total = conn.execute(text(
             "SELECT COALESCE(SUM(quantity), 0) FROM warehouse_stocks WHERE item_id = :iid AND warehouse_id = :wid"
@@ -64,14 +101,19 @@ def release_stock(conn, item_id: int, quantity: int):
 def update_item_status(conn, item_id: int):
     """根据实时库存自动更新物品状态"""
     available = get_available_quantity(conn, item_id)
-    item = conn.execute(text(
-        "SELECT total_quantity, status FROM items WHERE id = :iid"
+    row = conn.execute(text(
+        "SELECT total_quantity, status, item_type FROM items WHERE id = :iid"
     ), {"iid": item_id}).fetchone()
-    if not item:
+    if not row:
         return
+    item = dict(row)
 
     if item["status"] == "损坏":
         return  # 损坏状态不自动变
+
+    # 固定资产状态由 asset_instances 决定，不自动更新 items.status
+    if item.get("item_type") == "fixed_asset":
+        return
 
     if available <= 0:
         new_status = "租借中"
@@ -85,18 +127,19 @@ def update_item_status(conn, item_id: int):
 
 
 def check_low_stock(conn) -> list:
-    """检查所有库存低于阈值的物品，返回低库存物品列表"""
-    rows = conn.execute(text("SELECT id, name, low_stock_threshold FROM items WHERE status != '损坏'")).fetchall()
+    """检查所有库存低于阈值的物品，返回低库存物品列表（仅检查工具类和消耗品）"""
+    rows = conn.execute(text(
+        "SELECT id, name, item_type, low_stock_threshold FROM items WHERE status != '损坏'"
+    )).fetchall()
     low_stock = []
     for row in rows:
-        total = get_total_quantity(conn, row["id"])
         available = get_available_quantity(conn, row["id"])
         if available <= row["low_stock_threshold"]:
             low_stock.append({
                 "id": row["id"],
                 "name": row["name"],
+                "item_type": row["item_type"] if row["item_type"] else "tool",
                 "available": available,
-                "total": total,
                 "threshold": row["low_stock_threshold"],
             })
     return low_stock
@@ -104,6 +147,11 @@ def check_low_stock(conn) -> list:
 
 def get_warehouse_stocks(conn, item_id: int) -> list:
     """获取物品在各仓库的库存分布（含借出量和剩余量）"""
+    item = conn.execute(text(
+        "SELECT item_type FROM items WHERE id = :iid"
+    ), {"iid": item_id}).fetchone()
+    item_type = item["item_type"] if item else "tool"
+
     rows = conn.execute(text(
         """SELECT ws.warehouse_id, w.name AS warehouse_name, ws.quantity
            FROM warehouse_stocks ws JOIN warehouses w ON ws.warehouse_id = w.id
@@ -112,13 +160,23 @@ def get_warehouse_stocks(conn, item_id: int) -> list:
     ), {"iid": item_id}).fetchall()
     stocks = [dict(r) for r in rows]
 
-    for s in stocks:
-        borrowed = conn.execute(text(
-            """SELECT COALESCE(SUM(quantity), 0) FROM records
-               WHERE item_id = :iid AND source_warehouse_id = :wid
-               AND status IN ('借出中', '逾期', '待审核')"""
-        ), {"iid": item_id, "wid": s["warehouse_id"]}).fetchone()[0]
-        s["borrowed"] = borrowed
-        s["available"] = max(0, s["quantity"] - borrowed)
+    if item_type == "fixed_asset":
+        # 固定资产：borrowed = 使用中 + 维修中的实例数
+        for s in stocks:
+            in_use = conn.execute(text(
+                "SELECT COUNT(*) FROM asset_instances "
+                "WHERE item_id = :iid AND warehouse_id = :wid AND status IN ('使用中', '维修中')"
+            ), {"iid": item_id, "wid": s["warehouse_id"]}).fetchone()[0]
+            s["borrowed"] = in_use
+            s["available"] = max(0, s["quantity"] - in_use)
+    else:
+        for s in stocks:
+            borrowed = conn.execute(text(
+                """SELECT COALESCE(SUM(quantity), 0) FROM records
+                   WHERE item_id = :iid AND source_warehouse_id = :wid
+                   AND status IN ('借出中', '逾期', '待审核')"""
+            ), {"iid": item_id, "wid": s["warehouse_id"]}).fetchone()[0]
+            s["borrowed"] = borrowed
+            s["available"] = max(0, s["quantity"] - borrowed)
 
     return stocks

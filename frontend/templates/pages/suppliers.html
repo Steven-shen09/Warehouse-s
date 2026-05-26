@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}供应商管理 - Warehouse-s{% endblock %}
+{% block content %}
+<h2>供应商管理</h2>
+
+<div class="card" style="margin-bottom: 20px;">
+  <div class="card-body" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+    <input type="text" id="searchInput" class="form-input" placeholder="搜索供应商名称/联系人/电话..." style="max-width: 300px;" oninput="loadSuppliers()">
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr><th>ID</th><th>名称</th><th>联系人</th><th>电话</th><th>邮箱</th><th>地址</th><th>操作</th></tr>
+        </thead>
+        <tbody id="supplierTableBody"></tbody>
+      </table>
+    </div>
+    <div id="pagination" style="margin-top: 12px; display: flex; gap: 8px; justify-content: center;"></div>
+  </div>
+</div>
+
+<!-- 新增/编辑模态框 -->
+<div class="modal-overlay" id="supplier-modal">
+  <div class="modal">
+    <div class="modal-header"><span id="modalTitle">新增供应商</span><button class="btn btn-outline btn-sm" onclick="closeModal('supplier-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="editId">
+      <div class="form-group"><label class="form-label">名称 *</label><input type="text" id="supplierName" class="form-input" maxlength="200"></div>
+      <div class="form-group"><label class="form-label">联系人</label><input type="text" id="contactPerson" class="form-input" maxlength="100"></div>
+      <div class="form-group"><label class="form-label">电话</label><input type="text" id="phone" class="form-input" maxlength="50"></div>
+      <div class="form-group"><label class="form-label">邮箱</label><input type="email" id="email" class="form-input" maxlength="200"></div>
+      <div class="form-group"><label class="form-label">地址</label><input type="text" id="address" class="form-input"></div>
+      <div class="form-group"><label class="form-label">备注</label><textarea id="notes" class="form-input" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('supplier-modal')">取消</button>
+      <button class="btn btn-primary" onclick="saveSupplier()">保存</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+
+async function loadSuppliers(page = 1) {
+  currentPage = page;
+  const kw = document.getElementById('searchInput').value;
+  const res = await api(`/api/v1/suppliers?keyword=${encodeURIComponent(kw)}&page=${page}`);
+  const tbody = document.getElementById('supplierTableBody');
+  tbody.innerHTML = res.suppliers.map(s => `
+    <tr>
+      <td>${s.id}</td>
+      <td>${esc(s.name)}</td>
+      <td>${esc(s.contact_person)}</td>
+      <td>${esc(s.phone)}</td>
+      <td>${esc(s.email)}</td>
+      <td>${esc(s.address)}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick='editSupplier(${JSON.stringify(s).replace(/'/g, "&#39;")})'><i class="bi bi-pencil"></i></button>
+        {% if current_user.role == 'admin' %}
+        <button class="btn btn-danger btn-sm" onclick="deleteSupplier(${s.id})"><i class="bi bi-trash"></i></button>
+        {% endif %}
+      </td>
+    </tr>`).join('');
+  renderPagination(res.total, page, 'loadSuppliers');
+}
+
+function editSupplier(s) {
+  document.getElementById('modalTitle').textContent = '编辑供应商';
+  document.getElementById('editId').value = s.id;
+  document.getElementById('supplierName').value = s.name;
+  document.getElementById('contactPerson').value = s.contact_person || '';
+  document.getElementById('phone').value = s.phone || '';
+  document.getElementById('email').value = s.email || '';
+  document.getElementById('address').value = s.address || '';
+  document.getElementById('notes').value = s.notes || '';
+  openModal('supplier-modal');
+}
+
+async function saveSupplier() {
+  const id = document.getElementById('editId').value;
+  const name = document.getElementById('supplierName').value.trim();
+  if (!name) { showToast('请输入供应商名称', 'error'); return; }
+  const params = new URLSearchParams({ name, contact_person: document.getElementById('contactPerson').value, phone: document.getElementById('phone').value, email: document.getElementById('email').value, address: document.getElementById('address').value, notes: document.getElementById('notes').value });
+  await api(`/api/v1/suppliers/${id}?${params}`, 'PUT');
+  showToast('供应商更新成功');
+  closeModal('supplier-modal');
+  loadSuppliers(currentPage);
+}
+
+async function deleteSupplier(id) {
+  showConfirmDialog('删除供应商', '确认删除该供应商？', async () => {
+    await api(`/api/v1/suppliers/${id}`, 'DELETE');
+    showToast('供应商已删除');
+    loadSuppliers(currentPage);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => loadSuppliers());
+</script>
+{% endblock %}

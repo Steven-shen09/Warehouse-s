@@ -152,6 +152,7 @@ def list_items(
     keyword: str = "",
     category: str = "",
     status: str = "",
+    item_type: str = "",
     low_stock: int = 0,
     warehouse_id: Optional[int] = Query(default=None),
     current_user: dict = Depends(get_current_user),
@@ -170,6 +171,9 @@ def list_items(
     if status:
         where += " AND status = :st"
         params["st"] = status
+    if item_type:
+        where += " AND item_type = :it"
+        params["it"] = item_type
     if warehouse_id is not None and warehouse_id:
         where += " AND id IN (SELECT item_id FROM warehouse_stocks WHERE warehouse_id = :whid AND quantity > 0)"
         params["whid"] = warehouse_id
@@ -326,13 +330,22 @@ def create_item(
     conn=Depends(get_db),
 ):
     """新增物品"""
+    item_type = getattr(body, "item_type", "tool")
+    abbreviation = getattr(body, "abbreviation", "")
+    specification = getattr(body, "specification", "")
+    brand = getattr(body, "brand", "")
+    department_id = getattr(body, "department_id", None)
+
     conn.rollback()
     with conn.begin():
         result = conn.execute(text(
-            "INSERT INTO items (name, category, description, total_quantity, value, low_stock_threshold, image_url) "
-            "VALUES (:n, :c, :d, :q, :v, :t, :img) RETURNING id"
+            "INSERT INTO items (name, category, description, total_quantity, value, "
+            "low_stock_threshold, image_url, item_type, abbreviation, specification, brand, department_id) "
+            "VALUES (:n, :c, :d, :q, :v, :t, :img, :it, :ab, :sp, :br, :did) RETURNING id"
         ), {"n": body.name, "c": body.category, "d": body.description,
-            "q": body.total_quantity, "v": body.value, "t": body.low_stock_threshold, "img": body.image_url})
+            "q": body.total_quantity, "v": body.value, "t": body.low_stock_threshold,
+            "img": body.image_url, "it": item_type, "ab": abbreviation,
+            "sp": specification, "br": brand, "did": department_id})
         item_id = result.fetchone()[0]
 
         # 如果指定了仓库，写入 warehouse_stocks
@@ -350,6 +363,15 @@ def create_item(
                     "INSERT INTO warehouse_stocks (item_id, warehouse_id, quantity) VALUES (:iid, :wid, :qty)"
                 ), {"iid": item_id, "wid": default_wh["id"], "qty": body.total_quantity})
 
+        # 固定资产：按数量创建 asset_instances 记录
+        target_wh = body.warehouse_id or default_wh["id"]
+        if item_type == "fixed_asset" and body.total_quantity > 0:
+            for _ in range(body.total_quantity):
+                conn.execute(text(
+                    "INSERT INTO asset_instances (item_id, asset_code, status, purchase_date, warehouse_id) "
+                    "VALUES (:iid, NULL, '在库', CURRENT_DATE, :wid)"
+                ), {"iid": item_id, "wid": target_wh})
+
     return {"message": "物品创建成功"}
 
 
@@ -366,8 +388,9 @@ def update_item(
         raise HTTPException(status_code=404, detail="物品不存在")
 
     updates = {}
-    for field in ["name", "category", "description", "total_quantity", "value", "low_stock_threshold", "image_url"]:
-        val = getattr(body, field)
+    for field in ["name", "category", "description", "total_quantity", "value", "low_stock_threshold",
+                  "image_url", "item_type", "abbreviation", "specification", "brand", "department_id"]:
+        val = getattr(body, field, None)
         if val is not None:
             updates[field] = val
 

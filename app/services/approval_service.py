@@ -247,8 +247,10 @@ def get_pending_approvals_grouped(
         placeholders = ",".join(f":id_{i}" for i in range(len(record_ids)))
         params = {f"id_{i}": rid for i, rid in enumerate(record_ids)}
         rows = conn.execute(text(
-            f"""SELECT r.*, i.name as item_name
+            f"""SELECT r.*, i.name as item_name,
+                      COALESCE(w.name, '') as source_warehouse_name
                FROM records r JOIN items i ON r.item_id = i.id
+               LEFT JOIN warehouses w ON r.source_warehouse_id = w.id
                WHERE r.id IN ({placeholders})"""
         ), params).fetchall()
         items_list = []
