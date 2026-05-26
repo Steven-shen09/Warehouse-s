@@ -286,10 +286,13 @@ def approve_assignment(conn, assignment_id: int, approved_by: int):
     conn.execute(text(
         "UPDATE asset_instances SET status = '使用中', "
         "current_user_id = :uid, current_department_id = :did, "
+        "user_name = :un, department_name = :dn, "
         "updated_at = NOW() WHERE id = :aiid"
     ), {
         "uid": assignment["assigned_to_user_id"],
         "did": assignment["assigned_to_department_id"],
+        "un": assignment["user_name"] or "",
+        "dn": assignment["department_name"] or "",
         "aiid": assignment["asset_instance_id"],
     })
 

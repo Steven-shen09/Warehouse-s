@@ -24,7 +24,7 @@
   <div class="card-body">
     <div class="table-wrapper">
       <table class="table">
-        <thead><tr><th>资产编号</th><th>物品名称</th><th>规格</th><th>品牌</th><th>状态</th><th>使用人</th><th>部门</th><th>仓库</th><th>操作</th></tr></thead>
+        <thead><tr><th>资产编号</th><th>物品名称</th><th>规格</th><th>品牌</th><th>状态</th><th>使用人</th><th>部门</th><th>领取日期</th><th>操作</th></tr></thead>
         <tbody id="assetTableBody"></tbody>
       </table>
     </div>
@@ -83,7 +83,7 @@ async function loadAssets(page = 1) {
       <td><span class="status-badge">${esc(a.asset_code || '-')}</span></td>
       <td>${esc(a.item_name)}</td><td>${esc(a.specification || '-')}</td><td>${esc(a.brand || '-')}</td>
       <td><span class="status-badge ${a.status === '在库' ? 'available' : a.status === '使用中' ? 'lent' : a.status === '维修中' ? 'damaged' : 'rejected'}">${a.status}</span></td>
-      <td>${esc(a.user_name || '-')}</td><td>${esc(a.department_name || '-')}</td><td>${esc(a.warehouse_name || '-')}</td>
+      <td>${esc(a.user_name || '-')}</td><td>${esc(a.department_name || '-')}</td><td>${esc(a.assignment_date || '-')}</td>
       <td style="white-space: nowrap;">
         <button class="btn btn-outline btn-sm" onclick='showAssetDetail(${a.id})'><i class="bi bi-eye"></i></button>
         {% if current_user.role in ('admin', 'approver') %}
@@ -103,7 +103,7 @@ async function showAssetDetail(aid) {
   document.getElementById('assetDetailBody').innerHTML = `
     <p><strong>资产编号：</strong>${esc(a.asset_code || '-')} | <strong>序列号：</strong>${esc(a.serial_number || '-')}</p>
     <p><strong>物品：</strong>${esc(a.item_name)} | <strong>分类：</strong>${esc(a.category)} | <strong>规格：</strong>${esc(a.specification || '-')} | <strong>品牌：</strong>${esc(a.brand || '-')}</p>
-    <p><strong>状态：</strong>${a.status} | <strong>仓库：</strong>${esc(a.warehouse_name)} | <strong>价值：</strong>¥${(a.value||0).toFixed(2)}</p>
+    <p><strong>状态：</strong>${a.status} | <strong>领取日期：</strong>${esc(a.assignment_date || '-')} | <strong>价值：</strong>¥${(a.value||0).toFixed(2)}</p>
     <p><strong>使用人：</strong>${esc(a.user_name || '-')} | <strong>部门：</strong>${esc(a.department_name || '-')}</p>
     <p><strong>采购日期：</strong>${a.purchase_date} | <strong>备注：</strong>${esc(a.notes || '-')}</p>
     <hr>

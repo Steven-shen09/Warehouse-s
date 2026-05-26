@@ -98,6 +98,10 @@ def _extend_existing_tables(conn):
     conn.execute(text("ALTER TABLE asset_assignments ADD COLUMN IF NOT EXISTS department_name VARCHAR(100) DEFAULT ''"))
     conn.execute(text("ALTER TABLE asset_assignments ADD COLUMN IF NOT EXISTS document_no VARCHAR(50) DEFAULT ''"))
 
+    # asset_instances 扩展：支持手动输入姓名
+    conn.execute(text("ALTER TABLE asset_instances ADD COLUMN IF NOT EXISTS user_name VARCHAR(100) DEFAULT ''"))
+    conn.execute(text("ALTER TABLE asset_instances ADD COLUMN IF NOT EXISTS department_name VARCHAR(100) DEFAULT ''"))
+
 
 def _create_tables(conn):
     """创建所有数据表（PostgreSQL 语法）"""

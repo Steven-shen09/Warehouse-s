@@ -52,13 +52,15 @@ def list_assets(
 
     rows = conn.execute(text(
         f"SELECT ai.*, i.name AS item_name, i.category, i.specification, i.brand, "
-        f"d.name AS department_name, u.display_name AS user_name, "
-        f"w.name AS warehouse_name "
+        f"COALESCE(u.display_name, ai.user_name) AS user_name, "
+        f"COALESCE(d.name, ai.department_name) AS department_name, "
+        f"(SELECT aa.assignment_date FROM asset_assignments aa "
+        f" WHERE aa.asset_instance_id = ai.id AND aa.status = '使用中' "
+        f" ORDER BY aa.id DESC LIMIT 1) AS assignment_date "
         f"FROM asset_instances ai "
         f"JOIN items i ON ai.item_id = i.id "
         f"LEFT JOIN departments d ON ai.current_department_id = d.id "
         f"LEFT JOIN users u ON ai.current_user_id = u.id "
-        f"LEFT JOIN warehouses w ON ai.warehouse_id = w.id "
         f"{where} ORDER BY ai.id DESC LIMIT :limit OFFSET :offset"
     ), params).fetchall()
 
@@ -213,13 +215,15 @@ def get_asset(
     """固定资产详情（含领用历史）"""
     asset = conn.execute(text(
         "SELECT ai.*, i.name AS item_name, i.category, i.specification, i.brand, i.value, "
-        "d.name AS department_name, u.display_name AS user_name, "
-        "w.name AS warehouse_name "
+        "COALESCE(u.display_name, ai.user_name) AS user_name, "
+        "COALESCE(d.name, ai.department_name) AS department_name, "
+        "(SELECT aa.assignment_date FROM asset_assignments aa "
+        " WHERE aa.asset_instance_id = ai.id AND aa.status = '使用中' "
+        " ORDER BY aa.id DESC LIMIT 1) AS assignment_date "
         "FROM asset_instances ai "
         "JOIN items i ON ai.item_id = i.id "
         "LEFT JOIN departments d ON ai.current_department_id = d.id "
         "LEFT JOIN users u ON ai.current_user_id = u.id "
-        "LEFT JOIN warehouses w ON ai.warehouse_id = w.id "
         "WHERE ai.id = :aid"
     ), {"aid": asset_id}).fetchone()
     if not asset:
