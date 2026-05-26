@@ -223,7 +223,8 @@ def reject_disposal(conn, disposal_id: int):
 def request_assign_asset(conn, asset_instance_id: int, user_id: int,
                          department_id: int, expected_return_date=None,
                          notes: str = "", created_by: int = None,
-                         user_name: str = "", department_name: str = ""):
+                         user_name: str = "", department_name: str = "",
+                         document_no: str = ""):
     """用户发起固产领用申请（待审核）"""
     asset = conn.execute(text(
         "SELECT * FROM asset_instances WHERE id = :aid"
@@ -237,16 +238,35 @@ def request_assign_asset(conn, asset_instance_id: int, user_id: int,
     conn.execute(text(
         "INSERT INTO asset_assignments (asset_instance_id, assigned_to_user_id, "
         "assigned_to_department_id, assignment_date, expected_return_date, "
-        "status, notes, created_by, user_name, department_name) "
-        "VALUES (:aiid, :auid, :adid, :ad, :erd, '待审核', :nt, :cb, :un, :dn)"
+        "status, notes, created_by, user_name, department_name, document_no) "
+        "VALUES (:aiid, :auid, :adid, :ad, :erd, '待审核', :nt, :cb, :un, :dn, :docno)"
     ), {
         "aiid": asset_instance_id, "auid": user_id, "adid": department_id,
         "ad": dt_date.today(), "erd": expected_return_date,
         "nt": notes, "cb": created_by or user_id,
-        "un": user_name, "dn": department_name,
+        "un": user_name, "dn": department_name, "docno": document_no,
     })
 
     return {"message": "领用申请已提交，等待审核"}
+
+
+def request_batch_assign_asset(conn, asset_instance_ids: list, user_id: int,
+                               department_id: int, assignment_date=None,
+                               notes: str = "", created_by: int = None,
+                               user_name: str = "", department_name: str = ""):
+    """批量提交固产领用申请（同一单据号）"""
+    from app.utils.helpers import generate_asset_doc_no
+    doc_no = generate_asset_doc_no(conn)
+    from datetime import date as dt_date
+    ad = assignment_date or dt_date.today()
+
+    for aiid in asset_instance_ids:
+        request_assign_asset(
+            conn, aiid, user_id, department_id, None,
+            notes, created_by, user_name, department_name, document_no=doc_no,
+        )
+
+    return {"message": f"已提交 {len(asset_instance_ids)} 件资产领用申请", "document_no": doc_no}
 
 
 def approve_assignment(conn, assignment_id: int, approved_by: int):

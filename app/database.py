@@ -96,6 +96,7 @@ def _extend_existing_tables(conn):
     conn.execute(text("ALTER TABLE asset_assignments DROP CONSTRAINT IF EXISTS asset_assignments_assigned_to_user_id_fkey"))
     conn.execute(text("ALTER TABLE asset_assignments ADD COLUMN IF NOT EXISTS user_name VARCHAR(100) DEFAULT ''"))
     conn.execute(text("ALTER TABLE asset_assignments ADD COLUMN IF NOT EXISTS department_name VARCHAR(100) DEFAULT ''"))
+    conn.execute(text("ALTER TABLE asset_assignments ADD COLUMN IF NOT EXISTS document_no VARCHAR(50) DEFAULT ''"))
 
 
 def _create_tables(conn):

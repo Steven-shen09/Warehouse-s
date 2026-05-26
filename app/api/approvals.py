@@ -225,12 +225,7 @@ def list_pending_assignments(
     current_user: dict = Depends(require_role("admin", "approver")),
     conn=Depends(get_db),
 ):
-    """待审核固产领用列表"""
-    total = conn.execute(text(
-        "SELECT COUNT(*) FROM asset_assignments WHERE status = '待审核'"
-    )).fetchone()[0]
-    offset = (page - 1) * page_size
-
+    """待审核固产领用列表（按单据号分组）"""
     rows = conn.execute(text(
         "SELECT aa.*, ai.asset_code, i.name AS item_name, i.specification, i.brand, "
         "COALESCE(u.display_name, aa.user_name) AS user_name, "
@@ -240,10 +235,34 @@ def list_pending_assignments(
         "JOIN items i ON ai.item_id = i.id "
         "LEFT JOIN users u ON aa.assigned_to_user_id = u.id "
         "LEFT JOIN departments d ON aa.assigned_to_department_id = d.id "
-        "WHERE aa.status = '待审核' ORDER BY aa.id DESC LIMIT :limit OFFSET :offset"
-    ), {"limit": page_size, "offset": offset}).fetchall()
+        "WHERE aa.status = '待审核' ORDER BY aa.id DESC"
+    ), ).fetchall()
 
-    return {"assignments": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
+    assignments = [dict(r) for r in rows]
+
+    # 按单据号分组
+    groups = {}
+    for a in assignments:
+        key = a.get("document_no") or f"GZ-{a['id']}"
+        if key not in groups:
+            groups[key] = {
+                "document_no": key,
+                "type": "asset",
+                "user_name": a.get("user_name", ""),
+                "department_name": a.get("department_name", ""),
+                "created_at": a.get("created_at", ""),
+                "items": [],
+                "count": 0,
+            }
+        groups[key]["items"].append(a)
+        groups[key]["count"] += 1
+
+    all_groups = list(groups.values())
+    total = len(all_groups)
+    offset = (page - 1) * page_size
+    paged = all_groups[offset:offset + page_size]
+
+    return {"groups": paged, "total": total, "page": page, "page_size": page_size}
 
 
 @router.put("/assignments/{assignment_id}/approve")

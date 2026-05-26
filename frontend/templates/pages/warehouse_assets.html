@@ -117,22 +117,16 @@ async function submitCart() {
   if (cart.isEmpty()) { showToast('请先选择要领用的资产', 'error'); return; }
   const ad = document.getElementById('assignDate').value;
   const notes = document.getElementById('assignNotes').value;
+  const ids = Object.keys(cart.items).join(',');
 
-  let success = 0, fail = 0;
-  for (const it of Object.values(cart.items)) {
-    try {
-      let url = `/api/v1/assets/${it.id}/request-assign?user_name=${encodeURIComponent(userName)}&department_name=${encodeURIComponent(deptName)}&notes=${encodeURIComponent(notes)}`;
-      if (ad) url += `&assignment_date=${ad}`;
-      const r = await api(url, { method: 'POST' });
-      const data = await r.json();
-      if (r.ok) { success++; }
-      else { fail++; }
-    } catch(e) { fail++; }
-  }
-  if (fail === 0) { showToast(`${success}件资产领用申请已提交`); }
-  else { showToast(`${success}件成功，${fail}件失败`, 'warning'); }
-  cart.clear();
-  loadAssets(currentPage);
+  try {
+    let url = `/api/v1/assets/batch-request-assign?asset_ids=${ids}&user_name=${encodeURIComponent(userName)}&department_name=${encodeURIComponent(deptName)}&notes=${encodeURIComponent(notes)}`;
+    if (ad) url += `&assignment_date=${ad}`;
+    const r = await api(url, { method: 'POST' });
+    const data = await r.json();
+    if (r.ok) { showToast(data.message); cart.clear(); loadAssets(currentPage); }
+    else { showToast(data.detail || '提交失败', 'error'); }
+  } catch(e) { showToast('提交失败：' + (e.message||''), 'error'); }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

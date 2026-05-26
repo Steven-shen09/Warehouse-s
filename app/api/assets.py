@@ -7,7 +7,7 @@ from app.api.deps import get_db, get_current_user, require_role
 from app.services.asset_service import (
     assign_asset, return_asset, transfer_asset,
     repair_asset, repair_done_asset,
-    request_assign_asset,
+    request_assign_asset, request_batch_assign_asset,
 )
 from app.services.asset_code_service import check_asset_code_exists, batch_generate_codes
 
@@ -168,6 +168,36 @@ def do_request_assign(
                 assigned_to_department_id or None,
                 expected_return_date,
                 notes, current_user["id"], user_name, department_name,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    return result
+
+
+@router.post("/batch-request-assign")
+def do_batch_request_assign(
+    asset_ids: str = Query(..., description="逗号分隔的资产ID列表"),
+    user_name: str = Query(default=""),
+    department_name: str = Query(default=""),
+    assignment_date: Optional[date] = Query(default=None),
+    notes: str = Query(default=""),
+    current_user: dict = Depends(get_current_user),
+    conn=Depends(get_db),
+):
+    """批量提交固产领用申请（同一单据号）"""
+    try:
+        ids = [int(x.strip()) for x in asset_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="资产ID格式错误")
+    if not ids:
+        raise HTTPException(status_code=400, detail="请选择要领用的资产")
+    conn.rollback()
+    with conn.begin():
+        try:
+            result = request_batch_assign_asset(
+                conn, ids, current_user["id"], None,
+                assignment_date, notes, current_user["id"],
+                user_name, department_name,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

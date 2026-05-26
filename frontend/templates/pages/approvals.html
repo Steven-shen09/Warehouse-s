@@ -220,7 +220,7 @@ async function loadApprovals(page) {
   }
   if (type === 'all' || type === 'asset') {
     const r = await api('/api/v1/approvals/pending-assignments?page_size=50');
-    if (r.ok) { const d = await r.json(); astDocs = d.assignments || []; }
+    if (r.ok) { const d = await r.json(); astDocs = d.groups || []; }
   }
   if (type === 'all' || type === 'transfers') {
     const r = await api('/api/v1/approvals/pending-transfers?page=1&page_size=50');
@@ -281,23 +281,24 @@ async function loadApprovals(page) {
     html += '</tbody></table></div></div>';
   }
 
-  for (const aa of astDocs) {
+  for (const g of astDocs) {
     html += '<div class="doc-group">';
     html += '<div class="doc-group-header" onclick="toggleDocGroup(this)">';
     html += '<div class="doc-group-meta">';
-    html += '<strong>固产领用 #' + aa.id + '</strong>';
+    html += '<strong>单据号: ' + escapeHtml(g.document_no || '') + '</strong>';
     html += '<span class="status-badge pending" style="font-size:11px;">固产领用</span>';
-    html += '<span>资产编号: ' + escapeHtml(aa.asset_code || '-') + '</span>';
-    html += '<span>物品: ' + escapeHtml(aa.item_name || '') + '</span>';
-    html += '<span>申领人: ' + escapeHtml(aa.user_name || '') + ' (' + escapeHtml(aa.department_name || '') + ')</span>';
-    html += '<span>' + (aa.assignment_date || '') + '</span>';
+    html += '<span>申领人: ' + escapeHtml(g.user_name || '') + ' (' + escapeHtml(g.department_name || '') + ')</span>';
+    html += '<span>' + g.count + ' 件资产</span>';
     html += '</div>';
     html += '<div style="display:flex;align-items:center;gap:8px;">';
-    html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();doApproveAssignment(' + aa.id + ')">通过</button>';
-    html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();showRejectAssignmentForId(' + aa.id + ')">驳回</button>';
+    html += '<button class="btn btn-success btn-sm" onclick="event.stopPropagation();doApproveAssignment(' + g.items[0].id + ')">通过首件</button>';
+    html += '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();showRejectAssignmentForId(' + g.items[0].id + ')">驳回首件</button>';
     html += '<span class="doc-group-toggle">▼</span></div></div>';
-    html += '<div class="doc-group-body"><table class="table"><thead><tr><th>规格</th><th>品牌</th><th>申领人</th><th>部门</th><th>预计归还</th></tr></thead><tbody>';
-    html += '<tr><td>' + escapeHtml(aa.specification || '-') + '</td><td>' + escapeHtml(aa.brand || '-') + '</td><td>' + escapeHtml(aa.user_name || '') + '</td><td>' + escapeHtml(aa.department_name || '') + '</td><td>' + (aa.expected_return_date || '未指定') + '</td></tr>';
+    html += '<div class="doc-group-body"><table class="table"><thead><tr><th>资产编号</th><th>物品</th><th>规格</th><th>品牌</th><th>操作</th></tr></thead><tbody>';
+    for (const aa of g.items) {
+      html += '<tr><td>' + escapeHtml(aa.asset_code || '-') + '</td><td>' + escapeHtml(aa.item_name || '') + '</td><td>' + escapeHtml(aa.specification || '-') + '</td><td>' + escapeHtml(aa.brand || '-') + '</td>';
+      html += '<td><div class="btn-group"><button class="btn btn-success btn-sm" onclick="doApproveAssignment(' + aa.id + ')">通过</button> <button class="btn btn-danger btn-sm" onclick="showRejectAssignmentForId(' + aa.id + ')">驳回</button></div></td></tr>';
+    }
     html += '</tbody></table></div></div>';
   }
 

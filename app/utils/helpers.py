@@ -98,3 +98,20 @@ def generate_disposal_doc_no(conn) -> str:
     else:
         seq = 1
     return f"{prefix}{seq:04d}"
+
+def generate_asset_doc_no(conn) -> str:
+    """生成固产领用单号：GZ-YYYYMMDD-NNNN"""
+    from datetime import datetime
+    today = datetime.now().strftime("%Y%m%d")
+    prefix = f"GZ-{today}-"
+    row = conn.execute(text(
+        "SELECT MAX(document_no) FROM asset_assignments WHERE document_no ~ :pat"
+    ), {"pat": f"^{prefix}[0-9]+$"}).fetchone()
+    if row and row[0]:
+        try:
+            seq = int(row[0].split("-")[-1]) + 1
+        except (ValueError, IndexError):
+            seq = 1
+    else:
+        seq = 1
+    return f"{prefix}{seq:04d}"
