@@ -171,7 +171,7 @@ async function saveAsset(aid) {
 async function openAssign(aid) {
   const r = await api('/api/v1/users?page_size=200');
   const data = await r.json();
-  document.getElementById('assignUser').innerHTML = (data.users||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
+  document.getElementById('assignUser').innerHTML = (data.items||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
   document.getElementById('assignDate').style.display = '';
   document.getElementById('assignReturnDate').style.display = '';
   document.getElementById('assignDate').value = new Date().toISOString().slice(0,10);
@@ -210,7 +210,7 @@ async function openTransfer(aid) {
   currentAssetId = aid;
   const r = await api('/api/v1/users?page_size=200');
   const data = await r.json();
-  document.getElementById('assignUser').innerHTML = (data.users||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
+  document.getElementById('assignUser').innerHTML = (data.items||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
   document.getElementById('assignNotes').value = '';
   document.getElementById('assignReturnDate').style.display = 'none';
   document.getElementById('assignDate').style.display = 'none';
