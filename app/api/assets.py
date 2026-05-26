@@ -152,6 +152,7 @@ def do_request_assign(
     assigned_to_department_id: int = Query(default=None),
     user_name: str = Query(default=""),
     department_name: str = Query(default=""),
+    assignment_date: Optional[date] = Query(default=None),
     expected_return_date: Optional[date] = Query(default=None),
     notes: str = Query(default=""),
     current_user: dict = Depends(get_current_user),
