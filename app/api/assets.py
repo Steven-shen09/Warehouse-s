@@ -231,7 +231,9 @@ def get_asset(
     d = dict(asset)
     # 领用历史
     assignments = conn.execute(text(
-        "SELECT aa.*, u.display_name AS user_name, d.name AS department_name "
+        "SELECT aa.*, "
+        "COALESCE(NULLIF(aa.user_name, ''), u.display_name) AS user_name, "
+        "COALESCE(NULLIF(aa.department_name, ''), d.name) AS department_name "
         "FROM asset_assignments aa "
         "LEFT JOIN users u ON aa.assigned_to_user_id = u.id "
         "LEFT JOIN departments d ON aa.assigned_to_department_id = d.id "
