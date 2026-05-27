@@ -300,8 +300,10 @@ def update_asset(
 @router.post("/{asset_id}/assign")
 def do_assign(
     asset_id: int,
-    assigned_to_user_id: int = Query(...),
-    assigned_to_department_id: int = Query(...),
+    assigned_to_user_id: int = Query(default=None),
+    assigned_to_department_id: int = Query(default=None),
+    user_name: str = Query(default=""),
+    department_name: str = Query(default=""),
     assignment_date: date = Query(default=None),
     expected_return_date: Optional[date] = Query(default=None),
     notes: str = Query(default=""),
@@ -317,7 +319,8 @@ def do_assign(
         try:
             assign_asset(
                 conn, asset_id, assigned_to_user_id, assigned_to_department_id,
-                assignment_date, expected_return_date, notes, current_user["id"]
+                assignment_date, expected_return_date, notes, current_user["id"],
+                user_name, department_name,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

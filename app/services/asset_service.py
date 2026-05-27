@@ -5,7 +5,8 @@ from app.utils.helpers import generate_disposal_doc_no
 
 def assign_asset(conn, asset_instance_id: int, user_id: int, department_id: int,
                  assignment_date, expected_return_date=None, notes: str = "",
-                 created_by: int = None):
+                 created_by: int = None, user_name: str = "",
+                 department_name: str = ""):
     """领用固定资产"""
     asset = conn.execute(text(
         "SELECT ai.*, i.item_type FROM asset_instances ai "
@@ -19,19 +20,21 @@ def assign_asset(conn, asset_instance_id: int, user_id: int, department_id: int,
     # 更新资产实例
     conn.execute(text(
         "UPDATE asset_instances SET status = '使用中', current_user_id = :uid, "
-        "current_department_id = :did, updated_at = NOW() WHERE id = :aid"
-    ), {"uid": user_id, "did": department_id, "aid": asset_instance_id})
+        "current_department_id = :did, user_name = :un, department_name = :dn, "
+        "updated_at = NOW() WHERE id = :aid"
+    ), {"uid": user_id, "did": department_id, "un": user_name, "dn": department_name, "aid": asset_instance_id})
 
     # 创建领用记录
     conn.execute(text(
         "INSERT INTO asset_assignments (asset_instance_id, assigned_to_user_id, "
         "assigned_to_department_id, assignment_date, expected_return_date, status, "
-        "notes, created_by) "
-        "VALUES (:aiid, :auid, :adid, :ad, :erd, '使用中', :nt, :cb)"
+        "notes, created_by, user_name, department_name) "
+        "VALUES (:aiid, :auid, :adid, :ad, :erd, '使用中', :nt, :cb, :un, :dn)"
     ), {
         "aiid": asset_instance_id, "auid": user_id, "adid": department_id,
         "ad": assignment_date, "erd": expected_return_date,
         "nt": notes, "cb": created_by or user_id,
+        "un": user_name, "dn": department_name,
     })
 
     # 减少仓库库存
