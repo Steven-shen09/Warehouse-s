@@ -56,9 +56,10 @@
 <!-- 领用/转移模态框 -->
 <div class="modal-overlay" id="assign-modal">
   <div class="modal">
-    <div class="modal-header"><span>领用/转移资产</span><button class="btn btn-outline btn-sm" onclick="closeModal('assign-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-header"><span id="assignModalTitle">领用/转移资产</span><button class="btn btn-outline btn-sm" onclick="closeModal('assign-modal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body">
-      <div class="form-group"><label class="form-label">使用人 *</label><select id="assignUser" class="form-input"></select></div>
+      <div class="form-group"><label class="form-label">使用人（系统用户）</label><select id="assignUser" class="form-input"><option value="">-- 选择系统用户 --</option></select></div>
+      <div class="form-group"><label class="form-label">或手动输入姓名</label><input type="text" id="assignUserName" class="form-input" placeholder="手动输入使用人姓名"></div>
       <div class="form-group" id="assignDateGroup"><label class="form-label">日期</label><input type="date" id="assignDate" class="form-input"></div>
       <div class="form-group" id="assignReturnGroup"><label class="form-label">预计归还日期</label><input type="date" id="assignReturnDate" class="form-input"></div>
       <div class="form-group"><label class="form-label">备注</label><input type="text" id="assignNotes" class="form-input"></div>
@@ -190,6 +191,7 @@ async function openAssign(aid) {
   document.getElementById('assignUser').innerHTML = (data.items||[]).map(u => `<option value="${u.id}">${esc(u.display_name||u.username)}</option>`).join('');
   document.getElementById('assignDateGroup').style.display = '';
   document.getElementById('assignReturnGroup').style.display = '';
+  document.getElementById('assignUserName').value = '';
   document.getElementById('assignDate').value = new Date().toISOString().slice(0,10);
   document.getElementById('assignReturnDate').value = '';
   document.getElementById('assignNotes').value = '';
@@ -199,13 +201,22 @@ async function openAssign(aid) {
   openModal('assign-modal');
 }
 
-async function doAssign() {
+function _getAssignUserParams() {
   const uid = document.getElementById('assignUser').value;
+  const uname = document.getElementById('assignUserName').value.trim();
+  let params = '';
+  if (uid) params += `&assigned_to_user_id=${uid}`;
+  if (uname) params += `&user_name=${encodeURIComponent(uname)}`;
+  return params;
+}
+
+async function doAssign() {
+  const userParams = _getAssignUserParams();
   const ad = document.getElementById('assignDate').value;
   const erd = document.getElementById('assignReturnDate').value;
   const notes = document.getElementById('assignNotes').value;
-  if (!uid || !ad) { showToast('请填写使用人和日期', 'error'); return; }
-  let url = `/api/v1/assets/${currentAssetId}/assign?assigned_to_user_id=${uid}&assignment_date=${ad}&notes=${encodeURIComponent(notes)}`;
+  if (!userParams || !ad) { showToast('请填写使用人和日期', 'error'); return; }
+  let url = `/api/v1/assets/${currentAssetId}/assign?assignment_date=${ad}&notes=${encodeURIComponent(notes)}${userParams}`;
   if (erd) url += `&expected_return_date=${erd}`;
   const r = await api(url, { method: 'POST' });
   const d = await r.json();
@@ -234,14 +245,19 @@ async function openTransfer(aid) {
   if (assetData.current_user_id) {
     document.getElementById('assignUser').value = assetData.current_user_id;
   }
+  document.getElementById('assignUserName').value = assetData.user_name || '';
   document.getElementById('assignNotes').value = '';
   document.getElementById('assignDateGroup').style.display = 'none';
   document.getElementById('assignReturnGroup').style.display = 'none';
   document.getElementById('assignBtn').textContent = '确认转移';
   document.getElementById('assignBtn').onclick = async () => {
     const uid = document.getElementById('assignUser').value;
-    if (!uid) { showToast('请选择使用人', 'error'); return; }
-    const r = await api(`/api/v1/assets/${currentAssetId}/transfer?new_user_id=${uid}&notes=${encodeURIComponent(document.getElementById('assignNotes').value)}`, { method: 'POST' });
+    const uname = document.getElementById('assignUserName').value.trim();
+    if (!uid && !uname) { showToast('请选择或输入使用人', 'error'); return; }
+    let url = `/api/v1/assets/${currentAssetId}/transfer?notes=${encodeURIComponent(document.getElementById('assignNotes').value)}`;
+    if (uid) url += `&new_user_id=${uid}`;
+    if (uname) url += `&user_name=${encodeURIComponent(uname)}`;
+    const r = await api(url, { method: 'POST' });
     const d = await r.json();
     if (r.ok) { showToast('转移成功'); closeModal('assign-modal'); loadAssets(currentPage); }
     else { showToast(d.detail || '转移失败', 'error'); }

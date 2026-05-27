@@ -348,8 +348,10 @@ def do_return(
 @router.post("/{asset_id}/transfer")
 def do_transfer(
     asset_id: int,
-    new_user_id: int = Query(...),
+    new_user_id: int = Query(default=None),
     new_department_id: int = Query(default=None),
+    user_name: str = Query(default=""),
+    department_name: str = Query(default=""),
     notes: str = Query(default=""),
     current_user: dict = Depends(require_role("admin", "approver")),
     conn=Depends(get_db),
@@ -358,7 +360,7 @@ def do_transfer(
     conn.rollback()
     with conn.begin():
         try:
-            transfer_asset(conn, asset_id, new_user_id, new_department_id, notes, current_user["id"])
+            transfer_asset(conn, asset_id, new_user_id, new_department_id, notes, current_user["id"], user_name, department_name)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     return {"message": "资产转移成功"}

@@ -73,7 +73,8 @@ def return_asset(conn, asset_instance_id: int, return_date, notes: str = ""):
 
 def transfer_asset(conn, asset_instance_id: int, new_user_id: int,
                    new_department_id: int, notes: str = "",
-                   created_by: int = None):
+                   created_by: int = None, user_name: str = "",
+                   department_name: str = ""):
     """转移固定资产（换人/换部门）"""
     asset = conn.execute(text(
         "SELECT * FROM asset_instances WHERE id = :aid"
@@ -92,17 +93,20 @@ def transfer_asset(conn, asset_instance_id: int, new_user_id: int,
     # 更新资产实例
     conn.execute(text(
         "UPDATE asset_instances SET current_user_id = :uid, current_department_id = :did, "
+        "user_name = :un, department_name = :dn, "
         "updated_at = NOW() WHERE id = :aid"
-    ), {"uid": new_user_id, "did": new_department_id, "aid": asset_instance_id})
+    ), {"uid": new_user_id, "did": new_department_id, "un": user_name, "dn": department_name, "aid": asset_instance_id})
 
     # 创建新的领用记录
     conn.execute(text(
         "INSERT INTO asset_assignments (asset_instance_id, assigned_to_user_id, "
-        "assigned_to_department_id, assignment_date, status, notes, created_by) "
-        "VALUES (:aiid, :auid, :adid, CURRENT_DATE, '使用中', :nt, :cb)"
+        "assigned_to_department_id, assignment_date, status, notes, created_by, "
+        "user_name, department_name) "
+        "VALUES (:aiid, :auid, :adid, CURRENT_DATE, '使用中', :nt, :cb, :un, :dn)"
     ), {
         "aiid": asset_instance_id, "auid": new_user_id,
         "adid": new_department_id, "nt": notes, "cb": created_by or new_user_id,
+        "un": user_name, "dn": department_name,
     })
 
 
