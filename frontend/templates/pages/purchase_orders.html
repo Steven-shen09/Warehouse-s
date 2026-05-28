@@ -158,8 +158,8 @@ function selectSuggest(index) {
     // 更新其他输入框
         const row = _activeSuggest.input.closest("div").parentElement;
     if (row) {
-      const inputs = row.querySelectorAll('input');
-          if (inputs.length >= 3) { inputs[0].value = s.category || ""; inputs[1].value = s.specification || ""; inputs[2].value = s.brand || ""; }
+      const inputs = row.querySelectorAll('input:not([id^=itemName])');
+          if (inputs.length >= 3) { inputs[0].value = s.category || ''; inputs[1].value = s.specification || ''; inputs[2].value = s.brand || ''; }
     }
   }
   closeSuggest();
