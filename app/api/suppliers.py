@@ -34,6 +34,31 @@ def list_suppliers(
     return {"suppliers": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
 
 
+@router.post("/")
+def create_supplier(
+    name: str = Query(..., max_length=200),
+    contact_person: str = Query(default=""),
+    phone: str = Query(default=""),
+    email: str = Query(default=""),
+    address: str = Query(default=""),
+    notes: str = Query(default=""),
+    current_user: dict = Depends(require_role("admin", "approver")),
+    conn=Depends(get_db),
+):
+    """创建供应商"""
+    existing = conn.execute(text("SELECT id FROM suppliers WHERE name = :n"), {"n": name}).fetchone()
+    if existing:
+        return {"id": existing[0], "message": "供应商已存在"}
+    conn.rollback()
+    with conn.begin():
+        result = conn.execute(text(
+            "INSERT INTO suppliers (name, contact_person, phone, email, address, notes) "
+            "VALUES (:n, :c, :p, :e, :a, :nt) RETURNING id"
+        ), {"n": name, "c": contact_person, "p": phone, "e": email, "a": address, "nt": notes})
+        sid = result.fetchone()[0]
+    return {"id": sid, "message": "供应商创建成功"}
+
+
 @router.put("/{supplier_id}")
 def update_supplier(
     supplier_id: int,
