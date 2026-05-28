@@ -45,25 +45,6 @@
     </div>
   </div>
 </div>
-
-<div class="modal-overlay" id="create-item-modal">
-  <div class="modal">
-    <div class="modal-header"><span>新增工具</span><button class="btn btn-outline btn-sm" onclick="closeModal('create-item-modal')"><i class="bi bi-x-lg"></i></button></div>
-    <div class="modal-body">
-      <div class="form-group"><label class="form-label">名称 *</label><input type="text" id="newItemName" class="form-input"></div>
-      <div class="form-group"><label class="form-label">分类</label><input type="text" id="newItemCategory" class="form-input"></div>
-      <div class="form-group"><label class="form-label">规格</label><input type="text" id="newItemSpec" class="form-input"></div>
-      <div class="form-group"><label class="form-label">品牌</label><input type="text" id="newItemBrand" class="form-input"></div>
-      <div class="form-group"><label class="form-label">总数量</label><input type="number" id="newItemQty" class="form-input" value="1" min="1"></div>
-      <div class="form-group"><label class="form-label">单价（元）</label><input type="number" id="newItemValue" class="form-input" value="0" step="0.01"></div>
-      <div class="form-group"><label class="form-label">存放仓库</label><select id="newItemWarehouse" class="form-input"></select></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('create-item-modal')">取消</button>
-      <button class="btn btn-primary" onclick="createItem()">创建</button>
-    </div>
-  </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -163,28 +144,6 @@ async function submitCart() {
     if (r.ok) { showToast(data.message || '提交成功'); cart.clear(); setTimeout(() => location.href = '/records', 1500); }
     else { showToast(data.detail || '提交失败', 'error'); }
   } catch(e) { showToast('提交失败：' + (e.message||''), 'error'); }
-}
-
-async function openCreateModal() {
-  const r = await api('/api/v1/warehouses/');
-  const data = await r.json();
-  document.getElementById('newItemWarehouse').innerHTML = data.warehouses
-    .filter(w => w.warehouse_type === 'tool' || w.warehouse_type === 'mixed')
-    .map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('');
-  document.getElementById('newItemName').value = '';
-  document.getElementById('newItemCategory').value = '';
-  document.getElementById('newItemSpec').value = '';
-  document.getElementById('newItemBrand').value = '';
-  document.getElementById('newItemQty').value = '1';
-  document.getElementById('newItemValue').value = '0';
-  openModal('create-item-modal');
-}
-
-);
-  const r = await api(`/api/v1/items/?${params.toString()}`, { method: 'POST' });
-  const data = await r.json();
-  if (r.ok) { showToast('工具创建成功'); closeModal('create-item-modal'); loadItems(currentPage); }
-  else { showToast(data.detail || '创建失败', 'error'); }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
