@@ -156,10 +156,10 @@ function selectSuggest(index) {
     poLines[i].specification = s.specification || '';
     poLines[i].brand = s.brand || '';
     // 更新其他输入框
-    const row = _activeSuggest.input.closest('div');
+        const row = _activeSuggest.input.closest("div").parentElement;
     if (row) {
       const inputs = row.querySelectorAll('input');
-      if (inputs.length >= 4) { inputs[1].value = s.category || ''; inputs[2].value = s.specification || ''; inputs[3].value = s.brand || ''; }
+          if (inputs.length >= 3) { inputs[0].value = s.category || ""; inputs[1].value = s.specification || ""; inputs[2].value = s.brand || ""; }
     }
   }
   closeSuggest();
