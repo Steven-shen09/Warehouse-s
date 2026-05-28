@@ -9,9 +9,6 @@
     <select id="categoryFilter" class="form-input" style="max-width: 140px;" onchange="loadItems()">
       <option value="">全部分类</option>
     </select>
-    {% if current_user.role in ('admin', 'approver') %}
-    <button class="btn btn-primary btn-sm" onclick="openCreateModal()">新增工具</button>
-    {% endif %}
   </div>
 </div>
 
@@ -183,17 +180,7 @@ async function openCreateModal() {
   openModal('create-item-modal');
 }
 
-async function createItem() {
-  const name = document.getElementById('newItemName').value.trim();
-  if (!name) { showToast('请输入名称', 'error'); return; }
-  const params = new URLSearchParams({
-    name, item_type: 'tool',
-    category: document.getElementById('newItemCategory').value,
-    specification: document.getElementById('newItemSpec').value,
-    brand: document.getElementById('newItemBrand').value,
-    total_quantity: document.getElementById('newItemQty').value || 1,
-    value: document.getElementById('newItemValue').value || 0,
-  });
+);
   const r = await api(`/api/v1/items/?${params.toString()}`, { method: 'POST' });
   const data = await r.json();
   if (r.ok) { showToast('工具创建成功'); closeModal('create-item-modal'); loadItems(currentPage); }
