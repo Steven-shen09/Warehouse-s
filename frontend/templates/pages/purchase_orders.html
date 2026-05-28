@@ -12,6 +12,7 @@
       <option value="已取消">已取消</option>
     </select>
     <button class="btn btn-primary" onclick="openCreateModal()"><i class="bi bi-plus-lg"></i> 新建采购单</button>
+    <button class="btn btn-outline" onclick="openImportModal()"><i class="bi bi-upload"></i> 导入采购单</button>
   </div>
 </div>
 
@@ -24,6 +25,18 @@
       </table>
     </div>
     <div id="pagination" style="margin-top: 12px; display: flex; gap: 8px; justify-content: center;"></div>
+  </div>
+</div>
+
+<!-- 确认弹窗 -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <div class="modal-header"><span id="confirm-title">确认操作</span><button class="btn btn-outline btn-sm" onclick="closeModal('confirm-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body"><p id="confirm-message" style="color:var(--text-secondary);"></p></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('confirm-modal')">取消</button>
+      <button class="btn btn-success" id="confirm-btn">确认</button>
+    </div>
   </div>
 </div>
 
@@ -58,6 +71,40 @@
   </div>
 </div>
 
+<!-- 导入采购单模态框 -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal" style="max-width: 600px;">
+    <div class="modal-header"><span>导入采购单</span><button class="btn btn-outline btn-sm" onclick="closeModal('import-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body">
+      <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+        <div class="form-group" style="flex:1; min-width: 160px;">
+          <label class="form-label">供应商 *</label><select id="impSupplier" class="form-input"></select>
+        </div>
+        <div class="form-group" style="flex:1; min-width: 160px;">
+          <label class="form-label">仓库 *</label><select id="impWarehouse" class="form-input"></select>
+        </div>
+        <div class="form-group" style="flex:1; min-width: 140px;">
+          <label class="form-label">采购日期 *</label><input type="date" id="impDate" class="form-input">
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">备注</label><input type="text" id="impNotes" class="form-input"></div>
+      <hr style="margin: 16px 0; border-color: var(--bg);">
+      <div class="form-group">
+        <label class="form-label">
+          CSV 文件 (物品名称,数量,单价,批次号)
+          <a href="#" onclick="downloadTemplate();return false;" style="font-size:12px;color:var(--primary);margin-left:8px;">下载模板</a>
+        </label>
+        <input type="file" id="impFile" class="form-input" accept=".csv" onchange="previewImport()">
+      </div>
+      <div id="importPreview" style="margin-top:12px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('import-modal')">取消</button>
+      <button class="btn btn-primary" onclick="submitImport()">导入</button>
+    </div>
+  </div>
+</div>
+
 <!-- 详情模态框 -->
 <div class="modal-overlay" id="detail-modal">
   <div class="modal" style="max-width: 700px;">
@@ -72,23 +119,44 @@
 <script>
 let currentPage = 1;
 let poLines = [];
+let importLines = [];
+let _confirmCb = null;
+
+document.getElementById('confirm-btn').addEventListener('click', () => {
+  if (_confirmCb) { closeModal('confirm-modal'); _confirmCb(); _confirmCb = null; }
+});
+
+function showConfirm(title, msg, cb) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-message').textContent = msg;
+  _confirmCb = cb;
+  openModal('confirm-modal');
+}
 
 async function initSelects() {
-  const [suppliers, warehouses, items] = await Promise.all([
+  const [suppliersR, warehousesR, itemsR] = await Promise.all([
     api('/api/v1/suppliers?page_size=100'),
     api('/api/v1/warehouses'),
     api('/api/v1/items?page_size=500')
   ]);
-  document.getElementById('poSupplier').innerHTML = suppliers.suppliers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
-  document.getElementById('poWarehouse').innerHTML = warehouses.warehouses.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('');
-  // 存储物品列表供采购行使用
-  window._items = items.items;
+  const suppliers = await suppliersR.json();
+  const warehouses = await warehousesR.json();
+  const items = await itemsR.json();
+  const suppOpts = (suppliers.suppliers||[]).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  const whOpts = (warehouses.warehouses||[]).map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('');
+  document.getElementById('poSupplier').innerHTML = suppOpts;
+  document.getElementById('poWarehouse').innerHTML = whOpts;
+  document.getElementById('impSupplier').innerHTML = suppOpts;
+  document.getElementById('impWarehouse').innerHTML = whOpts;
+  window._items = items.items || [];
+}
+
+function findItem(name) {
+  const n = name.toLowerCase().trim();
+  return (window._items||[]).find(i => i.name.toLowerCase() === n);
 }
 
 function addPOLine() {
-  const items = window._items || [];
-  const options = items.map(i => `<option value="${i.id}">${esc(i.name)} (${i.item_type === 'consumable' ? '消耗品' : i.item_type === 'fixed_asset' ? '固定资产' : '工具'})</option>`).join('');
-  const idx = poLines.length;
   poLines.push({ item_id: 0, quantity: 1, unit_price: 0, batch_no: '' });
   renderPOLines();
 }
@@ -111,33 +179,35 @@ function renderPOLines() {
 async function loadOrders(page = 1) {
   currentPage = page;
   const st = document.getElementById('statusFilter').value;
-  const res = await api(`/api/v1/purchase-orders?status=${st}&page=${page}`);
-  document.getElementById('orderTableBody').innerHTML = res.orders.map(o => `
+  const r = await api(`/api/v1/purchase-orders?status=${encodeURIComponent(st)}&page=${page}`);
+  const data = await r.json();
+  document.getElementById('orderTableBody').innerHTML = data.orders.map(o => `
     <tr>
       <td><span class="status-badge">${esc(o.document_no)}</span></td>
       <td>${esc(o.supplier_name)}</td><td>${esc(o.warehouse_name)}</td>
-      <td>${o.purchase_date}</td><td>¥${o.total_amount.toFixed(2)}</td>
+      <td>${o.purchase_date}</td><td>${(o.total_amount||0).toFixed(2)}</td>
       <td><span class="status-badge ${o.status === '已入库' ? 'returned' : o.status === '已取消' ? 'rejected' : 'pending'}">${o.status}</span></td>
       <td>
         <button class="btn btn-outline btn-sm" onclick='showDetail(${JSON.stringify(o).replace(/'/g, "&#39;")})'><i class="bi bi-eye"></i></button>
         ${o.status === '待审核' ? `<button class="btn btn-success btn-sm" onclick="approvePO(${o.id})">入库</button><button class="btn btn-danger btn-sm" onclick="cancelPO(${o.id})">取消</button>` : ''}
       </td>
     </tr>`).join('');
-  renderPagination(res.total, page, 'loadOrders');
+  renderPagination(data.total, page, 'loadOrders');
 }
 
 function showDetail(o) {
   document.getElementById('detailBody').innerHTML = `
     <p><strong>单号：</strong>${esc(o.document_no)} | <strong>供应商：</strong>${esc(o.supplier_name)} | <strong>仓库：</strong>${esc(o.warehouse_name)}</p>
-    <p><strong>日期：</strong>${o.purchase_date} | <strong>金额：</strong>¥${o.total_amount.toFixed(2)}</p>
+    <p><strong>日期：</strong>${o.purchase_date} | <strong>金额：</strong>${(o.total_amount||0).toFixed(2)}</p>
     <table class="table"><thead><tr><th>物品</th><th>类型</th><th>数量</th><th>单价</th><th>批次号</th></tr></thead>
-    <tbody>${(o.items||[]).map(i => `<tr><td>${esc(i.item_name)}</td><td>${esc(i.item_type)}</td><td>${i.quantity}</td><td>¥${i.unit_price.toFixed(2)}</td><td>${esc(i.batch_no||'-')}</td></tr>`).join('')}</tbody></table>`;
+    <tbody>${(o.items||[]).map(i => `<tr><td>${esc(i.item_name)}</td><td>${esc(i.item_type||'-')}</td><td>${i.quantity}</td><td>${(i.unit_price||0).toFixed(2)}</td><td>${esc(i.batch_no||'-')}</td></tr>`).join('')}</tbody></table>`;
   document.getElementById('detailFooter').innerHTML = '<button class="btn btn-outline" onclick="closeModal(\'detail-modal\')">关闭</button>';
   openModal('detail-modal');
 }
 
 async function openCreateModal() {
   document.getElementById('poDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('poNotes').value = '';
   poLines = [];
   renderPOLines();
   await initSelects();
@@ -153,27 +223,99 @@ async function submitPO() {
   for (const l of poLines) { if (!l.item_id) { showToast('请选择所有采购物品', 'error'); return; } }
   const body = { supplier_id: sid, warehouse_id: wid, purchase_date: pdate, notes: document.getElementById('poNotes').value, items: poLines };
   try {
-    const res = await api('/api/v1/purchase-orders', 'POST', body);
-    showToast(`采购单 ${res.document_no} 创建成功`);
-    closeModal('po-modal');
-    loadOrders();
+    const r = await api('/api/v1/purchase-orders', { method: 'POST', body: JSON.stringify(body) });
+    const d = await r.json();
+    if (r.ok) { showToast(`采购单 ${d.document_no} 创建成功`); closeModal('po-modal'); loadOrders(); }
+    else { showToast(d.detail || '创建失败', 'error'); }
   } catch(e) { showToast('创建失败：' + (e.message || ''), 'error'); }
 }
 
 async function approvePO(id) {
-  showConfirmDialog('确认入库', '审核通过后将自动更新库存，确认？', async () => {
-    await api(`/api/v1/purchase-orders/${id}/approve`, 'PUT');
-    showToast('采购单已入库');
-    loadOrders(currentPage);
+  showConfirm('确认入库', '审核通过后将自动更新库存，确认？', async () => {
+    const r = await api(`/api/v1/purchase-orders/${id}/approve`, { method: 'PUT' });
+    const d = await r.json();
+    if (r.ok) { showToast('采购单已入库'); loadOrders(currentPage); }
+    else { showToast(d.detail || '操作失败', 'error'); }
   });
 }
 
 async function cancelPO(id) {
-  showConfirmDialog('取消采购单', '确认取消该采购单？', async () => {
-    await api(`/api/v1/purchase-orders/${id}/cancel`, 'PUT');
-    showToast('采购单已取消');
-    loadOrders(currentPage);
+  showConfirm('取消采购单', '确认取消该采购单？', async () => {
+    const r = await api(`/api/v1/purchase-orders/${id}/cancel`, { method: 'PUT' });
+    const d = await r.json();
+    if (r.ok) { showToast('采购单已取消'); loadOrders(currentPage); }
+    else { showToast(d.detail || '操作失败', 'error'); }
   });
+}
+
+// ── 导入功能 ──
+async function openImportModal() {
+  document.getElementById('impDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('impNotes').value = '';
+  document.getElementById('impFile').value = '';
+  document.getElementById('importPreview').innerHTML = '';
+  importLines = [];
+  await initSelects();
+  openModal('import-modal');
+}
+
+function downloadTemplate() {
+  const csv = '物品名称,数量,单价,批次号\nA4打印纸,5,25,\n墨盒,2,200,HP-2026\n胶带,10,5,\n';
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = '采购导入模板.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function previewImport() {
+  const file = document.getElementById('impFile').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const lines = e.target.result.split('\n').filter(l => l.trim());
+    if (lines.length < 2) { showToast('CSV文件为空', 'error'); return; }
+    // 跳过表头
+    importLines = [];
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split(',');
+      const name = (parts[0]||'').trim();
+      if (!name) continue;
+      const item = findItem(name);
+      if (!item) { showToast(`物品"${name}"不存在，请先创建`, 'error'); return; }
+      importLines.push({
+        item_id: item.id,
+        item_name: item.name,
+        quantity: parseInt(parts[1]) || 1,
+        unit_price: parseFloat(parts[2]) || 0,
+        batch_no: (parts[3]||'').trim()
+      });
+    }
+    document.getElementById('importPreview').innerHTML = `
+      <div class="table-wrapper">
+        <table class="table">
+          <thead><tr><th>物品</th><th>数量</th><th>单价</th><th>批次号</th></tr></thead>
+          <tbody>${importLines.map(l => `<tr><td>${esc(l.item_name)}</td><td>${l.quantity}</td><td>${l.unit_price.toFixed(2)}</td><td>${esc(l.batch_no||'-')}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+      <p style="color:var(--text-secondary);margin-top:8px;">共 ${importLines.length} 种物品</p>`;
+  };
+  reader.readAsText(file);
+}
+
+async function submitImport() {
+  const sid = parseInt(document.getElementById('impSupplier').value);
+  const wid = parseInt(document.getElementById('impWarehouse').value);
+  const pdate = document.getElementById('impDate').value;
+  if (!sid || !wid || !pdate) { showToast('请完整填写供应商、仓库和采购日期', 'error'); return; }
+  if (importLines.length === 0) { showToast('请先上传CSV并预览', 'error'); return; }
+  const body = { supplier_id: sid, warehouse_id: wid, purchase_date: pdate, notes: document.getElementById('impNotes').value, items: importLines };
+  try {
+    const r = await api('/api/v1/purchase-orders', { method: 'POST', body: JSON.stringify(body) });
+    const d = await r.json();
+    if (r.ok) { showToast(`采购单 ${d.document_no} 导入成功`); closeModal('import-modal'); loadOrders(); }
+    else { showToast(d.detail || '导入失败', 'error'); }
+  } catch(e) { showToast('导入失败：' + (e.message || ''), 'error'); }
 }
 
 document.addEventListener('DOMContentLoaded', () => { loadOrders(); initSelects(); });
