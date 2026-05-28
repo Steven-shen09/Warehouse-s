@@ -45,13 +45,11 @@
   <div class="modal" style="max-width: 800px;">
     <div class="modal-header"><span>新建采购单</span><button class="btn btn-outline btn-sm" onclick="closeModal('po-modal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body">
-      <!-- 供应商/仓库/日期数据列表（隐藏） -->
-      <datalist id="supplierList"></datalist>
-      <datalist id="itemList"></datalist>
       <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
-        <div class="form-group" style="flex:1; min-width: 180px;">
+        <div class="form-group" style="flex:1; min-width: 180px; position:relative;">
           <label class="form-label">供应商 *</label>
-          <input type="text" id="poSupplier" class="form-input" list="supplierList" placeholder="输入供应商名称，TAB补全" autocomplete="off">
+          <input type="text" id="poSupplier" class="form-input" placeholder="输入供应商名称" autocomplete="off" oninput="suggest(this, window._suppliers||[], 'supplierSuggest')" onfocus="suggest(this, window._suppliers||[], 'supplierSuggest')" onblur="setTimeout(()=>document.getElementById('supplierSuggest').innerHTML='',150)">
+          <div id="supplierSuggest" class="suggest-dropdown"></div>
         </div>
         <div class="form-group" style="flex:1; min-width: 180px;">
           <label class="form-label">仓库 *</label><select id="poWarehouse" class="form-input"></select>
@@ -81,9 +79,10 @@
     <div class="modal-header"><span>导入采购单</span><button class="btn btn-outline btn-sm" onclick="closeModal('import-modal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body">
       <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
-        <div class="form-group" style="flex:1; min-width: 180px;">
+        <div class="form-group" style="flex:1; min-width: 180px; position:relative;">
           <label class="form-label">供应商 *</label>
-          <input type="text" id="impSupplier" class="form-input" list="supplierList" placeholder="输入供应商名称，TAB补全" autocomplete="off">
+          <input type="text" id="impSupplier" class="form-input" placeholder="输入供应商名称" autocomplete="off" oninput="suggest(this, window._suppliers||[], 'importSuppSuggest')" onfocus="suggest(this, window._suppliers||[], 'importSuppSuggest')" onblur="setTimeout(()=>document.getElementById('importSuppSuggest').innerHTML='',150)">
+          <div id="importSuppSuggest" class="suggest-dropdown"></div>
         </div>
         <div class="form-group" style="flex:1; min-width: 180px;">
           <label class="form-label">仓库 *</label><select id="impWarehouse" class="form-input"></select>
@@ -136,6 +135,42 @@ function showConfirm(title, msg, cb) {
   _confirmCb = cb; openModal('confirm-modal');
 }
 
+// ── 自定义建议列表 ──
+function suggest(input, sourceList, dropdownId) {
+  const dd = document.getElementById(dropdownId);
+  const val = input.value.toLowerCase().trim();
+  if (!val) { dd.innerHTML = ''; return; }
+  const matches = sourceList.filter(s => s.name.toLowerCase().includes(val)).slice(0, 6);
+  if (matches.length === 0) { dd.innerHTML = ''; return; }
+  dd.innerHTML = matches.map(s => `<div class="suggest-item" onmousedown="event.preventDefault();this.closest('input')||document.getElementById('${input.id}');document.getElementById('${input.id}').value='${esc(s.name).replace(/'/g,"&#39;")}';document.getElementById('${dropdownId}').innerHTML=''">${esc(s.name)}</div>`).join('');
+}
+// 点击建议项填入
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('suggest-item')) {
+    const input = e.target.parentElement.previousElementSibling;
+    if (input && input.tagName === 'INPUT') {
+      input.value = e.target.textContent;
+      input.focus();
+    }
+    e.target.parentElement.innerHTML = '';
+  }
+});
+// 行内物品建议
+function suggestLine(input, idx) {
+  const val = input.value.toLowerCase().trim();
+  const items = window._items || [];
+  if (!val) return;
+  const matches = items.filter(i => i.name.toLowerCase().includes(val)).slice(0, 5);
+  // 找到或创建建议列表
+  let dd = input.nextElementSibling;
+  if (!dd || !dd.classList.contains('suggest-dropdown')) {
+    dd = document.createElement('div'); dd.className = 'suggest-dropdown';
+    input.parentElement.appendChild(dd);
+  }
+  if (matches.length === 0) { dd.innerHTML = ''; return; }
+  dd.innerHTML = matches.map(s => `<div class="suggest-item" onmousedown="event.preventDefault();var inp=document.getElementById('itemName${idx}');inp.value='${esc(s.name).replace(/'/g,"&#39;")}';poLines[${idx}].item_name='${esc(s.name).replace(/'/g,"&#39;")}';poLines[${idx}].category='${esc(s.category||'').replace(/'/g,"&#39;")}';poLines[${idx}].specification='${esc(s.specification||'').replace(/'/g,"&#39;")}';poLines[${idx}].brand='${esc(s.brand||'').replace(/'/g,"&#39;")}';this.parentElement.innerHTML='';">${esc(s.name)} <span style="color:var(--text-muted);font-size:12px;">${esc(s.category||'')} ${esc(s.brand||'')}</span></div>`).join('');
+}
+
 async function initSelects() {
   const [suppliersR, warehousesR, itemsR] = await Promise.all([
     api('/api/v1/suppliers?page_size=200'),
@@ -145,41 +180,26 @@ async function initSelects() {
   const suppliers = await suppliersR.json();
   const warehouses = await warehousesR.json();
   const items = await itemsR.json();
-  // 仓库下拉框
-  const whOpts = (warehouses.warehouses||[]).map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('');
-  document.getElementById('poWarehouse').innerHTML = whOpts;
-  document.getElementById('impWarehouse').innerHTML = whOpts;
-  // 供应商 datalist
-  document.getElementById('supplierList').innerHTML = (suppliers.suppliers||[]).map(s => `<option value="${esc(s.name)}">`).join('');
-  // 物品 datalist
-  document.getElementById('itemList').innerHTML = (items.items||[]).map(i => `<option value="${esc(i.name)}">`).join('');
+  document.getElementById('poWarehouse').innerHTML = (warehouses.warehouses||[]).map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('');
+  document.getElementById('impWarehouse').innerHTML = document.getElementById('poWarehouse').innerHTML;
   window._suppliers = suppliers.suppliers || [];
   window._items = items.items || [];
 }
 
-function findItem(name) {
-  const n = name.toLowerCase().trim();
-  return (window._items||[]).find(i => i.name.toLowerCase() === n);
-}
-
-function findSupplier(name) {
-  const n = name.toLowerCase().trim();
-  return (window._suppliers||[]).find(s => s.name.toLowerCase() === n);
-}
+function findItem(name) { const n = name.toLowerCase().trim(); return (window._items||[]).find(i => i.name.toLowerCase() === n); }
+function findSupplier(name) { const n = name.toLowerCase().trim(); return (window._suppliers||[]).find(s => s.name.toLowerCase() === n); }
 
 async function ensureItem(name, category, spec, brand) {
   const existing = findItem(name);
   if (existing) return existing;
   const params = new URLSearchParams({ name, item_type:'tool', category:category||'', specification:spec||'', brand:brand||'', total_quantity:0, value:0 });
   const r = await api(`/api/v1/items/?${params.toString()}`, { method:'POST' });
-  const d = await r.json();
   if (r.ok) {
     const itemsR = await api('/api/v1/items?page_size=1000');
-    const itemsData = await itemsR.json();
-    window._items = itemsData.items || [];
-    document.getElementById('itemList').innerHTML = (window._items).map(i => `<option value="${esc(i.name)}">`).join('');
+    window._items = (await itemsR.json()).items || [];
     return findItem(name);
   }
+  const d = await r.json();
   throw new Error(d.detail || '创建物品失败');
 }
 
@@ -188,15 +208,9 @@ async function ensureSupplier(name) {
   if (existing) return existing.id;
   const r = await api(`/api/v1/suppliers/?name=${encodeURIComponent(name)}`, { method:'POST' });
   const d = await r.json();
-  if (r.ok && d.id) {
-    window._suppliers.push({ id: d.id, name: name });
-    document.getElementById('supplierList').innerHTML += `<option value="${esc(name)}">`;
-    return d.id;
-  }
-  // 重新查找
+  if (r.ok && d.id) { window._suppliers.push({ id:d.id, name }); return d.id; }
   const r2 = await api('/api/v1/suppliers?page_size=200');
-  const d2 = await r2.json();
-  window._suppliers = d2.suppliers || [];
+  window._suppliers = (await r2.json()).suppliers || [];
   const found = findSupplier(name);
   return found ? found.id : 0;
 }
@@ -208,8 +222,13 @@ function addPOLine() {
 
 function renderPOLines() {
   document.getElementById('poLines').innerHTML = poLines.map((l, i) => `
-    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;padding:8px;background:var(--bg);border-radius:8px;">
-      <input type="text" class="form-input" style="flex:1.5;min-width:140px;" list="itemList" value="${esc(l.item_name||'')}" onchange="poLines[${i}].item_name=this.value" placeholder="物品名称，TAB补全" autocomplete="off">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;padding:8px;background:var(--bg);border-radius:8px;position:relative;">
+      <div style="position:relative;flex:1.5;min-width:140px;">
+        <input type="text" id="itemName${i}" class="form-input" value="${esc(l.item_name||'')}" placeholder="物品名称" autocomplete="off"
+          oninput="poLines[${i}].item_name=this.value;suggestLine(this,${i})"
+          onfocus="suggestLine(this,${i})"
+          onblur="setTimeout(()=>{var n=this.nextElementSibling;if(n&&n.classList.contains('suggest-dropdown'))n.innerHTML=''},150)">
+      </div>
       <input type="text" class="form-input" style="width:80px;" value="${esc(l.category||'')}" onchange="poLines[${i}].category=this.value" placeholder="分类">
       <input type="text" class="form-input" style="width:90px;" value="${esc(l.specification||'')}" onchange="poLines[${i}].specification=this.value" placeholder="规格">
       <input type="text" class="form-input" style="width:80px;" value="${esc(l.brand||'')}" onchange="poLines[${i}].brand=this.value" placeholder="品牌">
@@ -221,21 +240,14 @@ function renderPOLines() {
 }
 
 async function loadOrders(page = 1) {
-  currentPage = page;
-  const st = document.getElementById('statusFilter').value;
+  currentPage = page; const st = document.getElementById('statusFilter').value;
   const r = await api(`/api/v1/purchase-orders/?status=${encodeURIComponent(st)}&page=${page}`);
   const data = await r.json();
   document.getElementById('orderTableBody').innerHTML = data.orders.map(o => `
-    <tr>
-      <td><span class="status-badge">${esc(o.document_no)}</span></td>
-      <td>${esc(o.supplier_name)}</td><td>${esc(o.warehouse_name)}</td>
-      <td>${o.purchase_date}</td><td>${(o.total_amount||0).toFixed(2)}</td>
+    <tr><td><span class="status-badge">${esc(o.document_no)}</span></td><td>${esc(o.supplier_name)}</td><td>${esc(o.warehouse_name)}</td><td>${o.purchase_date}</td><td>${(o.total_amount||0).toFixed(2)}</td>
       <td><span class="status-badge ${o.status==='已入库'?'returned':o.status==='已取消'?'rejected':'pending'}">${o.status}</span></td>
-      <td>
-        <button class="btn btn-outline btn-sm" onclick='showDetail(${JSON.stringify(o).replace(/'/g,"&#39;")})'><i class="bi bi-eye"></i></button>
-        ${o.status==='待审核'?`<button class="btn btn-success btn-sm" onclick="approvePO(${o.id})">入库</button><button class="btn btn-danger btn-sm" onclick="cancelPO(${o.id})">取消</button>`:''}
-      </td>
-    </tr>`).join('');
+      <td><button class="btn btn-outline btn-sm" onclick='showDetail(${JSON.stringify(o).replace(/'/g,"&#39;")})'><i class="bi bi-eye"></i></button>
+        ${o.status==='待审核'?`<button class="btn btn-success btn-sm" onclick="approvePO(${o.id})">入库</button><button class="btn btn-danger btn-sm" onclick="cancelPO(${o.id})">取消</button>`:''}</td></tr>`).join('');
   renderPagination(data.total, page, 'loadOrders');
 }
 
@@ -261,8 +273,7 @@ async function openCreateModal() {
   document.getElementById('poSupplier').value = '';
   document.getElementById('poDate').value = new Date().toISOString().slice(0,10);
   document.getElementById('poNotes').value = '';
-  poLines = [];
-  renderPOLines();
+  poLines = []; renderPOLines();
   await initSelects();
   openModal('po-modal');
 }
@@ -273,19 +284,14 @@ async function submitPO() {
   const pdate = document.getElementById('poDate').value;
   if (!sname || !wid || !pdate) { showToast('请填写供应商、仓库和日期', 'error'); return; }
   if (poLines.length === 0) { showToast('请添加采购明细', 'error'); return; }
-
   const sid = await ensureSupplier(sname);
   if (!sid) { showToast('无法创建供应商', 'error'); return; }
-
   const items = [];
   for (const l of poLines) {
     if (!l.item_name) { showToast('请填写所有物品名称', 'error'); return; }
-    try {
-      const it = await ensureItem(l.item_name, l.category, l.specification, l.brand);
-      items.push({ item_id:it.id, quantity:l.quantity, unit_price:l.unit_price, batch_no:l.batch_no });
-    } catch(e) { showToast(e.message, 'error'); return; }
+    try { const it = await ensureItem(l.item_name, l.category, l.specification, l.brand); items.push({ item_id:it.id, quantity:l.quantity, unit_price:l.unit_price, batch_no:l.batch_no }); }
+    catch(e) { showToast(e.message, 'error'); return; }
   }
-
   const body = { supplier_id:sid, warehouse_id:wid, purchase_date:pdate, notes:document.getElementById('poNotes').value, items };
   try {
     const r = await api('/api/v1/purchase-orders/', { method:'POST', body:JSON.stringify(body) });
@@ -303,7 +309,6 @@ async function approvePO(id) {
     else { showToast(d.detail||'操作失败', 'error'); }
   });
 }
-
 async function cancelPO(id) {
   showConfirm('取消采购单', '确认取消该采购单？', async () => {
     const r = await api(`/api/v1/purchase-orders/${id}/cancel`, { method:'PUT' });
@@ -317,70 +322,44 @@ async function cancelPO(id) {
 async function openImportModal() {
   document.getElementById('impSupplier').value = '';
   document.getElementById('impDate').value = new Date().toISOString().slice(0,10);
-  document.getElementById('impNotes').value = '';
-  document.getElementById('impFile').value = '';
-  document.getElementById('importPreview').innerHTML = '';
-  importLines = [];
-  await initSelects();
-  openModal('import-modal');
+  document.getElementById('impNotes').value = ''; document.getElementById('impFile').value = '';
+  document.getElementById('importPreview').innerHTML = ''; importLines = [];
+  await initSelects(); openModal('import-modal');
 }
-
 function downloadTemplate() {
   const csv = '物品名称,分类,规格,品牌,数量,单价,批次号\nA4打印纸,办公用品,A4 70g,得力,5,25,\n墨盒,办公用品,HP 80A,惠普,2,200,HP-2026\n胶带,办公用品,48mm,得力,10,5,\n';
-  const blob = new Blob(['﻿'+csv], { type:'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = '采购导入模板.csv'; a.click();
-  URL.revokeObjectURL(a.href);
+  a.href = URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv'})); a.download='采购导入模板.csv'; a.click();
 }
-
 function previewImport() {
-  const file = document.getElementById('impFile').files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const lines = e.target.result.split('\n').filter(l => l.trim());
-    if (lines.length < 2) { showToast('CSV为空', 'error'); return; }
+  const f = document.getElementById('impFile').files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = function(e) {
+    const ls = e.target.result.split('\n').filter(l=>l.trim()); if (ls.length<2){showToast('CSV为空','error');return;}
     importLines = [];
-    for (let i = 1; i < lines.length; i++) {
-      const p = lines[i].split(',');
-      const name = (p[0]||'').trim();
-      if (!name) continue;
-      importLines.push({ item_name:name, category:(p[1]||'').trim(), specification:(p[2]||'').trim(), brand:(p[3]||'').trim(), quantity:parseInt(p[4])||1, unit_price:parseFloat(p[5])||0, batch_no:(p[6]||'').trim() });
-    }
-    document.getElementById('importPreview').innerHTML = `
-      <table class="table"><thead><tr><th>物品</th><th>分类</th><th>规格</th><th>品牌</th><th>数量</th><th>单价</th><th>批次</th></tr></thead>
-      <tbody>${importLines.map(l => `<tr><td>${esc(l.item_name)}</td><td>${esc(l.category||'-')}</td><td>${esc(l.specification||'-')}</td><td>${esc(l.brand||'-')}</td><td>${l.quantity}</td><td>${l.unit_price.toFixed(2)}</td><td>${esc(l.batch_no||'-')}</td></tr>`).join('')}</tbody></table>
+    for (let i=1;i<ls.length;i++){const p=ls[i].split(',');const n=(p[0]||'').trim();if(!n)continue;
+      importLines.push({item_name:n,category:(p[1]||'').trim(),specification:(p[2]||'').trim(),brand:(p[3]||'').trim(),quantity:parseInt(p[4])||1,unit_price:parseFloat(p[5])||0,batch_no:(p[6]||'').trim()});}
+    document.getElementById('importPreview').innerHTML = `<table class="table"><thead><tr><th>物品</th><th>分类</th><th>规格</th><th>品牌</th><th>数量</th><th>单价</th><th>批次</th></tr></thead>
+      <tbody>${importLines.map(l=>`<tr><td>${esc(l.item_name)}</td><td>${esc(l.category||'-')}</td><td>${esc(l.specification||'-')}</td><td>${esc(l.brand||'-')}</td><td>${l.quantity}</td><td>${l.unit_price.toFixed(2)}</td><td>${esc(l.batch_no||'-')}</td></tr>`).join('')}</tbody></table>
       <p style="color:var(--text-secondary);margin-top:8px;">${importLines.length} 种物品</p>`;
-  };
-  reader.readAsText(file);
+  }; r.readAsText(f);
 }
-
 async function submitImport() {
-  const sname = document.getElementById('impSupplier').value.trim();
+  const sn = document.getElementById('impSupplier').value.trim();
   const wid = parseInt(document.getElementById('impWarehouse').value);
-  const pdate = document.getElementById('impDate').value;
-  if (!sname || !wid || !pdate) { showToast('请填写供应商、仓库和日期', 'error'); return; }
-  if (importLines.length === 0) { showToast('请先上传CSV并预览', 'error'); return; }
-
-  const sid = await ensureSupplier(sname);
-  if (!sid) { showToast('无法创建供应商', 'error'); return; }
-
+  const pd = document.getElementById('impDate').value;
+  if (!sn||!wid||!pd) { showToast('请填写供应商、仓库和日期','error'); return; }
+  if (importLines.length===0) { showToast('请先上传CSV','error'); return; }
+  const sid = await ensureSupplier(sn); if (!sid) { showToast('无法创建供应商','error'); return; }
   const items = [];
-  for (const l of importLines) {
-    try {
-      const it = await ensureItem(l.item_name, l.category, l.specification, l.brand);
-      items.push({ item_id:it.id, quantity:l.quantity, unit_price:l.unit_price, batch_no:l.batch_no });
-    } catch(e) { showToast(e.message, 'error'); return; }
-  }
-
+  for (const l of importLines) { try { const it = await ensureItem(l.item_name,l.category,l.specification,l.brand); items.push({item_id:it.id,quantity:l.quantity,unit_price:l.unit_price,batch_no:l.batch_no}); } catch(e) { showToast(e.message,'error'); return; } }
   try {
-    const r = await api('/api/v1/purchase-orders/', { method:'POST', body:JSON.stringify({ supplier_id:sid, warehouse_id:wid, purchase_date:pdate, notes:document.getElementById('impNotes').value, items }) });
+    const r = await api('/api/v1/purchase-orders/',{method:'POST',body:JSON.stringify({supplier_id:sid,warehouse_id:wid,purchase_date:pd,notes:document.getElementById('impNotes').value,items})});
     const d = await r.json();
     if (r.ok) { showToast(`采购单 ${d.document_no} 导入成功`); closeModal('import-modal'); loadOrders(); }
-    else { showToast(d.detail||'导入失败', 'error'); }
-  } catch(e) { showToast('导入失败：'+(e.message||''), 'error'); }
+    else { showToast(d.detail||'导入失败','error'); }
+  } catch(e) { showToast('导入失败：'+(e.message||''),'error'); }
 }
-
 document.addEventListener('DOMContentLoaded', () => { loadOrders(); initSelects(); });
 </script>
 {% endblock %}

@@ -731,6 +731,22 @@ a:hover { color: var(--primary-dark); }
 }
 .cart-checkbox:disabled { cursor: not-allowed; opacity: 0.3; }
 
+/* ── 自动补全建议列表 ── */
+.suggest-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 1000;
+  background: #FFFFFF; border: 1px solid var(--border-strong);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  border-top: none; max-height: 200px; overflow-y: auto;
+}
+.suggest-item {
+  padding: 10px 16px; cursor: pointer;
+  font-size: 14px; font-family: var(--font-sans); font-weight: 500;
+  color: var(--text);
+}
+.suggest-item:hover, .suggest-item:focus {
+  background: rgba(245,78,0,0.08); color: var(--primary);
+}
+
 /* ── 单据分组折叠 ── */
 .doc-group {
   margin-bottom: 18px;
