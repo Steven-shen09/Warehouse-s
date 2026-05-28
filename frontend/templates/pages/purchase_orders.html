@@ -179,7 +179,7 @@ function renderPOLines() {
 async function loadOrders(page = 1) {
   currentPage = page;
   const st = document.getElementById('statusFilter').value;
-  const r = await api(`/api/v1/purchase-orders?status=${encodeURIComponent(st)}&page=${page}`);
+  const r = await api(`/api/v1/purchase-orders/?status=${encodeURIComponent(st)}&page=${page}`);
   const data = await r.json();
   document.getElementById('orderTableBody').innerHTML = data.orders.map(o => `
     <tr>
@@ -223,7 +223,7 @@ async function submitPO() {
   for (const l of poLines) { if (!l.item_id) { showToast('请选择所有采购物品', 'error'); return; } }
   const body = { supplier_id: sid, warehouse_id: wid, purchase_date: pdate, notes: document.getElementById('poNotes').value, items: poLines };
   try {
-    const r = await api('/api/v1/purchase-orders', { method: 'POST', body: JSON.stringify(body) });
+    const r = await api('/api/v1/purchase-orders/', { method: 'POST', body: JSON.stringify(body) });
     const d = await r.json();
     if (r.ok) { showToast(`采购单 ${d.document_no} 创建成功`); closeModal('po-modal'); loadOrders(); }
     else { showToast(d.detail || '创建失败', 'error'); }
@@ -311,7 +311,7 @@ async function submitImport() {
   if (importLines.length === 0) { showToast('请先上传CSV并预览', 'error'); return; }
   const body = { supplier_id: sid, warehouse_id: wid, purchase_date: pdate, notes: document.getElementById('impNotes').value, items: importLines };
   try {
-    const r = await api('/api/v1/purchase-orders', { method: 'POST', body: JSON.stringify(body) });
+    const r = await api('/api/v1/purchase-orders/', { method: 'POST', body: JSON.stringify(body) });
     const d = await r.json();
     if (r.ok) { showToast(`采购单 ${d.document_no} 导入成功`); closeModal('import-modal'); loadOrders(); }
     else { showToast(d.detail || '导入失败', 'error'); }
