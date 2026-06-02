@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}耗材仓库 - Warehouse-s{% endblock %}
 {% block content %}
-<h2>耗材仓库</h2>
+<h2><i class="bi bi-droplet"></i> 耗材仓库</h2>
 
 <div class="card" style="margin-bottom: 20px;">
   <div class="card-body" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
@@ -105,7 +105,7 @@ async function loadItems(page = 1) {
   currentPage = page;
   const kw = document.getElementById('searchInput').value;
   const cat = document.getElementById('categoryFilter').value;
-  const r = await api(`/api/v1/warehouse-items/consumables?keyword=${encodeURIComponent(kw)}&category=${encodeURIComponent(cat)}&page=${page}`);
+  const r = await api(`/api/v1/warehouse-items/consumables?keyword=${encodeURIComponent(kw)}&category=${encodeURIComponent(cat)}&page=${page}&page_size=11`);
   const data = await r.json();
   document.getElementById('itemTableBody').innerHTML = data.items.map(it => `
     <tr>
@@ -116,7 +116,7 @@ async function loadItems(page = 1) {
         ${(it.stock_quantity||0) > 0 ? `<button class="btn btn-primary btn-sm" onclick="cart.add({id:${it.id},name:'${esc(it.name).replace(/'/g, "\\'")}',max:${it.stock_quantity||0},warehouse_id:${it.warehouse_id||0}})">加入</button>` : '<span style="color:var(--text-muted);">无库存</span>'}
       </td>
     </tr>`).join('');
-  renderPagination(data.total, page, 'loadItems');
+  renderPagination(data.total, page, 'loadItems', 11);
 }
 
 async function submitCart() {

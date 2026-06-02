@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}部门管理 - Warehouse-s{% endblock %}
 {% block content %}
-<h2>部门管理</h2>
+<h2><i class="bi bi-diagram-3"></i> 部门管理</h2>
 
 <div class="card" style="margin-bottom: 20px;">
   <div class="card-body" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
@@ -28,7 +28,7 @@
 <!-- 模态框 -->
 <div class="modal-overlay" id="dept-modal">
   <div class="modal">
-    <div class="modal-header"><span id="modalTitle">新增部门</span><button class="btn btn-outline btn-sm" onclick="closeModal('dept-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-header"><span id="modalTitle">新增部门</span><button class="btn btn-outline btn-sm" aria-label="关闭" onclick="closeModal('dept-modal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body">
       <input type="hidden" id="editId">
       <div class="form-group"><label class="form-label">名称 *</label><input type="text" id="deptName" class="form-input" maxlength="100"></div>
@@ -37,7 +37,7 @@
       <div class="form-group"><label class="form-label">描述</label><textarea id="description" class="form-input" rows="2"></textarea></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('dept-modal')">取消</button>
+      <button class="btn btn-outline" aria-label="关闭" onclick="closeModal('dept-modal')">取消</button>
       <button class="btn btn-primary" onclick="saveDept()">保存</button>
     </div>
   </div>
@@ -46,11 +46,17 @@
 
 {% block scripts %}
 <script>
-async function loadDepartments() {
+let deptPage = 1;
+
+async function loadDepartments(page = 1) {
+  deptPage = page;
   document.getElementById('deptTable').style.display = '';
   document.getElementById('deptTree').style.display = 'none';
-  const res = await api('/api/v1/departments');
-  document.getElementById('deptTableBody').innerHTML = res.departments.map(d => `
+  const res = await api(`/api/v1/departments?page=${page}&page_size=12`);
+  const depts = res.departments || [];
+  const total = res.total || 0;
+
+  let html = depts.map(d => `
     <tr>
       <td>${d.id}</td><td>${esc(d.name)}</td><td>${esc(d.parent_name || '-')}</td><td>${esc(d.manager_name || '-')}</td>
       <td>${esc(d.description)}</td>
@@ -59,6 +65,22 @@ async function loadDepartments() {
         <button class="btn btn-danger btn-sm" onclick="deleteDept(${d.id})"><i class="bi bi-trash"></i></button>
       </td>
     </tr>`).join('');
+
+  const deptTableBody = document.getElementById('deptTableBody');
+  // 翻页
+  const pages = Math.ceil(total / 12);
+  if (pages > 1) {
+    html += '<tr><td colspan="6"><div style="display:flex;gap:8px;justify-content:center;">';
+    html += `<button class="btn btn-outline btn-sm" onclick="loadDepartments(${page - 1})" ${page <= 1 ? 'disabled' : ''}>上一页</button>`;
+    const start = Math.max(1, page - 2);
+    const end = Math.min(pages, page + 2);
+    for (let i = start; i <= end; i++) {
+      html += `<button class="btn btn-sm ${i === page ? 'btn-primary' : 'btn-outline'}" onclick="loadDepartments(${i})">${i}</button>`;
+    }
+    html += `<button class="btn btn-outline btn-sm" onclick="loadDepartments(${page + 1})" ${page >= pages ? 'disabled' : ''}>下一页</button>`;
+    html += '</div></td></tr>';
+  }
+  deptTableBody.innerHTML = html;
 }
 
 async function loadTree() {
@@ -79,13 +101,14 @@ function renderTree(nodes, level = 0) {
 }
 
 async function loadParentOptions() {
-  const res = await api('/api/v1/departments');
+  const res = await api('/api/v1/departments?page_size=999');
   document.getElementById('parentId').innerHTML = '<option value="">无（顶级部门）</option>' + res.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
 }
 
 async function loadManagerOptions() {
-  const res = await api('/api/v1/users');
-  document.getElementById('managerId').innerHTML = '<option value="">无</option>' + res.users.map(u => `<option value="${u.id}">${esc(u.display_name || u.username)}</option>`).join('');
+  const res = await api('/api/v1/users?page_size=999');
+  const users = res.users || res.items || [];
+  document.getElementById('managerId').innerHTML = '<option value="">无</option>' + users.map(u => `<option value="${u.id}">${esc(u.display_name || u.username)}</option>`).join('');
 }
 
 function editDept(d) {
@@ -115,12 +138,12 @@ async function saveDept() {
     showToast('部门创建成功');
   }
   closeModal('dept-modal');
-  loadDepartments();
+  loadDepartments(deptPage);
 }
 
 async function deleteDept(id) {
   showConfirmDialog('删除部门', '确认删除该部门？', async () => {
-    try { await api(`/api/v1/departments/${id}`, 'DELETE'); showToast('部门已删除'); loadDepartments(); }
+    try { await api(`/api/v1/departments/${id}`, 'DELETE'); showToast('部门已删除'); loadDepartments(deptPage); }
     catch(e) { showToast('删除失败：' + (e.message || ''), 'error'); }
   });
 }

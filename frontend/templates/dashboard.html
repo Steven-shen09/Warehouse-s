@@ -3,239 +3,124 @@
 
 {% block content %}
 <style>
-/* ===== 仪表盘专用样式（Cursor Warm Minimal 设计规范） ===== */
+/* ===== 仪表盘专用样式（8dp 间距体系） ===== */
 
-.dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
+.dashboard { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+/* 仪表盘自行拉伸面板，须覆盖全局 ::after */
+.main-content::after { flex: 0 0 0; content: none; }
 
-/* --- 顶部辅助统计卡片行 --- */
-.quick-stats {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 16px;
-}
+/* --- 统计卡片 --- */
+.quick-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
 .quick-stat {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 20px;
-  border-radius: var(--radius);
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  cursor: pointer;
-  transition: all 0.2s ease;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: var(--radius);
+  background: var(--bg-card); border: 1px solid var(--border);
+  cursor: pointer; transition: all 0.2s ease;
+  min-height: 56px; /* 满足 44px + padding 的触控标准 */
 }
-.quick-stat:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-hover);
-  background: var(--bg-card-hover);
-}
-.quick-stat:active {
-  transform: scale(.98);
-  transition: transform 0.1s;
-}
+.quick-stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); background: var(--bg-card-hover); }
+.quick-stat:active { transform: scale(.98); transition: transform 0.1s; }
 .quick-stat-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  flex-shrink: 0;
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
 }
-.quick-stat-icon.danger { background: rgba(38,37,30,0.08); color: #26251E; }
-.quick-stat-icon.success { background: rgba(192,133,50,0.10); color: #C08532; }
-.quick-stat-icon.warning { background: rgba(245,78,0,0.08); color: #F54E00; }
-.quick-stat-icon.info { background: rgba(245,78,0,0.06); color: #E04A00; }
-.quick-stat-info { display: flex; flex-direction: column; }
-.quick-stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--primary);
-  line-height: 1.1;
-}
-.quick-stat-label { font-size: 13px; color: var(--text-secondary); }
+.quick-stat-icon.danger  { background: rgba(207,45,86,0.10); color: var(--danger); }
+.quick-stat-icon.success { background: rgba(31,138,101,0.10); color: var(--success); }
+.quick-stat-icon.warning { background: rgba(245,78,0,0.10); color: var(--primary); }
+.quick-stat-icon.info    { background: rgba(159,187,224,0.15); color: #5A7BA8; }
+.quick-stat-info { display: flex; flex-direction: column; min-width: 0; }
+.quick-stat-value { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: var(--primary); line-height: 1.15; }
+.quick-stat-label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
 
-/* --- 表盘区域 --- */
-.gauge-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 20px;
+/* --- 面板通用 --- */
+.dash-row-2, .dash-row-3 { display: flex; gap: 16px; flex: 1; min-height: 0; }
+.dash-row-2 .dash-panel:first-child { flex: 1.15; min-width: 0; }
+.dash-row-2 .dash-panel:last-child  { flex: 0.85; min-width: 0; }
+.dash-row-3 .dash-panel { flex: 1; min-width: 0; }
+.dash-panel {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  transition: box-shadow 0.2s ease;
+  display: flex; flex-direction: column;
 }
-.gauge-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 24px 16px 20px;
-  border-radius: var(--radius);
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  transition: all 0.2s ease;
+.dash-panel:hover { box-shadow: var(--shadow-hover); }
+.dash-panel-title {
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  padding: 10px 16px; background: var(--bg-soft);
+  display: flex; align-items: center; gap: 7px;
+  border-bottom: 1px solid var(--border);
 }
-.gauge-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-hover);
-  background: var(--bg-card-hover);
-}
-.gauge-card svg { position: relative; z-index: 2; }
-.gauge-value {
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  fill: var(--text-title);
-}
-.gauge-label {
-  font-size: 13px;
-  font-weight: 500;
-  fill: var(--text-secondary);
-}
-.gauge-sub {
-  font-size: 11px;
-  fill: var(--text-muted);
-}
+.dash-panel-title i { color: var(--primary); font-size: 14px; }
+.dash-panel-body { padding: 12px 16px; flex: 1; min-height: 0; }
 
-/* --- 饼图切片 --- */
-.gauge-card svg { pointer-events: none; }
-.gauge-card svg .pie-slices path,
-.gauge-card svg .pie-slices { pointer-events: auto; }
-.pie-slice {
-  transition: transform .3s ease, opacity .3s ease;
-  transform-origin: 100px 100px;
+/* --- 待处理事项 --- */
+.pending-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 0; border-bottom: 1px solid var(--border-light);
+  font-size: 13px; color: var(--text); text-decoration: none;
+  transition: all 0.15s ease;
+  min-height: 38px;
 }
-.pie-slice:hover {
-  transform: scale(1.06);
-  filter: brightness(1.15);
-}
+.pending-item:last-child { border-bottom: none; }
+.pending-item:hover { color: var(--primary); background: rgba(245,78,0,0.03); margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: 6px; }
 
-/* --- 饼图 tooltip --- */
-.pie-tooltip {
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(38,37,30,0.92);
-  color: #fff;
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 12px;
-  white-space: nowrap;
-  z-index: 20;
-  pointer-events: none;
-  display: none;
+/* --- 低库存预警 --- */
+.lowstock-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--border-light);
+  font-size: 13px; color: var(--text); text-decoration: none;
+  transition: all 0.15s ease;
+  min-height: 38px;
 }
+.lowstock-item:last-child { border-bottom: none; }
+.lowstock-item:hover { color: var(--primary); background: rgba(245,78,0,0.03); margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: 6px; }
 
-/* --- 趋势曲线图区域 --- */
-.trend-card {
-  border-radius: var(--radius);
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  padding: 24px;
-}
-.trend-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-.trend-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-title);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.trend-title i { color: var(--primary); font-size: 22px; }
-.trend-legend {
-  display: flex;
-  gap: 20px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.trend-legend span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.trend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.trend-dot.borrowed { background: var(--primary); }
-.trend-dot.returned { background: #C08532; }
-.trend-dot.new-items { background: var(--accent); }
+/* --- 仓库库存 --- */
+.warehouse-bar-row { margin-bottom: 8px; }
+.warehouse-bar-row:last-child { margin-bottom: 0; }
+.warehouse-bar-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+.warehouse-bar-label span:last-child { font-weight: 600; color: var(--text); }
+.warehouse-bar-track { height: 8px; background: var(--bg-soft); border-radius: 4px; overflow: hidden; }
+.warehouse-bar-fill { height: 100%; background: var(--primary); border-radius: 4px; transition: width 0.6s cubic-bezier(.25,.1,.25,1); }
 
-.trend-svg { width: 100%; }
-.trend-line {
-  fill: none;
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: stroke-dashoffset 1s cubic-bezier(.25,.1,.25,1);
-}
-.trend-area { opacity: .12; }
-.trend-dot-point { transition: r .2s; }
-.trend-label { font-size: 11px; fill: var(--text-muted); }
-.trend-grid-line { stroke: rgba(38,37,30,0.08); stroke-width: 1; }
-.trend-hover-line { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0; }
-.trend-tooltip {
-  position: absolute;
-  background: rgba(38,37,30,0.92);
-  color: #F2F1ED;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity .15s;
-  white-space: nowrap;
-  z-index: 10;
-}
-.trend-tooltip.show { opacity: 1; }
+/* --- 分类分布 --- */
+.category-dot-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 13px; }
+.category-dot-row:last-child { margin-bottom: 0; }
+.category-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.category-dot-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 500; }
+.category-dot-count { color: var(--text-muted); min-width: 28px; text-align: right; }
+.category-dot-pct { min-width: 36px; text-align: right; color: var(--text-secondary); }
+
+/* --- 本周概览 --- */
+.week-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 12px; }
+.week-stat { text-align: center; padding: 6px 4px; }
+.week-num { font-size: 22px; font-weight: 700; color: var(--primary); display: block; line-height: 1.2; }
+.week-lbl { font-size: 12px; color: var(--text-muted); margin-top: 2px; display: block; }
+.week-stat-full { grid-column: 1 / -1; display: flex; justify-content: center; gap: 24px; padding: 4px 0; border-top: 1px solid var(--border-light); }
+.week-stat-inline { text-align: center; }
+.week-stat-inline .week-num { font-size: 16px; display: inline; }
+.week-stat-inline .week-lbl { font-size: 12px; display: inline; margin-left: 4px; }
 
 /* --- 响应式 --- */
-@media (max-width: 1399px) {
-  .quick-stats { gap: 12px; }
-  .quick-stat { padding: 12px 14px; }
-  .quick-stat-icon { width: 36px; height: 36px; font-size: 17px; border-radius: 10px; }
-  .quick-stat-value { font-size: 18px; }
-  .gauge-grid { gap: 14px; }
-  .gauge-card { padding: 18px 10px 14px; }
-  .gauge-value { font-size: 24px; }
-}
 @media (max-width: 1023px) {
   .quick-stats { grid-template-columns: repeat(3, 1fr); }
-  .gauge-grid { grid-template-columns: repeat(3, 1fr); }
+  .dash-row-2, .dash-row-3 { flex-direction: column; }
 }
 @media (max-width: 767px) {
   .quick-stats { grid-template-columns: repeat(2, 1fr); }
-  .gauge-grid { grid-template-columns: repeat(2, 1fr); }
-  .trend-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .week-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
 
 <div class="dashboard" x-data="dashboardData()" x-init="init()">
-  <!-- 顶部辅助统计卡片 -->
+  <!-- ═══ 行1: 统计卡片 ═══ -->
   <div class="quick-stats">
     <div class="quick-stat" @click="go('/records?status=逾期')">
       <div class="quick-stat-icon danger"><i class="bi bi-exclamation-triangle"></i></div>
       <div class="quick-stat-info">
         <span class="quick-stat-value" x-text="fmt(stats.total_overdue)">--</span>
         <span class="quick-stat-label">逾期</span>
-      </div>
-    </div>
-    <div class="quick-stat" @click="go('/records?status=已归还')">
-      <div class="quick-stat-icon success"><i class="bi bi-arrow-return-left"></i></div>
-      <div class="quick-stat-info">
-        <span class="quick-stat-value" x-text="fmt(stats.total_returned_today)">--</span>
-        <span class="quick-stat-label">今日归还</span>
       </div>
     </div>
     {% if current_user.role in ('admin', 'approver') %}
@@ -249,143 +134,60 @@
         <span class="quick-stat-label">待审核</span>
       </div>
     </div>
+    <div class="quick-stat" @click="go('/records?status=借出中')">
+      <div class="quick-stat-icon info"><i class="bi bi-box-arrow-right"></i></div>
+      <div class="quick-stat-info">
+        <span class="quick-stat-value" x-text="fmt(stats.total_borrowed)">--</span>
+        <span class="quick-stat-label">在借中</span>
+      </div>
+    </div>
+    <div class="quick-stat">
+      <div class="quick-stat-icon success"><i class="bi bi-arrow-return-left"></i></div>
+      <div class="quick-stat-info">
+        <span class="quick-stat-value" x-text="fmt(stats.total_returned_today)">--</span>
+        <span class="quick-stat-label">今日归还</span>
+      </div>
+    </div>
     <div class="quick-stat" @click="go('/items?low_stock=1')">
       <div class="quick-stat-icon warning"><i class="bi bi-exclamation-diamond"></i></div>
       <div class="quick-stat-info">
         <span class="quick-stat-value" x-text="fmt(stats.low_stock_count)">--</span>
-        <span class="quick-stat-label">低库存预警</span>
-      </div>
-    </div>
-    <div class="quick-stat">
-      <div class="quick-stat-icon info"><i class="bi bi-clock-history"></i></div>
-      <div class="quick-stat-info">
-        <span class="quick-stat-value" x-text="fmt(stats.approval_timeout_count)">--</span>
-        <span class="quick-stat-label">审批超时</span>
+        <span class="quick-stat-label">低库存</span>
       </div>
     </div>
   </div>
 
-  <!-- 环形表盘区域 -->
-  <div class="gauge-grid">
-    {% raw %}
-    <!-- 表盘1：总物品（分类数量占比） -->
-    <div class="gauge-card" x-data="{hoverIdx:-1}" @mouseleave="hoverIdx=-1">
-      <svg viewBox="0 0 200 200" style="width:100%;max-width:215px">
-        <g class="pie-slices" data-gauge="1"></g>
-        <text x="100" y="90" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text-secondary)">总物品</text>
-        <text x="100" y="125" text-anchor="middle" class="gauge-value" x-text="animNums.g1">0</text>
-      </svg>
-      <div class="pie-tooltip" style="display:none"></div>
+  <!-- ═══ 行2: 待处理事项 + 低库存预警 ═══ -->
+  <div class="dash-row-2">
+    <!-- 左：待处理事项 -->
+    <div class="dash-panel">
+      <div class="dash-panel-title"><i class="bi bi-list-check"></i>待处理事项<span style="margin-left:auto;font-weight:400;font-size:12px;color:var(--text-muted);" id="pending-total"></span></div>
+      <div class="dash-panel-body" id="pending-panel">
+        <div class="skeleton" style="height:60px;"></div>
+      </div>
     </div>
-
-    <!-- 表盘2：库存总量（仓库占比） -->
-    <div class="gauge-card" x-data="{hoverIdx:-1}" @mouseleave="hoverIdx=-1">
-      <svg viewBox="0 0 200 200" style="width:100%;max-width:215px">
-        <g class="pie-slices" data-gauge="2"></g>
-        <text x="100" y="90" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text-secondary)">库存总量</text>
-        <text x="100" y="125" text-anchor="middle" class="gauge-value" x-text="animNums.g2">0</text>
-      </svg>
-      <div class="pie-tooltip" style="display:none"></div>
+    <!-- 右：低库存预警 -->
+    <div class="dash-panel">
+      <div class="dash-panel-title"><i class="bi bi-exclamation-triangle"></i>低库存预警</div>
+      <div class="dash-panel-body" id="lowstock-panel">
+        <div class="skeleton" style="height:60px;"></div>
+      </div>
     </div>
-
-    <!-- 表盘3：各分类库存占比（按数量） -->
-    <div class="gauge-card" x-data="{hoverIdx:-1}" @mouseleave="hoverIdx=-1">
-      <svg viewBox="0 0 200 200" style="width:100%;max-width:215px">
-        <g class="pie-slices" data-gauge="3"></g>
-        <text x="100" y="90" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text-secondary)">分类库存占比</text>
-        <text x="100" y="125" text-anchor="middle" class="gauge-value" x-text="animNums.g5">0</text>
-      </svg>
-      <div class="pie-tooltip" style="display:none"></div>
-    </div>
-
-    <!-- 表盘4：库存健康度（低库存占比） -->
-    <div class="gauge-card" x-data="{hoverIdx:-1}" @mouseleave="hoverIdx=-1">
-      <svg viewBox="0 0 200 200" style="width:100%;max-width:215px">
-        <g class="pie-slices" data-gauge="4"></g>
-        <text x="100" y="90" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text-secondary)">库存健康度</text>
-        <text x="100" y="125" text-anchor="middle" class="gauge-value" x-text="animNums.g4 + '%'">0%</text>
-      </svg>
-      <div class="pie-tooltip" style="display:none"></div>
-    </div>
-
-    <!-- 表盘5：再借率 -->
-    <div class="gauge-card" x-data="{hoverIdx:-1}" @mouseleave="hoverIdx=-1">
-      <svg viewBox="0 0 200 200" style="width:100%;max-width:215px">
-        <g class="pie-slices" data-gauge="5"></g>
-        <text x="100" y="90" text-anchor="middle" font-size="14" font-weight="600" fill="var(--text-secondary)">再借率</text>
-        <text x="100" y="125" text-anchor="middle" class="gauge-value" x-text="animNums.g3 + '%'">0%</text>
-      </svg>
-      <div class="pie-tooltip" style="display:none"></div>
-    </div>
-    {% endraw %}
   </div>
 
-  <!-- 趋势图 + 热门借出 双栏 -->
-  <div style="display:flex;gap:20px">
-    <!-- 左：趋势曲线图 占3份 -->
-    <div class="trend-card" style="flex:3.15;min-width:0" x-data="trendChart()" x-init="setup()">
-      <div class="trend-header">
-        <span class="trend-title"><i class="bi bi-graph-up"></i>趋势</span>
-        <div class="trend-legend">
-          <span><i class="trend-dot borrowed"></i>借出 <strong x-text="totalBorrowed" style="color:var(--text)">--</strong></span>
-          <span><i class="trend-dot returned"></i>归还 <strong x-text="totalReturned" style="color:var(--text)">--</strong></span>
-          <span><i class="trend-dot new-items"></i>新增 <strong x-text="totalNewItems" style="color:var(--text)">--</strong></span>
-        </div>
-      </div>
-      {% raw %}
-      <div class="trend-controls" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <input type="date" x-model="customStart" class="form-input" style="width:125px;font-size:11px;padding:3px 6px">
-        <span style="color:var(--text-muted);font-size:11px">至</span>
-        <input type="date" x-model="customEnd" class="form-input" style="width:125px;font-size:11px;padding:3px 6px">
-        <button class="btn btn-sm btn-primary" @click="setCustom" style="font-size:11px;padding:3px 10px">应用</button>
-      </div>
-      <div style="position:relative">
-        <svg id="trendSvg" viewBox="0 0 640 180" class="trend-svg"
-             @mousemove="onHover($event)" @mouseleave="onLeave()">
-          <defs>
-            <linearGradient id="borrowFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#F54E00" stop-opacity=".20"/>
-              <stop offset="100%" stop-color="#F54E00" stop-opacity="0"/>
-            </linearGradient>
-            <linearGradient id="returnFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#C08532" stop-opacity=".20"/>
-              <stop offset="100%" stop-color="#C08532" stop-opacity="0"/>
-            </linearGradient>
-            <linearGradient id="newFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#E04A00" stop-opacity=".20"/>
-              <stop offset="100%" stop-color="#E04A00" stop-opacity="0"/>
-            </linearGradient>
-          </defs>
-          <line x1="40" x2="620" y1="20" y2="20" class="trend-grid-line"/>
-          <line x1="40" x2="620" y1="80" y2="80" class="trend-grid-line"/>
-          <line x1="40" x2="620" y1="140" y2="140" class="trend-grid-line"/>
-          <path :d="areaPaths.borrowed" fill="url(#borrowFill)" class="trend-area"/>
-          <path :d="areaPaths.returned" fill="url(#returnFill)" class="trend-area"/>
-          <path :d="areaPaths.newItems" fill="url(#newFill)" class="trend-area"/>
-          <path :d="linePaths.borrowed" class="trend-line" stroke="#F54E00" stroke-dasharray="8 4"/>
-          <path :d="linePaths.returned" class="trend-line" stroke="#C08532" stroke-dasharray="4 4"/>
-          <path :d="linePaths.newItems" class="trend-line" stroke="#E04A00" stroke-dasharray="2 4"/>
-          <g class="hover-group" style="display:none">
-            <line class="trend-hover-line" x1="0" x2="0" y1="0" y2="0"/>
-            <circle r="3.5" fill="#F54E00" stroke="#fff" stroke-width="1.5"/>
-            <circle r="3.5" fill="#C08532" stroke="#fff" stroke-width="1.5"/>
-            <circle r="3.5" fill="#E04A00" stroke="#fff" stroke-width="1.5"/>
-          </g>
-        </svg>
-        <div id="trendTooltip" class="trend-tooltip" style="display:none"></div>
-      </div>
-      {% endraw %}
+  <!-- ═══ 行3: 仓库库存 + 分类分布 + 本周概览 ═══ -->
+  <div class="dash-row-3">
+    <div class="dash-panel">
+      <div class="dash-panel-title"><i class="bi bi-building"></i>仓库库存</div>
+      <div class="dash-panel-body" id="warehouse-panel"></div>
     </div>
-
-    <!-- 右：热门借出 TOP10（对齐库存健康度→再借率两列宽度） -->
-    <div class="trend-card" style="flex:2;min-width:0" x-data="topBorrowed()" x-init="load()">
-      <div class="trend-header">
-        <span class="trend-title"><i class="bi bi-bar-chart"></i>热门借出 Top 10</span>
-        <span style="font-size:11px;color:var(--text-muted)">本周</span>
-      </div>
-      {% raw %}
-      <svg id="topBorrowedSvg" viewBox="0 0 240 220" style="width:100%"></svg>
-      {% endraw %}
+    <div class="dash-panel">
+      <div class="dash-panel-title"><i class="bi bi-grid"></i>物品分类</div>
+      <div class="dash-panel-body" id="category-panel"></div>
+    </div>
+    <div class="dash-panel">
+      <div class="dash-panel-title"><i class="bi bi-calendar-week"></i>本周概览</div>
+      <div class="dash-panel-body" id="week-panel"></div>
     </div>
   </div>
 </div>
@@ -393,420 +195,113 @@
 
 {% block scripts %}
 <script>
-/* ===== 仪表盘数据与动画控制器 ===== */
 function dashboardData() {
   return {
-    stats: {
-      total_items: 0, total_borrowed: 0, total_available: 0, total_quantity: 0,
-      category_count: 0, category_distribution: [],
-      warehouse_distribution: [], status_distribution: [],
-      total_overdue: 0, total_pending_approval: 0, total_returned_today: 0,
-      low_stock_count: 0, approval_timeout_count: 0
-    },
-    trendsData: { weeks: [] },
-    animNums: { g1: 0, g2: 0, g3: 0, g4: 0, g5: 0 },
-    tipText: '',
-
+    stats: {},
     fmt(v) { return v == null ? '--' : v; },
     go(url) { location.href = url; },
 
-    /* 构建信息条 HTML */
-    buildInfo(dist, totalKey) {
-      const total = dist.reduce((s, d) => s + d.count, 0) || 1;
+    /* 待处理事项面板 */
+    buildPending(stats) {
+      const isStaff = {{ 'true' if current_user.role in ('admin', 'approver') else 'false' }};
+      if (!isStaff) {
+        return `<p style="color:var(--text-muted);padding:20px 0;text-align:center;">你暂无审核权限</p>`;
+      }
+      const items = [
+        { label: '物品租借待审', count: stats.pending_records || 0, url: '/approvals?type=records', icon: 'bi-box-seam' },
+        { label: '耗材领用待审', count: stats.pending_consumables || 0, url: '/approvals?type=consumable', icon: 'bi-droplet' },
+        { label: '固产领用待审', count: stats.pending_assets || 0, url: '/approvals?type=asset', icon: 'bi-pc-display' },
+        { label: '调拨待审', count: stats.pending_transfers || 0, url: '/approvals?type=transfers', icon: 'bi-arrow-left-right' },
+      ];
+      const total = items.reduce((s, i) => s + i.count, 0);
+      if (total === 0) {
+        return `<p style="color:var(--text-muted);padding:20px 0;text-align:center;"><i class="bi bi-check-circle" style="color:var(--success);"></i> 暂无待处理事项</p>`;
+      }
+      return items.map(i => `
+        <a href="${i.url}" class="pending-item">
+          <span style="display:flex;align-items:center;gap:6px;"><i class="bi ${i.icon}"></i>${i.label}</span>
+          ${i.count > 0 ? `<span class="status-badge pending">${i.count} 笔</span>` : `<span style="color:var(--text-muted);font-size:12px;">0</span>`}
+        </a>
+      `).join('');
+    },
+
+    /* 低库存预警面板 */
+    buildLowStock(items) {
+      if (!items || items.length === 0) {
+        return `<p style="color:var(--text-muted);padding:20px 0;text-align:center;"><i class="bi bi-check-circle" style="color:var(--success);"></i> 库存充足</p>`;
+      }
+      const maxShow = 5;
+      const list = items.slice(0, maxShow);
+      return list.map(i => `
+        <a href="/items?low_stock=1" class="lowstock-item">
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(i.name || '?')}</span>
+          <span style="font-size:12px;color:var(--text-muted);">${i.item_type === 'consumable' ? '耗材' : '工具'}</span>
+          <span class="status-badge ${(i.available||0) === 0 ? 'rejected' : 'pending'}" style="font-size:12px;padding:2px 8px;">剩 ${i.available || 0} / 阈 ${i.threshold || 0}</span>
+        </a>
+      `).join('') + (items.length > maxShow ? `<p style="text-align:center;margin-top:4px;font-size:12px;"><a href="/items?low_stock=1">查看全部 ${items.length} 项 →</a></p>` : '');
+    },
+
+    /* 仓库库存分布（横向条形图） */
+    buildWarehouse(dist) {
+      if (!dist || dist.length === 0) return '<p style="color:var(--text-muted);padding:16px 0;text-align:center;font-size:13px;">暂无数据</p>';
+      const max = Math.max(...dist.map(d => d.count), 1);
       return dist.map(d => {
-        const pct = Math.round(d.count / total * 100);
-        return `<span style="margin-right:8px">${d.name}: ${d.count} (${pct}%)</span>`;
+        const pct = Math.round(d.count / max * 100);
+        return `<div class="warehouse-bar-row">
+          <div class="warehouse-bar-label"><span>${esc(d.name)}</span><span>${d.count}</span></div>
+          <div class="warehouse-bar-track"><div class="warehouse-bar-fill" style="width:${pct}%;"></div></div>
+        </div>`;
       }).join('');
     },
 
-    /* 极坐标转换 */
-    polar(cx, cy, r, deg) {
-      const rad = (deg - 90) * Math.PI / 180;
-      return { x: (cx + r * Math.cos(rad)).toFixed(1), y: (cy + r * Math.sin(rad)).toFixed(1) };
-    },
-
-    /* 生成扇形 path */
-    slicePath(cx, cy, outerR, innerR, startDeg, endDeg) {
-      const os = this.polar(cx, cy, outerR, startDeg);
-      const oe = this.polar(cx, cy, outerR, endDeg);
-      const ie = this.polar(cx, cy, innerR, endDeg);
-      const is_ = this.polar(cx, cy, innerR, startDeg);
-      const large = (endDeg - startDeg) > 180 ? 1 : 0;
-      return `M${os.x},${os.y} A${outerR},${outerR} 0 ${large} 1 ${oe.x},${oe.y} L${ie.x},${ie.y} A${innerR},${innerR} 0 ${large} 0 ${is_.x},${is_.y} Z`;
-    },
-
-    /* 构建饼图切片数组（含角度） */
-    buildPieSegments(dist, colors) {
-      const segs = [];
+    /* 分类分布（圆点列表） */
+    buildCategory(dist) {
+      if (!dist || dist.length === 0) return '<p style="color:var(--text-muted);padding:16px 0;text-align:center;font-size:13px;">暂无数据</p>';
       const total = dist.reduce((s, d) => s + d.count, 0) || 1;
-      let angle = 0;
-      dist.forEach((d, i) => {
-        const pct = d.count / total * 100;
-        const sweep = pct * 3.6; // 百分比 → 角度
-        segs.push({
-          color: colors[i % colors.length],
-          name: d.name, count: d.count,
-          pct: Math.round(pct),
-          startAngle: angle,
-          endAngle: angle + sweep
-        });
-        angle += sweep;
-      });
-      return segs;
+      const colors = ['var(--primary)','#C08532','#E04A00','#D49E40','#D94300','#A07020'];
+      return dist.slice(0, 6).map((d, i) => {
+        const pct = Math.round(d.count / total * 100);
+        return `<div class="category-dot-row">
+          <span class="category-dot" style="background:${colors[i%6]};"></span>
+          <span class="category-dot-name">${esc(d.name)}</span>
+          <span class="category-dot-count">${d.count}</span>
+          <span class="category-dot-pct">${pct}%</span>
+        </div>`;
+      }).join('');
     },
 
-    /* 绘制 SVG 饼图 */
-    renderPie(container, segments, infoEl) {
-      const svg = container.querySelector('svg');
-      const g = svg.querySelector('.pie-slices');
-      g.innerHTML = '';
-      if (!segments.length || segments[0].pct >= 100) {
-        // 单段全圆
-        const c = document.createElementNS('http://www.w3.org/2000/svg','path');
-        c.setAttribute('d', this.slicePath(100, 100, 80, 50, 0, 359.9));
-        c.setAttribute('fill', segments[0] ? segments[0].color : 'rgba(38,37,30,0.08)');
-        c.classList.add('pie-slice');
-        g.appendChild(c);
-      } else {
-        segments.forEach((seg, idx) => {
-          const p = document.createElementNS('http://www.w3.org/2000/svg','path');
-          p.setAttribute('d', this.slicePath(100, 100, 80, 50, seg.startAngle, seg.endAngle));
-          p.setAttribute('fill', seg.color);
-          p.classList.add('pie-slice');
-          p.style.transformOrigin = '100px 100px';
-          // 悬停事件
-          p.addEventListener('mouseenter', () => {
-            const tip = container.querySelector('.pie-tooltip');
-            tip.textContent = `${seg.name}: ${seg.count} (${seg.pct}%)`;
-            tip.style.display = 'block';
-          });
-          p.addEventListener('mouseleave', () => {
-            const tip = container.querySelector('.pie-tooltip');
-            tip.style.display = 'none';
-          });
-          g.appendChild(p);
-        });
-      }
-      // 更新信息条
-      if (infoEl) infoEl.innerHTML = this.buildInfo(segments);
-    },
-
-    /* 数字跳动动画 */
-    animateNum(key, target, duration = 800) {
-      const start = this.animNums[key] || 0;
-      const startTime = performance.now();
-      const ease = t => t < .5 ? 2*t*t : -1+(4-2*t)*t;
-      const step = (now) => {
-        const elapsed = now - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        this.animNums[key] = Math.round(start + (target - start) * ease(progress));
-        if (progress < 1) requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
+    /* 本周概览（3+2 网格） */
+    buildWeekSummary(stats) {
+      return `
+        <div class="week-grid">
+          <div class="week-stat"><span class="week-num">${stats.total_items || 0}</span><span class="week-lbl">物品总数</span></div>
+          <div class="week-stat"><span class="week-num">${stats.total_quantity || 0}</span><span class="week-lbl">库存总量</span></div>
+          <div class="week-stat"><span class="week-num">${stats.total_available || 0}</span><span class="week-lbl">可用物品</span></div>
+          <div class="week-stat"><span class="week-num">${stats.category_count || 0}</span><span class="week-lbl">物品分类</span></div>
+          <div class="week-stat"><span class="week-num" style="color:var(--danger);">${stats.approval_timeout_count || 0}</span><span class="week-lbl">审批超时</span></div>
+          <div class="week-stat"><span class="week-num">${stats.total_borrowed || 0}</span><span class="week-lbl">当前在借</span></div>
+        </div>`;
     },
 
     async init() {
       try {
         const resp = await api('/api/v1/stats/');
-        if (resp.ok) {
-          const data = await resp.json();
-          this.stats = data;
-          // 触发数字动画
-          setTimeout(() => {
-            this.animateNum('g1', data.total_items);
-            this.animateNum('g2', data.total_quantity);
-            const borrowRate = data.total_items > 0 ? Math.round(data.total_borrowed / data.total_items * 100) : 0;
-            this.animateNum('g3', borrowRate);
-            const health = data.total_items > 0 ? Math.round((data.total_items - data.low_stock_count) / data.total_items * 100) : 100;
-            this.animateNum('g4', health);
-            const catQtyTotal = (data.category_quantity_distribution || []).reduce((s, d) => s + d.count, 0) || 0;
-            this.animateNum('g5', catQtyTotal);
-          }, 100);
-          // 构建饼图 — 每类表盘独立配色，符合系统主色调
-          const C1 = ['#F54E00','#E04A00','#FF6B24','#D94300','#FF8C52','#C03A00'];       // 总物品-橙系
-          const C2 = ['#C08532','#A07020','#D49E40','#B08030','#E0B058','#906020'];       // 库存总量-金系
-          const C3 = ['#F54E00','#C08532','#E04A00','#D49E40','#D94300','#A07020'];      // 分类占比-橙金交替
-          const C4 = ['#F54E00','rgba(38,37,30,0.08)'];                                  // 健康度-橙/暖灰
-          const C5 = ['#C08532','rgba(38,37,30,0.08)'];                                  // 再借率-金/暖灰
+        if (!resp.ok) return;
+        const data = await resp.json();
+        this.stats = data;
 
-          const pie1 = this.buildPieSegments(data.category_distribution || [], C1);
-          const pie2 = this.buildPieSegments(data.warehouse_distribution || [], C2);
-          const borrowed = data.total_borrowed || 0;
-          const totalItems = data.total_items || 1;
-          const pieBorrow = this.buildPieSegments([
-            { name: '在借', count: borrowed },
-            { name: '可用', count: totalItems - borrowed }
-          ], C5);
-          const lowStock = data.low_stock_count || 0;
-          const pieHealth = this.buildPieSegments([
-            { name: '健康', count: totalItems - lowStock },
-            { name: '低库存', count: lowStock }
-          ], C4);
-          const pieCatQty = this.buildPieSegments(data.category_quantity_distribution || [], C3);
+        document.getElementById('pending-panel').innerHTML = this.buildPending(data);
+        document.getElementById('lowstock-panel').innerHTML = this.buildLowStock(data.low_stock_items || []);
+        document.getElementById('warehouse-panel').innerHTML = this.buildWarehouse(data.warehouse_distribution || []);
+        document.getElementById('category-panel').innerHTML = this.buildCategory(data.category_distribution || []);
+        document.getElementById('week-panel').innerHTML = this.buildWeekSummary(data);
 
-          setTimeout(() => {
-            const cards = document.querySelectorAll('.gauge-card');
-            // 顺序: 总物品(0) 库存总量(1) 分类库存占比(2) 库存健康度(3) 再借率(4)
-            if (cards[0]) this.renderPie(cards[0], pie1);
-            if (cards[1]) this.renderPie(cards[1], pie2);
-            if (cards[2]) this.renderPie(cards[2], pieCatQty);
-            if (cards[3]) this.renderPie(cards[3], pieHealth);
-            if (cards[4]) this.renderPie(cards[4], pieBorrow);
-          }, 150);
-          // 通知趋势图组件
-          window.dispatchEvent(new CustomEvent('stats-loaded', { detail: data }));
-        }
-      } catch (e) { console.error('加载统计数据失败:', e); }
-
+        // 面板标题后缀（待处理总数）
+        const pTotal = (data.pending_records||0)+(data.pending_consumables||0)+(data.pending_assets||0)+(data.pending_transfers||0);
+        const ptEl = document.getElementById('pending-total');
+        if (ptEl && pTotal > 0) ptEl.textContent = `共 ${pTotal} 笔`;
+      } catch (e) { console.error('加载仪表盘失败:', e); }
     }
-  };
-}
-
-/* ===== 趋势曲线图组件 ===== */
-function trendChart() {
-  return {
-    trends: { weeks: [] },
-    customStart: '',
-    customEnd: '',
-    hoverX: null,
-    tooltip: { show: false, x: 0, y: 0, html: '' },
-
-    get maxBorrowed() {
-      let max = 0;
-      (this.trends.weeks || []).forEach(w => { max = Math.max(max, w.borrowed || 0); });
-      return Math.max(max, 3);
-    },
-    get maxReturned() {
-      let max = 0;
-      (this.trends.weeks || []).forEach(w => { max = Math.max(max, w.returned || 0); });
-      return Math.max(max, 3);
-    },
-    get maxNewItems() {
-      let max = 0;
-      (this.trends.weeks || []).forEach(w => { max = Math.max(max, w.new_items || 0); });
-      return Math.max(max, 3);
-    },
-    get totalBorrowed() {
-      return (this.trends.weeks || []).reduce((s, w) => s + (w.borrowed || 0), 0);
-    },
-    get totalReturned() {
-      return (this.trends.weeks || []).reduce((s, w) => s + (w.returned || 0), 0);
-    },
-    get totalNewItems() {
-      return (this.trends.weeks || []).reduce((s, w) => s + (w.new_items || 0), 0);
-    },
-
-    xPos(i) {
-      const weeks = this.trends.weeks || [];
-      if (weeks.length <= 1) return 340;
-      return 40 + i * (580 / (weeks.length - 1));
-    },
-    yPosB(v) { return 140 - ((v || 0) / this.maxBorrowed) * 120; },
-    yPosR(v) { return 140 - ((v || 0) / this.maxReturned) * 120; },
-    yPosN(v) { return 140 - ((v || 0) / this.maxNewItems) * 120; },
-
-    buildPath(key, yFn) {
-      const weeks = this.trends.weeks || [];
-      if (weeks.length === 0) return '';
-      const pts = weeks.map((w, i) => ({ x: this.xPos(i), y: yFn(w[key] || 0) }));
-      if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
-      let d = `M ${pts[0].x} ${pts[0].y}`;
-      for (let i = 0; i < pts.length - 1; i++) {
-        const cx = (pts[i].x + pts[i+1].x) / 2;
-        const cy = (pts[i].y + pts[i+1].y) / 2;
-        d += ` Q ${pts[i].x} ${pts[i].y} ${cx} ${cy}`;
-      }
-      d += ` L ${pts[pts.length-1].x} ${pts[pts.length-1].y}`;
-      return d;
-    },
-    buildArea(key, yFn) {
-      const line = this.buildPath(key, yFn);
-      if (!line || this.trends.weeks.length === 0) return '';
-      const firstX = this.xPos(0);
-      const lastX = this.xPos((this.trends.weeks.length - 1));
-      return `${line} L ${lastX} 140 L ${firstX} 140 Z`;
-    },
-
-    get linePaths() {
-      return {
-        borrowed: this.buildPath('borrowed', (v) => this.yPosB(v)),
-        returned: this.buildPath('returned', (v) => this.yPosR(v)),
-        newItems: this.buildPath('new_items', (v) => this.yPosN(v))
-      };
-    },
-    get areaPaths() {
-      return {
-        borrowed: this.buildArea('borrowed', (v) => this.yPosB(v)),
-        returned: this.buildArea('returned', (v) => this.yPosR(v)),
-        newItems: this.buildArea('new_items', (v) => this.yPosN(v))
-      };
-    },
-
-    get hoverPoints() {
-      if (!this.hoverX) return [];
-      const weeks = this.trends.weeks || [];
-      if (weeks.length === 0) return [];
-      const x = this.hoverX;
-      let idx = 0, minDist = Infinity;
-      weeks.forEach((w, i) => {
-        const d = Math.abs(this.xPos(i) - x);
-        if (d < minDist) { minDist = d; idx = i; }
-      });
-      const w = weeks[idx];
-      return [
-        { x: this.xPos(idx), y: this.yPosB(w.borrowed || 0), color: '#F54E00' },
-        { x: this.xPos(idx), y: this.yPosR(w.returned || 0), color: '#C08532' },
-        { x: this.xPos(idx), y: this.yPosN(w.new_items || 0), color: '#E04A00' }
-      ];
-    },
-
-    onHover(e) {
-      const svg = e.currentTarget;
-      const rect = svg.getBoundingClientRect();
-      const vbW = 640;
-      const scaleX = vbW / rect.width;
-      const hx = (e.clientX - rect.left) * scaleX;
-      const weeks = this.trends.weeks || [];
-      if (weeks.length === 0) return;
-      let idx = 0, minDist = Infinity;
-      weeks.forEach((w, i) => {
-        const d = Math.abs(this.xPos(i) - hx);
-        if (d < minDist) { minDist = d; idx = i; }
-      });
-      const w = weeks[idx];
-      const px = this.xPos(idx);
-      const hg = svg.querySelector('.hover-group');
-      if (!hg) return;
-      hg.style.display = '';
-      const hl = hg.querySelector('line');
-      if (hl) { hl.setAttribute('x1', px); hl.setAttribute('x2', px); hl.setAttribute('y1', '20'); hl.setAttribute('y2', '140'); }
-      const cs = hg.querySelectorAll('circle');
-      if (cs.length >= 3) {
-        cs[0].setAttribute('cx', px); cs[0].setAttribute('cy', this.yPosB(w.borrowed||0));
-        cs[1].setAttribute('cx', px); cs[1].setAttribute('cy', this.yPosR(w.returned||0));
-        cs[2].setAttribute('cx', px); cs[2].setAttribute('cy', this.yPosN(w.new_items||0));
-      }
-      // tooltip
-      const tip = document.getElementById('trendTooltip');
-      if (!tip) return;
-      tip.innerHTML = `${w.label}<br><span style="color:#F54E00">借出 ${w.borrowed}</span>  <span style="color:#C08532">归还 ${w.returned}</span>  <span style="color:#E04A00">新增 ${w.new_items}</span>`;
-      let tx = e.clientX - rect.left + 12;
-      if (tx + 180 > rect.width) tx = e.clientX - rect.left - 180;
-      tip.style.cssText = `display:block;opacity:1;position:absolute;left:${tx}px;top:${e.clientY-rect.top-60}px;background:rgba(38,37,30,0.92);color:#F2F1ED;padding:6px 12px;border-radius:8px;font-size:11px;pointer-events:none;z-index:20;white-space:nowrap`;
-    },
-    onLeave() {
-      const svg = document.getElementById('trendSvg');
-      if (svg) {
-        const hg = svg.querySelector('.hover-group');
-        if (hg) hg.style.display = 'none';
-      }
-      const tip = document.getElementById('trendTooltip');
-      if (tip) tip.style.display = 'none';
-    },
-
-    /* 日期控制 */
-    async fetchTrends(params) {
-      try {
-        const qs = new URLSearchParams(params).toString();
-        const resp = await api(`/api/v1/stats/weekly-trends?${qs}`);
-        if (resp.ok) {
-          const data = await resp.json();
-          this.trends = data;
-          requestAnimationFrame(() => { requestAnimationFrame(() => this.renderLabels()); });
-        }
-      } catch (e) { console.error('加载趋势数据失败:', e); }
-    },
-    async setCustom() {
-      if (!this.customStart || !this.customEnd) return;
-      await this.fetchTrends({ start_date: this.customStart, end_date: this.customEnd });
-    },
-    /* JS 渲染 X 轴日期标签 */
-    renderLabels() {
-      const svg = document.getElementById('trendSvg');
-      if (!svg) return;
-      svg.querySelectorAll('.x-label').forEach(el => el.remove());
-      const weeks = this.trends.weeks || [];
-      const ns = 'http://www.w3.org/2000/svg';
-      weeks.forEach((w, i) => {
-        const t = document.createElementNS(ns, 'text');
-        t.setAttribute('x', this.xPos(i));
-        t.setAttribute('y', '170');
-        t.setAttribute('text-anchor', 'middle');
-        t.setAttribute('font-size', '8');
-        t.setAttribute('fill', 'rgba(128,128,140,.45)');
-        t.classList.add('x-label');
-        t.textContent = w.label;
-        svg.appendChild(t);
-      });
-    },
-
-    setup() {
-      const loadData = () => {
-        const today = new Date();
-        const d7 = new Date(today);
-        d7.setDate(d7.getDate() - 7);
-        this.customStart = d7.toISOString().split('T')[0];
-        this.customEnd = today.toISOString().split('T')[0];
-        this.fetchTrends({ start_date: this.customStart, end_date: this.customEnd });
-      };
-      loadData();
-      window.addEventListener('pageshow', (e) => { if (e.persisted) loadData(); });
-    }
-  };
-}
-
-/* ===== 热门借出 TOP7 条状图 ===== */
-function topBorrowed() {
-  return {
-    items: [],
-    colors: ['#F54E00','#C08532','#E04A00','#D49E40','#D94300','#A07020','#FF6B24','#B08030','#FF8C52','#E0B058'],
-    async load() {
-      try {
-        const resp = await api('/api/v1/stats/top-borrowed?days=7&limit=10');
-        if (resp.ok) {
-          const data = await resp.json();
-          this.items = data.items || [];
-          requestAnimationFrame(() => { requestAnimationFrame(() => this.render()); });
-        }
-      } catch (e) { console.error('加载热门借出失败:', e); }
-    },
-    render() {
-      const svg = document.getElementById('topBorrowedSvg');
-      if (!svg) return;
-      svg.querySelectorAll('.bar-g').forEach(el => el.remove());
-      const items = this.items;
-      if (!items.length) return;
-      const ns = 'http://www.w3.org/2000/svg';
-      const maxCount = Math.max(...items.map(i => i.count || 0), 1);
-        const barMaxW = 140;
-        items.forEach((item, idx) => {
-          const w = Math.max(20, (item.count / maxCount) * barMaxW);
-          const y = idx * 18 + 1;
-          const color = this.colors[idx % this.colors.length];
-          const name = item.name.length > 6 ? item.name.slice(0,6)+'..' : item.name;
-          const g = document.createElementNS(ns, 'g');
-          g.classList.add('bar-g');
-          const r = document.createElementNS(ns, 'rect');
-          r.setAttribute('x', '0'); r.setAttribute('y', y);
-          r.setAttribute('width', w); r.setAttribute('height', '14');
-          r.setAttribute('rx', '3'); r.setAttribute('fill', color);
-          r.setAttribute('opacity', '.85');
-          g.appendChild(r);
-          const tn = document.createElementNS(ns, 'text');
-          tn.setAttribute('x', '4'); tn.setAttribute('y', y + 11);
-          tn.setAttribute('font-size', '9'); tn.setAttribute('fill', '#fff');
-          tn.setAttribute('font-weight', '500');
-          tn.textContent = name + ' ' + (item.total_qty || 0);
-          g.appendChild(tn);
-          const tc = document.createElementNS(ns, 'text');
-          tc.setAttribute('x', '148'); tc.setAttribute('y', y + 11);
-          tc.setAttribute('text-anchor', 'start');
-          tc.setAttribute('font-size', '9'); tc.setAttribute('fill', color);
-          tc.setAttribute('font-weight', '600');
-          tc.textContent = item.count;
-          g.appendChild(tc);
-          svg.appendChild(g);
-        });    }
   };
 }
 </script>

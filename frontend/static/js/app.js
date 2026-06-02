@@ -90,8 +90,7 @@ function esc(str) {
 }
 
 // ── 分页控件 ──
-function renderPagination(total, page, callbackName) {
-  const pageSize = 20;
+function renderPagination(total, page, callbackName, pageSize = 12) {
   const pages = Math.ceil(total / pageSize);
   if (pages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
   let html = '<div style="display:flex;gap:8px;justify-content:center;">';

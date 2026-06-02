@@ -9,24 +9,42 @@ router = APIRouter(prefix="/api/v1/departments", tags=["部门管理"])
 @router.get("/")
 def list_departments(
     keyword: str = "",
+    page: int = 1,
+    page_size: int = 12,
     current_user: dict = Depends(get_current_user),
     conn=Depends(get_db),
 ):
-    """部门列表（含子部门扁平展示）"""
+    """部门列表（含子部门扁平展示，分页）"""
     where = "WHERE 1=1"
     params = {}
     if keyword:
         where += " AND name LIKE :kw"
         params["kw"] = f"%{keyword}%"
 
+    total = conn.execute(text(
+        f"SELECT COUNT(*) FROM departments d "
+        f"LEFT JOIN departments p ON d.parent_id = p.id "
+        f"LEFT JOIN users u ON d.manager_id = u.id "
+        f"{where}"
+    ), params).fetchone()[0]
+
+    offset = (page - 1) * page_size
+    params["limit"] = page_size
+    params["offset"] = offset
+
     rows = conn.execute(text(
         f"SELECT d.*, p.name AS parent_name, u.display_name AS manager_name "
         f"FROM departments d "
         f"LEFT JOIN departments p ON d.parent_id = p.id "
         f"LEFT JOIN users u ON d.manager_id = u.id "
-        f"{where} ORDER BY d.id"
+        f"{where} ORDER BY d.id LIMIT :limit OFFSET :offset"
     ), params).fetchall()
-    return {"departments": [dict(r) for r in rows]}
+    return {
+        "departments": [dict(r) for r in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.get("/tree")

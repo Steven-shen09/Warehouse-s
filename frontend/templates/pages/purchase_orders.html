@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}采购入库 - Warehouse-s{% endblock %}
 {% block content %}
-<h2>采购入库管理</h2>
+<h2><i class="bi bi-cart-plus"></i> 采购入库管理</h2>
 
 <div class="card" style="margin-bottom: 20px;">
   <div class="card-body" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
@@ -31,10 +31,10 @@
 <!-- 确认弹窗 -->
 <div class="modal-overlay" id="confirm-modal">
   <div class="modal">
-    <div class="modal-header"><span id="confirm-title">确认操作</span><button class="btn btn-outline btn-sm" onclick="closeModal('confirm-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-header"><span id="confirm-title">确认操作</span><button class="btn btn-outline btn-sm" aria-label="关闭" onclick="closeModal('confirm-modal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body"><p id="confirm-message" style="color:var(--text-secondary);"></p></div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('confirm-modal')">取消</button>
+      <button class="btn btn-outline" aria-label="关闭" onclick="closeModal('confirm-modal')">取消</button>
       <button class="btn btn-success" id="confirm-btn">确认</button>
     </div>
   </div>
@@ -43,7 +43,7 @@
 <!-- 新建采购单模态框 -->
 <div class="modal-overlay" id="po-modal">
   <div class="modal" style="max-width: 800px;">
-    <div class="modal-header"><span>新建采购单</span><button class="btn btn-outline btn-sm" onclick="closeModal('po-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-header"><span>新建采购单</span><button class="btn btn-outline btn-sm" aria-label="关闭" onclick="closeModal('po-modal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body">
       <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
         <div class="form-group" style="flex:1; min-width: 180px; position:relative;">
@@ -67,7 +67,7 @@
       <div id="poLines"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('po-modal')">取消</button>
+      <button class="btn btn-outline" aria-label="关闭" onclick="closeModal('po-modal')">取消</button>
       <button class="btn btn-primary" onclick="submitPO()">提交采购单</button>
     </div>
   </div>
@@ -76,7 +76,7 @@
 <!-- 导入采购单模态框 -->
 <div class="modal-overlay" id="import-modal">
   <div class="modal" style="max-width: 700px;">
-    <div class="modal-header"><span>导入采购单</span><button class="btn btn-outline btn-sm" onclick="closeModal('import-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-header"><span>导入采购单</span><button class="btn btn-outline btn-sm" aria-label="关闭" onclick="closeModal('import-modal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body">
       <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
         <div class="form-group" style="flex:1; min-width: 180px; position:relative;">
@@ -103,7 +103,7 @@
       <div id="importPreview" style="margin-top:12px;"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('import-modal')">取消</button>
+      <button class="btn btn-outline" aria-label="关闭" onclick="closeModal('import-modal')">取消</button>
       <button class="btn btn-primary" onclick="submitImport()">导入</button>
     </div>
   </div>
@@ -112,7 +112,7 @@
 <!-- 详情模态框 -->
 <div class="modal-overlay" id="detail-modal">
   <div class="modal" style="max-width: 700px;">
-    <div class="modal-header"><span>采购单详情</span><button class="btn btn-outline btn-sm" onclick="closeModal('detail-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-header"><span>采购单详情</span><button class="btn btn-outline btn-sm" aria-label="关闭" onclick="closeModal('detail-modal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body" id="detailBody"></div>
     <div class="modal-footer" id="detailFooter"></div>
   </div>
@@ -290,7 +290,7 @@ function renderPOLines() {
 
 async function loadOrders(page = 1) {
   currentPage = page; const st = document.getElementById('statusFilter').value;
-  const r = await api(`/api/v1/purchase-orders/?status=${encodeURIComponent(st)}&page=${page}`);
+  const r = await api(`/api/v1/purchase-orders/?status=${encodeURIComponent(st)}&page=${page}&page_size=12`);
   const data = await r.json();
   document.getElementById('orderTableBody').innerHTML = data.orders.map(o => `
     <tr><td><span class="status-badge">${esc(o.document_no)}</span></td><td>${esc(o.supplier_name)}</td><td>${esc(o.warehouse_name)}</td><td>${o.purchase_date}</td><td>${(o.total_amount||0).toFixed(2)}</td>
@@ -314,7 +314,7 @@ function showDetail(o) {
     <div class="card-title" style="margin-bottom:8px;">采购明细</div>
     <table class="table"><thead><tr><th>物品</th><th>分类</th><th>规格</th><th>品牌</th><th>数量</th><th>单价</th><th>批次</th></tr></thead>
     <tbody>${(o.items||[]).map(i => `<tr><td>${esc(i.item_name)}</td><td>${esc(i.item_type||'-')}</td><td>${esc(i.specification||'-')}</td><td>${esc(i.brand||'-')}</td><td>${i.quantity}</td><td>${(i.unit_price||0).toFixed(2)}</td><td>${esc(i.batch_no||'-')}</td></tr>`).join('')}</tbody></table>`;
-  document.getElementById('detailFooter').innerHTML = '<button class="btn btn-outline" onclick="closeModal(\'detail-modal\')">关闭</button>';
+  document.getElementById('detailFooter').innerHTML = '<button class="btn btn-outline" aria-label="关闭" onclick="closeModal(\'detail-modal\')">关闭</button>';
   openModal('detail-modal');
 }
 

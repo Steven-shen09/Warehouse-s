@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="flex-between mb-16">
-  <h2>租借记录</h2>
+  <h2><i class="bi bi-journal-text"></i> 租借记录</h2>
 </div>
 
 <!-- 筛选栏 -->
@@ -28,13 +28,13 @@
   <div class="modal">
     <div class="modal-header">
       <h3 id="confirm-return-title">确认全部归还</h3>
-      <button class="btn btn-sm btn-outline" onclick="closeModal('confirm-return-modal')">&times;</button>
+      <button class="btn btn-sm btn-outline" aria-label="关闭" onclick="closeModal('confirm-return-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <p id="confirm-return-message" class="text-muted"></p>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('confirm-return-modal')">取消</button>
+      <button class="btn btn-outline" aria-label="关闭" onclick="closeModal('confirm-return-modal')">取消</button>
       <button class="btn btn-success" id="confirm-return-btn">确认归还</button>
     </div>
   </div>
@@ -45,7 +45,7 @@
   <div class="modal">
     <div class="modal-header">
       <h3>归还物品</h3>
-      <button class="btn btn-sm btn-outline" onclick="closeModal('return-modal')">&times;</button>
+      <button class="btn btn-sm btn-outline" aria-label="关闭" onclick="closeModal('return-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <form onsubmit="submitReturn(event)">
@@ -162,40 +162,66 @@ async function returnByDocument(docNo) {
   );
 }
 
+let recAllGroups = [];  // 缓存全部分组结果
+
 async function loadRecords(page = 1) {
   recordsPage = page;
   const keyword = document.getElementById('search-input').value;
   const status = document.getElementById('status-filter').value;
-  const params = new URLSearchParams({ page, page_size: 50, keyword, status });
-
-  const resp = await api(`/api/v1/records/?${params}`);
   const container = document.getElementById('records-table-container');
+
+  // 全量拉取（按单据分组需要完整数据）
+  const params = new URLSearchParams({ page: 1, page_size: 500, keyword, status });
+  const resp = await api(`/api/v1/records/?${params}`);
   if (!resp.ok) { container.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
 
   const data = await resp.json();
-  if (data.items.length === 0) {
+  if (!data.items || data.items.length === 0) {
+    recAllGroups = [];
     container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>暂无租借记录</p></div>';
     return;
   }
 
   // 按单据号分组
-  const groups = {};
+  const groupsMap = {};
   data.items.forEach(r => {
     const key = r.document_no || `SINGLE_${r.id}`;
-    if (!groups[key]) groups[key] = { document_no: r.document_no, items: [] };
-    groups[key].items.push(r);
+    if (!groupsMap[key]) groupsMap[key] = { document_no: r.document_no, items: [] };
+    groupsMap[key].items.push(r);
   });
+
+  // 转为数组，按单据号倒序（最新的在前）
+  recAllGroups = Object.values(groupsMap).sort((a, b) => {
+    const da = a.items[0]?.created_at || '';
+    const db = b.items[0]?.created_at || '';
+    return db.localeCompare(da);
+  });
+
+  renderRecPage(page);
+}
+
+function renderRecPage(page) {
+  const container = document.getElementById('records-table-container');
+  const GROUP_SIZE = 12;
+  const totalPages = Math.ceil(recAllGroups.length / GROUP_SIZE);
+  const start = (page - 1) * GROUP_SIZE;
+  const pageGroups = recAllGroups.slice(start, start + GROUP_SIZE);
+  recordsPage = page;
+
+  if (pageGroups.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>暂无租借记录</p></div>';
+    return;
+  }
 
   const isStaff = AppState.isAdmin || AppState.isApprover;
   let html = '';
 
-  for (const [key, group] of Object.entries(groups)) {
+  for (const group of pageGroups) {
     const items = group.items;
     const docNo = group.document_no;
     const label = docNo ? `单据号: ${docNo}` : '单条记录';
     const firstItem = items[0];
     const itemCount = items.length;
-    const allReturnable = items.every(r => r.status === '借出中' || r.status === '逾期');
     const anyReturnable = items.some(r => r.status === '借出中' || r.status === '逾期');
 
     html += `<div class="doc-group">
@@ -206,14 +232,13 @@ async function loadRecords(page = 1) {
           <span>${itemCount} 件物品</span>
           <span>借出: ${firstItem.borrow_date} ~ ${firstItem.expected_return_date}</span>
           <span class="text-muted" style="font-size:12px;">提交: ${(firstItem.created_at || '').split(' ')[0]}</span>
-
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           ${isStaff && anyReturnable && docNo ? `<button class="btn btn-success btn-sm" onclick="event.stopPropagation();returnByDocument('${docNo}')">全部归还</button>` : ''}
-          <span class="doc-group-toggle">▼</span>
+          <span class="doc-group-toggle">▶</span>
         </div>
       </div>
-      <div class="doc-group-body">
+      <div class="doc-group-body" style="display:none;">
         <table class="table">
           <thead><tr>
             <th>ID</th><th>物品</th><th>来源仓库</th><th>数量</th><th>借出日期</th><th>预计归还</th><th>状态</th>
@@ -234,19 +259,19 @@ async function loadRecords(page = 1) {
     </div>`;
   }
 
-  container.innerHTML = html;
-
-  // 分页
-  const pages = Math.ceil(data.total / 50);
-  if (pages > 1) {
-    let pagHtml = '<div class="pagination">';
-    pagHtml += `<button onclick="loadRecords(${page-1})" ${page===1?'disabled':''}>上一页</button>`;
-    for (let i = 1; i <= pages; i++) {
-      pagHtml += `<button class="${i===page?'active':''}" onclick="loadRecords(${i})">${i}</button>`;
+  // 分页 — 基于分组数量
+  if (totalPages > 1) {
+    html += '<div class="pagination">';
+    html += `<button onclick="renderRecPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>上一页</button>`;
+    const ps = Math.max(1, page - 2);
+    const pe = Math.min(totalPages, page + 2);
+    for (let i = ps; i <= pe; i++) {
+      html += `<button class="${i === page ? 'active' : ''}" onclick="renderRecPage(${i})">${i}</button>`;
     }
-    pagHtml += `<button onclick="loadRecords(${page+1})" ${page===pages?'disabled':''}>下一页</button></div>`;
-    container.innerHTML += pagHtml;
+    html += `<button onclick="renderRecPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>下一页</button></div>`;
   }
+
+  container.innerHTML = html;
 }
 
 document.addEventListener('DOMContentLoaded', () => {

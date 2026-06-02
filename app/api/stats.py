@@ -70,6 +70,10 @@ def dashboard_stats(
             "SELECT COUNT(*) FROM records WHERE status = '待审核' AND approval_deadline < NOW() AND borrower_id = :uid"
         ), {"uid": user_id}).fetchone()[0]
         low_stock_list = []
+        pending_records = 0
+        pending_consumables = 0
+        pending_assets = 0
+        pending_transfers = 0
     else:
         total_borrowed = conn.execute(text(
             "SELECT COUNT(*) FROM records WHERE status IN ('借出中', '逾期')"
@@ -87,6 +91,19 @@ def dashboard_stats(
             "SELECT COUNT(*) FROM records WHERE status = '待审核' AND approval_deadline < NOW()"
         )).fetchone()[0]
         low_stock_list = check_low_stock(conn)
+        # 待审核分类统计
+        pending_records = conn.execute(text(
+            "SELECT COUNT(*) FROM records WHERE status = '待审核'"
+        )).fetchone()[0]
+        pending_consumables = conn.execute(text(
+            "SELECT COUNT(*) FROM consumable_records WHERE status = '待审核'"
+        )).fetchone()[0]
+        pending_assets = conn.execute(text(
+            "SELECT COUNT(*) FROM asset_assignments WHERE status = '待审核'"
+        )).fetchone()[0]
+        pending_transfers = conn.execute(text(
+            "SELECT COUNT(*) FROM transfers WHERE status = '待审核'"
+        )).fetchone()[0]
 
     return {
         "total_items": total_items,
@@ -104,6 +121,10 @@ def dashboard_stats(
         "low_stock_count": len(low_stock_list),
         "low_stock_items": low_stock_list,
         "approval_timeout_count": approval_timeout,
+        "pending_records": pending_records,
+        "pending_consumables": pending_consumables,
+        "pending_assets": pending_assets,
+        "pending_transfers": pending_transfers,
     }
 
 

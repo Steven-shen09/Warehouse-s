@@ -129,7 +129,7 @@ def update_item_status(conn, item_id: int):
 def check_low_stock(conn) -> list:
     """检查所有库存低于阈值的物品，返回低库存物品列表（仅检查工具类和消耗品）"""
     rows = conn.execute(text(
-        "SELECT id, name, item_type, low_stock_threshold FROM items WHERE status != '损坏'"
+        "SELECT id, name, item_type, low_stock_threshold FROM items WHERE status != '损坏' AND item_type != 'fixed_asset'"
     )).fetchall()
     low_stock = []
     for row in rows:

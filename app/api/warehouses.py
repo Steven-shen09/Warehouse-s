@@ -1,5 +1,5 @@
 """仓库管理路由"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from app.api.deps import get_db, get_current_user, require_role
 from app.schemas.warehouse import WarehouseCreate, WarehouseUpdate
@@ -9,12 +9,23 @@ router = APIRouter(prefix="/api/v1/warehouses", tags=["仓库管理"])
 
 @router.get("/")
 def list_warehouses(
+    page: int = 1,
+    page_size: int = 12,
     current_user: dict = Depends(get_current_user),
     conn=Depends(get_db),
 ):
-    """仓库列表"""
-    rows = conn.execute(text("SELECT * FROM warehouses ORDER BY id")).fetchall()
-    return {"warehouses": [dict(r) for r in rows]}
+    """仓库列表（分页）"""
+    total = conn.execute(text("SELECT COUNT(*) FROM warehouses")).fetchone()[0]
+    offset = (page - 1) * page_size
+    rows = conn.execute(text(
+        "SELECT * FROM warehouses ORDER BY id LIMIT :limit OFFSET :offset"
+    ), {"limit": page_size, "offset": offset}).fetchall()
+    return {
+        "warehouses": [dict(r) for r in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.post("/")

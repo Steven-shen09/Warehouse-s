@@ -5,7 +5,7 @@
 <!-- ====== 列表视图 ====== -->
 <div id="warehouse-list-view">
   <div class="flex-between mb-16">
-    <h2>仓库管理</h2>
+    <h2><i class="bi bi-building"></i> 仓库管理</h2>
     {% if current_user.role == 'admin' %}
     <button class="btn btn-primary" onclick="openWarehouseForm()">
       <i class="bi bi-plus-lg"></i> 新增仓库
@@ -25,7 +25,7 @@
       <button class="btn btn-outline" onclick="showWarehouseList()">
         <i class="bi bi-arrow-left"></i> 返回
       </button>
-      <h2 id="warehouse-detail-name">仓库物品</h2>
+      <h2 id="warehouse-detail-name"><i class="bi bi-box-seam"></i> 仓库物品</h2>
     </div>
   </div>
 
@@ -39,7 +39,7 @@
   <div class="modal">
     <div class="modal-header">
       <h3 id="warehouse-form-title">新增仓库</h3>
-      <button class="btn btn-sm btn-outline" onclick="closeModal('warehouse-form-modal')">&times;</button>
+      <button class="btn btn-sm btn-outline" aria-label="关闭" onclick="closeModal('warehouse-form-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <form id="warehouse-form" onsubmit="saveWarehouse(event)">
@@ -67,13 +67,13 @@
   <div class="modal">
     <div class="modal-header">
       <h3>确认删除</h3>
-      <button class="btn btn-sm btn-outline" onclick="closeModal('delete-warehouse-modal')">&times;</button>
+      <button class="btn btn-sm btn-outline" aria-label="关闭" onclick="closeModal('delete-warehouse-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <p id="delete-warehouse-message" class="text-muted"></p>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('delete-warehouse-modal')">取消</button>
+      <button class="btn btn-outline" aria-label="关闭" onclick="closeModal('delete-warehouse-modal')">取消</button>
       <button class="btn btn-danger" id="delete-warehouse-btn">确认删除</button>
     </div>
   </div>
@@ -119,7 +119,7 @@ function statusBadge(status) {
 function showWarehouseList() {
   document.getElementById('warehouse-list-view').style.display = '';
   document.getElementById('warehouse-detail-view').style.display = 'none';
-  loadWarehouses();
+  loadWarehouses(whPage);
 }
 
 // ── 切换到仓库详情视图 ──
@@ -179,12 +179,15 @@ function openWarehouseForm() {
   openModal('warehouse-form-modal');
 }
 
+let whPage = 1;
+
 // ── 加载仓库列表 ──
-async function loadWarehouses() {
+async function loadWarehouses(page = 1) {
+  whPage = page;
   const container = document.getElementById('warehouses-table-container');
   container.innerHTML = '<div class="text-center text-muted" style="padding:48px;">加载中...</div>';
 
-  const resp = await api('/api/v1/warehouses/');
+  const resp = await api(`/api/v1/warehouses/?page=${page}&page_size=12`);
   if (!resp.ok) {
     container.innerHTML = '<div class="empty-state">加载失败</div>';
     return;
@@ -192,6 +195,7 @@ async function loadWarehouses() {
 
   const data = await resp.json();
   const warehouses = data.warehouses || [];
+  const total = data.total || 0;
 
   // 更新映射表
   warehousesMap = {};
@@ -204,7 +208,7 @@ async function loadWarehouses() {
 
   const isAdmin = AppState.isAdmin;
 
-  container.innerHTML = `
+  let html = `
     <table class="table">
       <thead><tr>
         <th>ID</th>
@@ -231,6 +235,22 @@ async function loadWarehouses() {
           </td>` : ''}
         </tr>`).join('')}</tbody>
     </table>`;
+
+  // 分页
+  const pages = Math.ceil(total / 12);
+  if (pages > 1) {
+    html += '<div style="display:flex;gap:8px;justify-content:center;margin-top:16px;">';
+    html += `<button class="btn btn-outline btn-sm" onclick="loadWarehouses(${page - 1})" ${page <= 1 ? 'disabled' : ''}>上一页</button>`;
+    const start = Math.max(1, page - 2);
+    const end = Math.min(pages, page + 2);
+    for (let i = start; i <= end; i++) {
+      html += `<button class="btn btn-sm ${i === page ? 'btn-primary' : 'btn-outline'}" onclick="loadWarehouses(${i})">${i}</button>`;
+    }
+    html += `<button class="btn btn-outline btn-sm" onclick="loadWarehouses(${page + 1})" ${page >= pages ? 'disabled' : ''}>下一页</button>`;
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
 }
 
 // ── 编辑仓库（回填模态框） ──
@@ -263,7 +283,7 @@ async function saveWarehouse(e) {
     document.getElementById('warehouse-id').value = '';
     document.getElementById('warehouse-form-title').textContent = '新增仓库';
     showToast(id ? '仓库已更新' : '仓库已创建');
-    loadWarehouses();
+    loadWarehouses(whPage);
   } else {
     const data = await resp.json();
     showToast(data.detail || '操作失败', 'error');
@@ -286,7 +306,7 @@ function deleteWarehouse(id) {
     const resp = await api(`/api/v1/warehouses/${id}`, { method: 'DELETE' });
     if (resp.ok) {
       showToast('仓库已删除');
-      loadWarehouses();
+      loadWarehouses(whPage);
     } else {
       const data = await resp.json();
       showToast(data.detail || '删除失败', 'error');

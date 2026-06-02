@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}耗材领用记录 - Warehouse-s{% endblock %}
 {% block content %}
-<h2>耗材领用记录</h2>
+<h2><i class="bi bi-droplet"></i> 耗材领用记录</h2>
 
 <div class="card" style="margin-bottom: 20px;">
   <div class="card-body" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
@@ -21,10 +21,10 @@
 <!-- 通用确认弹窗 -->
 <div class="modal-overlay" id="confirm-modal">
   <div class="modal">
-    <div class="modal-header"><span id="confirm-title">确认操作</span><button class="btn btn-outline btn-sm" onclick="closeModal('confirm-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-header"><span id="confirm-title">确认操作</span><button class="btn btn-outline btn-sm" aria-label="关闭" onclick="closeModal('confirm-modal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body"><p id="confirm-message" style="color:var(--text-secondary);"></p><div id="confirm-extra"></div></div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('confirm-modal')">取消</button>
+      <button class="btn btn-outline" aria-label="关闭" onclick="closeModal('confirm-modal')">取消</button>
       <button class="btn btn-success" id="confirm-btn">确认</button>
     </div>
   </div>
@@ -33,13 +33,13 @@
 <!-- 驳回弹窗 -->
 <div class="modal-overlay" id="reject-modal">
   <div class="modal">
-    <div class="modal-header"><span id="reject-title">驳回申请</span><button class="btn btn-outline btn-sm" onclick="closeModal('reject-modal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-header"><span id="reject-title">驳回申请</span><button class="btn btn-outline btn-sm" aria-label="关闭" onclick="closeModal('reject-modal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body">
       <p id="reject-message" style="color:var(--text-secondary);"></p>
       <div class="form-group" style="margin-top:12px;"><label class="form-label">驳回原因 *</label><textarea id="reject-reason" class="form-input" rows="2" placeholder="请填写驳回原因（必填）"></textarea></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('reject-modal')">取消</button>
+      <button class="btn btn-outline" aria-label="关闭" onclick="closeModal('reject-modal')">取消</button>
       <button class="btn btn-danger" id="reject-btn">确认驳回</button>
     </div>
   </div>
@@ -81,24 +81,31 @@ function toggleDocGroup(h) {
   else { b.style.display = 'none'; t.textContent = '▶'; }
 }
 
-async function loadRecords() {
+let crPage = 1;
+let crAllGroups = [];  // 缓存全部分组结果
+
+async function loadRecords(page = 1) {
+  crPage = page;
   const st = document.getElementById('statusFilter').value;
-  const r = await api(`/api/v1/consumable-records?status=${encodeURIComponent(st)}&page_size=200`);
+  const container = document.getElementById('records-container');
+
+  // 首次加载或筛选条件变化时，重新获取全部数据
+  const r = await api(`/api/v1/consumable-records?status=${encodeURIComponent(st)}&page_size=500`);
   const data = await r.json();
   const records = data.records || [];
 
-  const container = document.getElementById('records-container');
   if (records.length === 0) {
+    crAllGroups = [];
     container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-inbox"></i></div><p>暂无耗材领用记录</p></div>';
     return;
   }
 
   // 按单据号分组
-  const groups = {};
+  const groupsMap = {};
   for (const rec of records) {
     const key = rec.document_no || 'LY-' + rec.id;
-    if (!groups[key]) {
-      groups[key] = {
+    if (!groupsMap[key]) {
+      groupsMap[key] = {
         document_no: key,
         user_name: rec.user_name,
         pickup_date: rec.pickup_date,
@@ -109,15 +116,34 @@ async function loadRecords() {
         allPicked: true,
       };
     }
-    groups[key].items.push(rec);
-    groups[key].count += rec.quantity;
-    if (rec.status === '待审核') groups[key].anyPending = true;
-    if (rec.status !== '已拒绝') groups[key].allRejected = false;
-    if (rec.status !== '已领取') groups[key].allPicked = false;
+    groupsMap[key].items.push(rec);
+    groupsMap[key].count += rec.quantity;
+    if (rec.status === '待审核') groupsMap[key].anyPending = true;
+    if (rec.status !== '已拒绝') groupsMap[key].allRejected = false;
+    if (rec.status !== '已领取') groupsMap[key].allPicked = false;
+  }
+
+  // 转为数组并按单据号倒序排列（最新的在前）
+  crAllGroups = Object.values(groupsMap).sort((a, b) => b.document_no.localeCompare(a.document_no));
+
+  renderGroupsPage(page);
+}
+
+function renderGroupsPage(page) {
+  const container = document.getElementById('records-container');
+  const GROUP_SIZE = 12;
+  const totalGroups = crAllGroups.length;
+  const totalPages = Math.ceil(totalGroups / GROUP_SIZE);
+  const start = (page - 1) * GROUP_SIZE;
+  const pageGroups = crAllGroups.slice(start, start + GROUP_SIZE);
+
+  if (pageGroups.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon"><i class="bi bi-inbox"></i></div><p>暂无耗材领用记录</p></div>';
+    return;
   }
 
   let html = '';
-  for (const [docNo, g] of Object.entries(groups)) {
+  for (const g of pageGroups) {
     const gStatus = g.allPicked ? '已领取' : (g.allRejected ? '已拒绝' : (g.anyPending ? '待审核' : '已领取'));
     const badgeClass = gStatus === '已领取' ? 'returned' : (gStatus === '已拒绝' ? 'rejected' : 'pending');
 
@@ -130,8 +156,8 @@ async function loadRecords() {
     html += '<span>' + g.items.length + ' 种物品 / 共 ' + g.count + ' 件</span>';
     html += '<span>' + (g.pickup_date || '') + '</span>';
     html += '</div>';
-    html += '<span class="doc-group-toggle">▼</span></div>';
-    html += '<div class="doc-group-body"><table class="table"><thead><tr><th>物品</th><th>仓库</th><th>数量</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+    html += '<span class="doc-group-toggle">▶</span></div>';
+    html += '<div class="doc-group-body" style="display:none;"><table class="table"><thead><tr><th>物品</th><th>仓库</th><th>数量</th><th>状态</th><th>操作</th></tr></thead><tbody>';
     for (const rec of g.items) {
       html += '<tr>';
       html += '<td>' + esc(rec.item_name || '') + '</td>';
@@ -149,6 +175,20 @@ async function loadRecords() {
     }
     html += '</tbody></table></div></div>';
   }
+
+  // 分页 — 基于分组数量
+  if (totalPages > 1) {
+    html += '<div style="display:flex;gap:8px;justify-content:center;margin-top:16px;">';
+    html += `<button class="btn btn-outline btn-sm" onclick="renderGroupsPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>上一页</button>`;
+    const ps = Math.max(1, page - 2);
+    const pe = Math.min(totalPages, page + 2);
+    for (let i = ps; i <= pe; i++) {
+      html += `<button class="btn btn-sm ${i === page ? 'btn-primary' : 'btn-outline'}" onclick="renderGroupsPage(${i})">${i}</button>`;
+    }
+    html += `<button class="btn btn-outline btn-sm" onclick="renderGroupsPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>下一页</button>`;
+    html += '</div>';
+  }
+
   container.innerHTML = html;
 }
 
@@ -156,7 +196,7 @@ async function approveRecord(id) {
   showConfirm('确认通过', '确定通过该耗材领用申请？（库存将被永久扣减）', async () => {
     const r = await api('/api/v1/consumable-records/' + id + '/approve?comment=', { method: 'PUT' });
     const d = await r.json();
-    if (r.ok) { showToast(d.message || '已通过'); loadRecords(); }
+    if (r.ok) { showToast(d.message || '已通过'); loadRecords(crPage); }
     else { showToast(d.detail || '操作失败', 'error'); }
   });
 }
@@ -165,11 +205,11 @@ async function rejectRecord(id) {
   showReject('驳回领用', '确定驳回该耗材领用申请吗？', async (reason) => {
     const r = await api('/api/v1/consumable-records/' + id + '/reject?comment=' + encodeURIComponent(reason), { method: 'PUT' });
     const d = await r.json();
-    if (r.ok) { showToast(d.message || '已驳回'); loadRecords(); }
+    if (r.ok) { showToast(d.message || '已驳回'); loadRecords(crPage); }
     else { showToast(d.detail || '操作失败', 'error'); }
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => loadRecords());
+document.addEventListener('DOMContentLoaded', () => loadRecords(1));
 </script>
 {% endblock %}

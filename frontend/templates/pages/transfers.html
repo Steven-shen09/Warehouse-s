@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="flex-between mb-16">
-  <h2>调拨管理</h2>
+  <h2><i class="bi bi-arrow-left-right"></i> 调拨管理</h2>
   {% if current_user.role in ('admin', 'approver') %}
   <div style="display:flex;gap:8px;">
     <button class="btn btn-outline" onclick="openTransferImportModal()">
@@ -36,7 +36,7 @@
   <div class="modal" style="max-width:700px;">
     <div class="modal-header">
       <h3>新建调拨单</h3>
-      <button class="btn btn-sm btn-outline" onclick="closeModal('transfer-form-modal')">&times;</button>
+      <button class="btn btn-sm btn-outline" aria-label="关闭" onclick="closeModal('transfer-form-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <form id="transfer-form" onsubmit="submitBatchTransfer(event)">
@@ -92,7 +92,7 @@
   <div class="modal">
     <div class="modal-header">
       <h3>驳回调拨</h3>
-      <button class="btn btn-sm btn-outline" onclick="closeModal('reject-modal')">&times;</button>
+      <button class="btn btn-sm btn-outline" aria-label="关闭" onclick="closeModal('reject-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <p id="reject-message" class="text-muted"></p>
@@ -102,7 +102,7 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('reject-modal')">取消</button>
+      <button class="btn btn-outline" aria-label="关闭" onclick="closeModal('reject-modal')">取消</button>
       <button class="btn btn-danger" id="reject-btn">确认驳回</button>
     </div>
   </div>
@@ -113,7 +113,7 @@
   <div class="modal">
     <div class="modal-header">
       <h3>调拨详情</h3>
-      <button class="btn btn-sm btn-outline" onclick="closeModal('transfer-detail-modal')">&times;</button>
+      <button class="btn btn-sm btn-outline" aria-label="关闭" onclick="closeModal('transfer-detail-modal')">&times;</button>
     </div>
     <div class="modal-body" id="transfer-detail-content">
     </div>
@@ -214,16 +214,16 @@
 .import-steps { display:flex; align-items:center; justify-content:center; margin-bottom:24px; }
 .import-step { display:flex; flex-direction:column; align-items:center; gap:4px; opacity:0.4; }
 .import-step.active { opacity:1; }
-.import-step-num { width:28px; height:28px; border-radius:50%; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+.import-step-num { width:28px; height:28px; border-radius:50%; background:var(--primary); color:#FFFFFF; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
 .import-step-label { font-size:12px; color:var(--text-secondary); }
 .import-step-connector { width:48px; height:2px; background:var(--border-color, rgba(128,128,128,.2)); margin:0 8px; margin-bottom:16px; }
 .import-dropzone { border:2px dashed var(--border-color, rgba(128,128,128,.3)); border-radius:var(--radius); padding:32px; text-align:center; cursor:pointer; transition:all .2s; }
 .import-dropzone:hover, .import-dropzone.drag-over { border-color:var(--primary); background:rgba(91,140,255,.06); }
 .import-preview-table-wrapper { border-radius:var(--radius); border:1px solid var(--border-color, rgba(128,128,128,.15)); }
 .import-row-error { background:rgba(255,59,48,.08); }
-.import-summary-ok { color:#34C759; }
-.import-summary-error { color:#FF3B30; }
-.text-error { color:#FF3B30; }
+.import-summary-ok { color: var(--import-success); }
+.import-summary-error { color: var(--import-error); }
+.text-error { color: var(--import-error); }
 .transfer-detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 .transfer-detail-item { }
 .transfer-detail-label { font-size:12px; color:var(--text-secondary); margin-bottom:4px; }
@@ -543,7 +543,7 @@ function renderPagination(total, pageSize, current) {
 async function loadTransfers(page = 1) {
   currentPage = page;
   const status = document.getElementById('status-filter').value;
-  const params = new URLSearchParams({ page, page_size: 50 });
+  const params = new URLSearchParams({ page, page_size: 12 });
   if (status) params.set('status', status);
 
   const resp = await api(`/api/v1/transfers/?${params}`);
@@ -801,7 +801,7 @@ async function confirmTransferImport() {
 
   if (!resp.ok) {
     const err = await resp.json();
-    document.getElementById('transfer-import-result-icon').innerHTML = '<i class="bi bi-x-circle-fill" style="color:#FF3B30;"></i>';
+    document.getElementById('transfer-import-result-icon').innerHTML = '<i class="bi bi-x-circle-fill" style="color:var(--import-error);"></i>';
     document.getElementById('transfer-import-result-message').textContent = '导入失败';
     document.getElementById('transfer-import-result-detail').textContent = err.detail || '未知错误';
     showTransferImportStep(3);
@@ -809,7 +809,7 @@ async function confirmTransferImport() {
   }
 
   const result = await resp.json();
-  document.getElementById('transfer-import-result-icon').innerHTML = '<i class="bi bi-check-circle-fill" style="color:#34C759;"></i>';
+  document.getElementById('transfer-import-result-icon').innerHTML = '<i class="bi bi-check-circle-fill" style="color:var(--import-success);"></i>';
   document.getElementById('transfer-import-result-message').textContent = '导入成功！';
   document.getElementById('transfer-import-result-detail').innerHTML =
     `成功创建 <strong>${result.imported}</strong> 条调拨申请` +

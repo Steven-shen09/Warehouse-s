@@ -2,7 +2,7 @@
 {% block title %}审核管理 - Warehouse-s{% endblock %}
 
 {% block content %}
-<h2 class="mb-16">审核管理</h2>
+<h2 class="mb-16"><i class="bi bi-check-circle"></i> 审核管理</h2>
 
 <div class="stats-grid" style="margin-bottom:20px;">
   <div class="stat-card"><div class="stat-value" id="stat-pending">--</div><div class="stat-label">租借待审</div></div>
@@ -31,11 +31,11 @@
   <div class="modal">
     <div class="modal-header">
       <h3 id="confirm-title">确认操作</h3>
-      <button class="btn btn-sm btn-outline" onclick="closeModal('confirm-modal')">&times;</button>
+      <button class="btn btn-sm btn-outline" aria-label="关闭" onclick="closeModal('confirm-modal')">&times;</button>
     </div>
     <div class="modal-body"><p id="confirm-message" class="text-muted"></p></div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('confirm-modal')">取消</button>
+      <button class="btn btn-outline" aria-label="关闭" onclick="closeModal('confirm-modal')">取消</button>
       <button class="btn btn-success" id="confirm-btn">确认通过</button>
     </div>
   </div>
@@ -46,7 +46,7 @@
   <div class="modal">
     <div class="modal-header">
       <h3 id="reject-title">驳回申请</h3>
-      <button class="btn btn-sm btn-outline" onclick="closeModal('reject-modal')">&times;</button>
+      <button class="btn btn-sm btn-outline" aria-label="关闭" onclick="closeModal('reject-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <p id="reject-message" class="text-muted"></p>
@@ -56,7 +56,7 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('reject-modal')">取消</button>
+      <button class="btn btn-outline" aria-label="关闭" onclick="closeModal('reject-modal')">取消</button>
       <button class="btn btn-danger" id="reject-btn">确认驳回</button>
     </div>
   </div>
@@ -225,19 +225,19 @@ async function loadApprovals(page) {
   let recDocs = [], trDocs = [], conDocs = [], astDocs = [];
 
   if (type === 'all' || type === 'records') {
-    const r = await api('/api/v1/approvals/pending-grouped?page=1&page_size=50');
+    const r = await api('/api/v1/approvals/pending-grouped?page=1&page_size=12');
     if (r.ok) { const d = await r.json(); recDocs = d.documents || []; }
   }
   if (type === 'all' || type === 'consumable') {
-    const r = await api('/api/v1/consumable-records?status=待审核&page_size=50');
+    const r = await api('/api/v1/consumable-records?status=待审核&page_size=12');
     if (r.ok) { const d = await r.json(); conDocs = d.records || []; }
   }
   if (type === 'all' || type === 'asset') {
-    const r = await api('/api/v1/approvals/pending-assignments?page_size=50');
+    const r = await api('/api/v1/approvals/pending-assignments?page_size=12');
     if (r.ok) { const d = await r.json(); astDocs = d.groups || []; }
   }
   if (type === 'all' || type === 'transfers') {
-    const r = await api('/api/v1/approvals/pending-transfers?page=1&page_size=50');
+    const r = await api('/api/v1/approvals/pending-transfers?page=1&page_size=12');
     if (r.ok) { const d = await r.json(); trDocs = d.groups || []; }
   }
 
