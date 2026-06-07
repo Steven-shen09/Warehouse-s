@@ -60,6 +60,56 @@
   --transition: 0.2s ease;
 }
 
+/* ── 暗色模式 ── */
+[data-theme="dark"] {
+  --primary: #FF6B2B;
+  --primary-dark: #E55A20;
+  --primary-light: #FF8C55;
+  --accent: #D49E40;
+  --accent-dark: #B88630;
+  --success: #3CB886;
+  --warning: #D49E40;
+  --danger: #E8556A;
+  --info: #7BA4CC;
+
+  /* 暗色表面 — 暖棕暗调 */
+  --bg: #1E1D1A;
+  --bg-soft: #252420;
+  --bg-card: #2A2925;
+  --bg-card-hover: #302F2B;
+  --bg-sidebar: #22211D;
+  --bg-header: #1E1D1A;
+
+  /* 暗色文字 */
+  --text-title: #F2F1ED;
+  --text: #E6E5E0;
+  --text-secondary: rgba(242,241,237,0.60);
+  --text-muted: rgba(242,241,237,0.42);
+
+  /* 暗色边框 */
+  --border: rgba(242,241,237,0.08);
+  --border-strong: rgba(242,241,237,0.14);
+  --border-heavy: rgba(242,241,237,0.45);
+  --border-light: rgba(242,241,237,0.05);
+  --border-card: rgba(242,241,237,0.08);
+
+  /* 暗色阴影 */
+  --shadow-hover: 0 2px 16px rgba(0,0,0,0.20);
+
+  /* 暗色表单输入 */
+  --input-bg: #2A2925;
+
+  /* 暗色状态色适配 */
+  --status-available: #3CB886;
+  --status-lent: #7BA4CC;
+  --status-damaged: #E8556A;
+  --status-pending: #D49E40;
+  --status-approved: #5FA870;
+  --status-rejected: #E8556A;
+  --status-returned: #9B80C0;
+  --status-overdue: #FF6B2B;
+}
+
 /* ── 基础重置 ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -118,7 +168,7 @@ a:hover { color: var(--primary-dark); }
 /* ── 布局 ── */
 .layout {
   display: flex; min-height: calc(100vh - 60px);
-  position: relative; z-index: 1;
+  position: relative;
 }
 
 /* ── 侧边栏 - 实色 ── */
@@ -428,14 +478,30 @@ a:hover { color: var(--primary-dark); }
 
 /* ── 登录页 ── */
 .login-page {
-  display: flex; align-items: center; justify-content: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   min-height: 100vh;
   position: relative;
+}
+
+/* 左侧角色面板 */
+.login-page .left-panel {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(160deg, #e8e5df 0%, #d5d1cb 100%);
+}
+
+/* 右侧表单面板 */
+.login-page .right-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--bg);
+  padding: 40px;
 }
 
 .login-card {
-  width: 420px; padding: 48px 44px;
+  width: 360px; padding: 36px 32px;
   background: #FFFFFF;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -445,28 +511,113 @@ a:hover { color: var(--primary-dark); }
   animation: fadeInUp 0.5s ease;
 }
 
-.login-card h1 {
-  text-align: center; margin-bottom: 8px;
-  font-size: 24px; font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.5px;
+/* 响应式：小屏单栏居中 */
+@media (max-width: 900px) {
+  .login-page {
+    grid-template-columns: 1fr;
+  }
+  .login-page .left-panel {
+    display: none;
+  }
+  .login-page .right-panel {
+    padding: 24px;
+  }
 }
 
-.login-card .btn { width: 100%; justify-content: center; margin-top: 20px; }
+/* ── 登录页标题区 ── */
+.login-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.login-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  background: var(--bg);
+  border-radius: 14px;
+  margin-bottom: 16px;
+}
+
+.login-icon i {
+  font-size: 28px;
+  color: var(--primary);
+}
+
+.login-card h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 6px 0;
+  letter-spacing: -0.3px;
+}
+
+.login-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.login-card .btn { width: 100%; justify-content: center; margin-top: 6px; }
 .login-card .btn-primary { padding: 12px; font-size: 16px; border-radius: var(--radius-sm); }
+
+/* ── 记住我复选框 ── */
+.remember-me {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  display: none;
+}
+
+.checkbox-custom {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  background: #fff;
+}
+
+.checkbox-label input:checked + .checkbox-custom {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.checkbox-label input:checked + .checkbox-custom::after {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.checkbox-text {
+  line-height: 1.4;
+}
 
 .login-error {
   color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center;
   display: none; font-weight: 500;
-}
-
-.login-card .demo-accounts {
-  margin-top: 28px; padding-top: 18px;
-  border-top: 1px solid var(--border-light);
-}
-.login-card .demo-accounts p {
-  font-size: 12px; color: var(--text-muted); text-align: center;
-  line-height: 1.8;
 }
 
 /* ── Toast ── */
@@ -803,6 +954,33 @@ a:hover { color: var(--primary-dark); }
   .layout { justify-content: center; }
 }
 
+/* ── 表格横向滚动包裹 ── */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-sm);
+}
+
+/* ── 仓库购物车双栏布局 ── */
+.warehouse-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.warehouse-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.warehouse-cart {
+  width: 340px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 80px;
+  align-self: flex-start;
+}
+
 /* ── 页面内容过渡动画 ── */
 .main-content > * {
   animation: fadeInUp 0.4s ease both;
@@ -872,4 +1050,308 @@ a:hover { color: var(--primary-dark); }
 
 .custom-confirm-dialog .btn-row {
   display: flex; gap: 10px; justify-content: flex-end;
+}
+
+/* ══════════════════════════════════════════
+   响应式断点体系
+   ── 手机 < 768px | 平板 768-1023px | 桌面 ≥ 1024px
+   ══════════════════════════════════════════ */
+
+/* ── 汉堡菜单按钮（默认隐藏，平板以下显示）── */
+.hamburger-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 10px;
+  min-width: 44px;
+  min-height: 44px;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+.hamburger-btn:hover {
+  background: rgba(38,37,30,0.06);
+  color: var(--primary);
+}
+
+/* ── 侧边栏遮罩层（手机端使用）── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 98;
+  background: rgba(38,37,30,0.35);
+}
+
+/* ── 平板 ≤ 1023px：侧边栏折叠为图标模式 ── */
+@media (max-width: 1023px) {
+  /* 折叠态：仅图标可见 */
+  .sidebar {
+    width: 60px;
+    padding: 12px 0;
+    transition: width 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
+  }
+
+  .sidebar a {
+    padding: 12px 16px;
+    margin: 2px 6px;
+    justify-content: center;
+    gap: 0;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+
+  .sidebar a span {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+    transition: opacity 0.15s ease, width 0.15s ease;
+  }
+
+  .sidebar a i {
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  /* hover 展开为完整侧边栏 */
+  .sidebar:hover {
+    width: 240px;
+    box-shadow: 4px 0 24px rgba(38,37,30,0.08);
+    z-index: 50;
+    overflow: visible;
+  }
+
+  .sidebar:hover a {
+    padding: 13px 24px;
+    margin: 2px 12px;
+    justify-content: flex-start;
+    gap: 12px;
+  }
+
+  .sidebar:hover a span {
+    opacity: 1;
+    width: auto;
+    overflow: visible;
+  }
+
+  .sidebar:hover a i {
+    font-size: 18px;
+  }
+
+  .main-content {
+    padding: 16px;
+  }
+
+  /* 仓库购物车：平板缩小面板 */
+  .warehouse-layout {
+    gap: 14px;
+  }
+  .warehouse-cart {
+    width: 280px;
+    top: 76px;
+  }
+}
+
+/* ── 手机 < 768px：侧边栏滑入覆盖模式 ── */
+@media (max-width: 767px) {
+  /* 汉堡菜单显示 */
+  .hamburger-btn {
+    display: flex;
+  }
+
+  /* 遮罩层：盖在主内容上（导航栏下方），低于侧边栏 */
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    top: 60px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 199;
+    background: rgba(38,37,30,0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+
+  .sidebar-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* 侧边栏：固定定位，滑入式 */
+  .sidebar {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    bottom: 0;
+    z-index: 200;
+    width: 260px !important;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    touch-action: manipulation;
+    will-change: transform;
+    pointer-events: auto;
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(38,37,30,0.14);
+  }
+
+  /* 手机模式始终显示完整内容（覆盖折叠样式） */
+  .sidebar a,
+  .sidebar:hover a {
+    padding: 13px 24px !important;
+    margin: 2px 12px !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+    pointer-events: auto;
+  }
+
+  .sidebar a span,
+  .sidebar:hover a span {
+    opacity: 1 !important;
+    width: auto !important;
+    overflow: visible !important;
+  }
+
+  .sidebar a i,
+  .sidebar:hover a i {
+    font-size: 18px !important;
+  }
+
+  /* 手机端侧边栏 hover 不改变宽度 */
+  .sidebar:hover {
+    width: 260px !important;
+    z-index: 200 !important;
+    box-shadow: 4px 0 24px rgba(38,37,30,0.14);
+  }
+
+  .main-content {
+    padding: 12px;
+  }
+
+  /* 仓库购物车：上下堆叠 */
+  .warehouse-layout {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .warehouse-cart {
+    width: 100%;
+    position: static;
+  }
+
+  /* 导航栏精简 */
+  .navbar {
+    padding: 0 12px;
+  }
+
+  .navbar-brand {
+    font-size: 17px;
+  }
+
+  .navbar-nav {
+    gap: 6px;
+  }
+}
+
+/* ── 小手机 < 400px：进一步精简 ── */
+@media (max-width: 399px) {
+  .navbar-brand {
+    font-size: 15px;
+  }
+
+  .navbar-username,
+  .navbar-nav .badge-role {
+    display: none;
+  }
+
+  .navbar-nav .btn-outline {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+}
+
+/* ══════════════════════════════════════════
+   暗色模式 — 表面/组件覆盖
+   ══════════════════════════════════════════ */
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] .form-textarea {
+  background: var(--bg-card);
+}
+[data-theme="dark"] .form-input:focus,
+[data-theme="dark"] .form-select:focus,
+[data-theme="dark"] .form-textarea:focus {
+  background: var(--bg-card);
+}
+
+[data-theme="dark"] .login-card,
+[data-theme="dark"] .modal,
+[data-theme="dark"] .custom-confirm-dialog,
+[data-theme="dark"] .suggest-dropdown {
+  background: var(--bg-card);
+}
+
+[data-theme="dark"] .login-page .left-panel {
+  background: linear-gradient(160deg, #1a1a2e 0%, #16213e 100%);
+}
+
+[data-theme="dark"] .login-page .right-panel {
+  background: var(--bg);
+}
+
+[data-theme="dark"] .cart-item:hover {
+  background: var(--bg-card-hover);
+}
+
+[data-theme="dark"] .doc-group-header {
+  background: var(--bg-soft);
+}
+[data-theme="dark"] .doc-group-header:hover {
+  background: var(--bg-card-hover);
+}
+
+[data-theme="dark"] .hamburger-btn:hover {
+  background: rgba(242,241,237,0.08);
+}
+
+[data-theme="dark"] .sidebar-overlay {
+  background: rgba(0,0,0,0.55);
+}
+
+/* 暗色模式表格斑马纹 */
+[data-theme="dark"] .table tbody tr:nth-child(even) {
+  background: rgba(242,241,237,0.03);
+}
+[data-theme="dark"] .table tbody tr:hover {
+  background: rgba(255,107,43,0.08);
+}
+
+/* 暗色模式骨架屏 */
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(90deg,
+    rgba(242,241,237,0.04) 25%,
+    rgba(242,241,237,0.08) 50%,
+    rgba(242,241,237,0.04) 75%);
+  background-size: 800px 100%;
+}
+
+/* 暗色模式滚动条 */
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(242,241,237,0.15);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(242,241,237,0.25);
 }

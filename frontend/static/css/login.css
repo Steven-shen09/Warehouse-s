@@ -1,1 +1,209 @@
-/* 登录页样式 — Apple Liquid Glass 风格（主样式已在 style.css 中定义） */
+/* 登录页动画角色样式 — 源自 animatedlogin 风格 */
+
+/* ── 角色容器（左侧面板内） ── */
+.left-panel {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(160deg, #e8e5df 0%, #d5d1cb 100%);
+}
+
+.chars-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── 装饰光晕 ── */
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.15;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glow-1 {
+  width: 260px;
+  height: 260px;
+  background: #6C3FF5;
+  top: 15%;
+  left: 5%;
+  animation: orbFloat1 8s ease-in-out infinite;
+}
+
+.glow-2 {
+  width: 200px;
+  height: 200px;
+  background: #FF9B6B;
+  bottom: 20%;
+  right: 10%;
+  animation: orbFloat2 10s ease-in-out infinite;
+}
+
+@keyframes orbFloat1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(20px, -15px) scale(1.1); }
+  66%      { transform: translate(-10px, 10px) scale(0.95); }
+}
+
+@keyframes orbFloat2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(-15px, 20px) scale(1.08); }
+  66%      { transform: translate(10px, -10px) scale(0.92); }
+}
+
+/* ── 角色基础 ── */
+.character {
+  position: absolute;
+  transition: transform 0.7s ease-in-out;
+}
+
+/* ── 紫色角色 — 高个圆角矩形 ── */
+.char-purple {
+  width: 170px;
+  height: 370px;
+  background: #6C3FF5;
+  border-radius: 10px;
+  bottom: 35%;
+  left: 12%;
+  z-index: 1;
+}
+
+/* ── 黑色角色 — 中等圆角矩形 ── */
+.char-black {
+  width: 115px;
+  height: 290px;
+  background: #2D2D2D;
+  border-radius: 8px;
+  bottom: 35%;
+  left: 30%;
+  z-index: 2;
+}
+
+/* ── 橙色角色 — 大半圆 ── */
+.char-orange {
+  width: 230px;
+  height: 190px;
+  background: #FF9B6B;
+  border-radius: 115px 115px 0 0;
+  bottom: 35%;
+  left: 42%;
+  z-index: 3;
+}
+
+/* ── 黄色角色 — 小半圆 ── */
+.char-yellow {
+  width: 135px;
+  height: 215px;
+  background: #E8D754;
+  border-radius: 68px 68px 0 0;
+  bottom: 35%;
+  left: 22%;
+  z-index: 4;
+}
+
+/* ── 眼睛容器 ── */
+.eyes {
+  position: absolute;
+  display: flex;
+  transition: all 0.7s ease-in-out;
+}
+
+.char-purple .eyes  { top: 80px;  left: 50px; gap: 35px; }
+.char-black .eyes   { top: 60px;  left: 28px; gap: 25px; }
+.char-orange .eyes  { top: 55px;  left: 75px; gap: 40px; }
+.char-yellow .eyes  { top: 60px;  left: 40px; gap: 28px; }
+
+/* ── 眼球（白色底 + 黑色瞳孔）—— 紫色和黑色角色 ── */
+.eyeball {
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: height 0.15s ease;
+  overflow: hidden;
+}
+
+.char-purple .eyeball { width: 18px; height: 18px; }
+.char-black .eyeball  { width: 16px; height: 16px; }
+
+.pupil {
+  width: 7px;
+  height: 7px;
+  background: #000;
+  border-radius: 50%;
+  transition: transform 0.1s ease-out;
+}
+
+.char-black .pupil { width: 6px; height: 6px; }
+
+/* ── 裸瞳孔（无白底）—— 橙色和黄色角色 ── */
+.bare-pupil {
+  width: 12px;
+  height: 12px;
+  background: #000;
+  border-radius: 50%;
+  transition: transform 0.1s ease-out;
+}
+
+/* ── 黄色角色嘴巴（横线） ── */
+.mouth-line {
+  position: absolute;
+  width: 24px;
+  height: 2px;
+  background: #000;
+  border-radius: 1px;
+  transition: all 0.7s ease-in-out;
+}
+
+.char-yellow .mouth-line {
+  top: 100px;
+  left: 56px;
+}
+
+/* ── 橙色角色悲伤嘴巴 ── */
+.orange-mouth {
+  position: absolute;
+  width: 28px;
+  height: 14px;
+  border: 2px solid #000;
+  border-top: none;
+  border-radius: 0 0 14px 14px;
+  top: 88px;
+  left: 101px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* ── 摇头动画关键帧 ── */
+@keyframes shakeHead {
+  0%, 100%  { transform: translateX(0); }
+  10%       { transform: translateX(-9px); }
+  20%       { transform: translateX(7px); }
+  30%       { transform: translateX(-6px); }
+  40%       { transform: translateX(5px); }
+  50%       { transform: translateX(-4px); }
+  60%       { transform: translateX(3px); }
+  70%       { transform: translateX(-2px); }
+  80%       { transform: translateX(1px); }
+  90%       { transform: translateX(-0.5px); }
+}
+
+.shake-head {
+  animation: shakeHead 0.8s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+/* ── 响应式：小屏幕单栏居中，隐藏左侧面板 ── */
+@media (max-width: 900px) {
+  .left-panel {
+    display: none;
+  }
+}

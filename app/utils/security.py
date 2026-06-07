@@ -26,9 +26,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def create_access_token(user_id: int, username: str, role: str) -> str:
-    """生成 JWT 访问令牌"""
-    expire = datetime.utcnow() + timedelta(hours=settings.JWT_EXPIRE_HOURS)
+def create_access_token(user_id: int, username: str, role: str, expire_hours: int = None) -> str:
+    """生成 JWT 访问令牌，可指定过期小时数（默认使用配置值）"""
+    if expire_hours is None:
+        expire_hours = settings.JWT_EXPIRE_HOURS
+    expire = datetime.utcnow() + timedelta(hours=expire_hours)
     payload = {
         "sub": str(user_id),
         "username": username,

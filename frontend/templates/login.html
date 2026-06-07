@@ -2,27 +2,76 @@
 {% block title %}登录 - Warehouse-s{% endblock %}
 
 {% block fullpage %}
+<link rel="stylesheet" href="/static/css/login.css">
 <div class="login-page">
-  <div class="login-card">
-    <h1><i class="bi bi-box-seam"></i> Warehouse-s</h1>
-    <p class="text-muted" style="margin-bottom:20px;font-size:14px;">物品租借管理系统</p>
+  <!-- 左侧：动画角色面板 -->
+  <div class="left-panel">
+    <div class="chars-container">
+      <!-- 紫色角色 — 高个 -->
+      <div class="character char-purple" id="char-purple">
+        <div class="eyes">
+          <div class="eyeball"><div class="pupil"></div></div>
+          <div class="eyeball"><div class="pupil"></div></div>
+        </div>
+      </div>
+      <!-- 黑色角色 — 中等 -->
+      <div class="character char-black" id="char-black">
+        <div class="eyes">
+          <div class="eyeball"><div class="pupil"></div></div>
+          <div class="eyeball"><div class="pupil"></div></div>
+        </div>
+      </div>
+      <!-- 橙色角色 — 大半圆 -->
+      <div class="character char-orange" id="char-orange">
+        <div class="eyes">
+          <div class="bare-pupil"></div>
+          <div class="bare-pupil"></div>
+        </div>
+        <div class="orange-mouth"></div>
+      </div>
+      <!-- 黄色角色 — 小半圆 -->
+      <div class="character char-yellow" id="char-yellow">
+        <div class="eyes">
+          <div class="bare-pupil"></div>
+          <div class="bare-pupil"></div>
+        </div>
+        <div class="mouth-line"></div>
+      </div>
+    </div>
+    <!-- 装饰光晕 -->
+    <div class="glow-orb glow-1"></div>
+    <div class="glow-orb glow-2"></div>
+  </div>
+
+  <!-- 右侧：登录表单 -->
+  <div class="right-panel">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-icon">
+          <i class="bi bi-box-seam"></i>
+        </div>
+        <h2>Welcome back!</h2>
+        <p class="login-subtitle">Sign in to your account</p>
+      </div>
     <form id="login-form" onsubmit="handleLogin(event)">
       <div class="form-group">
-        <label class="form-label" for="username">用户名</label>
-        <input type="text" id="username" class="form-input" placeholder="请输入用户名" required autofocus>
+        <label class="form-label" for="username">Username</label>
+        <input type="text" id="username" class="form-input" placeholder="Enter your username" required autofocus autocomplete="username">
       </div>
       <div class="form-group">
-        <label class="form-label" for="password">密码</label>
-        <input type="password" id="password" class="form-input" placeholder="请输入密码" required>
+        <label class="form-label" for="password">Password</label>
+        <input type="password" id="password" class="form-input" placeholder="Enter your password" required autocomplete="current-password">
+      </div>
+      <div class="form-group remember-me">
+        <label class="checkbox-label">
+          <input type="checkbox" id="remember-me">
+          <span class="checkbox-custom"></span>
+          <span class="checkbox-text">Remember for 30 days</span>
+        </label>
       </div>
       <div id="login-error" class="login-error"></div>
-      <button type="submit" class="btn btn-primary">登 录</button>
+      <button type="submit" class="btn btn-primary">Sign In</button>
     </form>
-    <div class="demo-accounts">
-      <p>预置账号</p>
-      <p>管理员: admin / admin123</p>
-      <p>审核员: approver1 / 123456</p>
-      <p>用户: user1 / 123456</p>
     </div>
   </div>
 </div>
@@ -30,29 +79,355 @@
 
 {% block scripts %}
 <script>
+// ── 动画角色交互逻辑 ──
+(function() {
+  // 角色 DOM 引用
+  var purple    = document.getElementById('char-purple');
+  var black     = document.getElementById('char-black');
+  var orange    = document.getElementById('char-orange');
+  var yellow    = document.getElementById('char-yellow');
+  if (!purple) return;
+
+  // 眼睛容器
+  var purpleEyes   = purple.querySelector('.eyes');
+  var blackEyes    = black.querySelector('.eyes');
+  var orangeEyes   = orange.querySelector('.eyes');
+  var yellowEyes   = yellow.querySelector('.eyes');
+  // 眼球（白底）
+  var purpleEyeL   = purple.querySelectorAll('.eyeball')[0];
+  var purpleEyeR   = purple.querySelectorAll('.eyeball')[1];
+  var blackEyeL    = black.querySelectorAll('.eyeball')[0];
+  var blackEyeR    = black.querySelectorAll('.eyeball')[1];
+  // 瞳孔（白底内）
+  var purplePupilL = purpleEyeL.querySelector('.pupil');
+  var purplePupilR = purpleEyeR.querySelector('.pupil');
+  var blackPupilL  = blackEyeL.querySelector('.pupil');
+  var blackPupilR  = blackEyeR.querySelector('.pupil');
+  // 裸瞳孔（橙/黄色角色）
+  var orangePupils = orange.querySelectorAll('.bare-pupil');
+  var yellowPupils = yellow.querySelectorAll('.bare-pupil');
+  // 嘴巴
+  var orangeMouth  = orange.querySelector('.orange-mouth');
+  var yellowMouth  = yellow.querySelector('.mouth-line');
+
+  // 表单元素
+  var usernameInput  = document.getElementById('username');
+  var passwordInput  = document.getElementById('password');
+  var loginErrorEl   = document.getElementById('login-error');
+
+  // ── 从 CSS 读取并存储眼睛初始位置 ──
+  function getStyleNum(el, prop) {
+    return parseFloat(getComputedStyle(el)[prop]) || 0;
+  }
+
+  var eyesBase = {
+    purple: { left: getStyleNum(purpleEyes, 'left'), top: getStyleNum(purpleEyes, 'top') },
+    black:  { left: getStyleNum(blackEyes, 'left'),  top: getStyleNum(blackEyes, 'top') },
+    orange: { left: getStyleNum(orangeEyes, 'left'), top: getStyleNum(orangeEyes, 'top') },
+    yellow: { left: getStyleNum(yellowEyes, 'left'), top: getStyleNum(yellowEyes, 'top') }
+  };
+
+  // 状态标志
+  var mouseX = window.innerWidth / 2;
+  var mouseY = window.innerHeight / 2;
+  var isPurpleBlinking = false;
+  var isBlackBlinking  = false;
+  var isLookingAtEachOther = false;
+  var isLoginError = false;
+
+  // ── 辅助函数 ──
+  function clamp(val, min, max) {
+    return Math.max(min, Math.min(max, val));
+  }
+
+  function calcPosition(cx, cy, mx, my, maxX, maxY, divisorX, divisorY) {
+    var faceX = clamp((mx - cx) / (divisorX || 20), -maxX, maxX);
+    var faceY = clamp((my - cy) / (divisorY || 30), -maxY, maxY);
+    var bodySkew = clamp(-(mx - cx) / 120, -6, 6);
+    return { faceX: faceX, faceY: faceY, bodySkew: bodySkew };
+  }
+
+  function calcPupilOffset(faceX, faceY, maxDist) {
+    maxDist = maxDist || 4;
+    var dist = Math.sqrt(faceX * faceX + faceY * faceY);
+    if (dist < 0.5) return { px: 0, py: 0 };
+    var ratio = Math.min(dist, maxDist) / dist;
+    return { px: faceX * ratio, py: faceY * ratio };
+  }
+
+  function getCharCenter(el) {
+    var rect = el.getBoundingClientRect();
+    return { cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2 };
+  }
+
+  // ── 更新所有角色位置（基于初始 CSS 位置 + 偏移） ──
+  function updatePositions() {
+    if (isLoginError) return;
+
+    var chars = [
+      { el: purple, eyes: purpleEyes, base: eyesBase.purple, pupils: [purplePupilL, purplePupilR], hasEyeball: true },
+      { el: black,  eyes: blackEyes,  base: eyesBase.black,  pupils: [blackPupilL, blackPupilR],   hasEyeball: true },
+      { el: orange, eyes: orangeEyes, base: eyesBase.orange, pupils: [orangePupils[0], orangePupils[1]], extra: orangeMouth, mouth: true },
+      { el: yellow, eyes: yellowEyes, base: eyesBase.yellow, pupils: [yellowPupils[0], yellowPupils[1]], extra: yellowMouth, mouth: true }
+    ];
+
+    chars.forEach(function(c) {
+      var pos = getCharCenter(c.el);
+      var result = calcPosition(pos.cx, pos.cy, mouseX, mouseY, 15, 10);
+
+      // 眼睛位置 = CSS 基础位置 + 鼠标偏移
+      c.eyes.style.left = (c.base.left + result.faceX) + 'px';
+      c.eyes.style.top  = (c.base.top + result.faceY) + 'px';
+
+      // 瞳孔偏移（在眼球内微动）
+      var pupilOff = calcPupilOffset(result.faceX, result.faceY, c.hasEyeball ? 4 : 5);
+      c.pupils.forEach(function(p) {
+        p.style.transform = 'translate(' + pupilOff.px + 'px, ' + pupilOff.py + 'px)';
+      });
+
+      // 身体倾斜
+      c.el.style.transform = 'skewX(' + result.bodySkew + 'deg)';
+
+      // 嘴巴跟随眼睛
+      if (c.mouth && c.extra) {
+        c.extra.style.transform = 'translate(' + result.faceX + 'px, ' + result.faceY + 'px)';
+      }
+    });
+  }
+
+  // ── 鼠标移动 ──
+  document.addEventListener('mousemove', function(e) {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    if (!isLoginError) updatePositions();
+  });
+
+  // ── 随机眨眼（紫色和黑色角色有白色眼球，可眨眼） ──
+  function scheduleBlink(charName) {
+    var delay = 3000 + Math.random() * 4000;
+    setTimeout(function() {
+      if (charName === 'purple') blinkPurple();
+      else blinkBlack();
+    }, delay);
+  }
+
+  function blinkPurple() {
+    if (isPurpleBlinking || isLoginError) { scheduleBlink('purple'); return; }
+    isPurpleBlinking = true;
+    purpleEyeL.style.height = '2px';
+    purpleEyeR.style.height = '2px';
+    setTimeout(function() {
+      purpleEyeL.style.height = '18px';
+      purpleEyeR.style.height = '18px';
+      isPurpleBlinking = false;
+      scheduleBlink('purple');
+    }, 150);
+  }
+
+  function blinkBlack() {
+    if (isBlackBlinking || isLoginError) { scheduleBlink('black'); return; }
+    isBlackBlinking = true;
+    blackEyeL.style.height = '2px';
+    blackEyeR.style.height = '2px';
+    setTimeout(function() {
+      blackEyeL.style.height = '16px';
+      blackEyeR.style.height = '16px';
+      isBlackBlinking = false;
+      scheduleBlink('black');
+    }, 150);
+  }
+
+  scheduleBlink('purple');
+  scheduleBlink('black');
+
+  // ── 重置所有角色到初始状态 ──
+  function resetAllCharacters() {
+    [purple, black, orange, yellow].forEach(function(el) {
+      el.style.transform = '';
+      el.style.height = '';
+    });
+    // 恢复眼睛到 CSS 基础位置
+    purpleEyes.style.left = eyesBase.purple.left + 'px';
+    purpleEyes.style.top  = eyesBase.purple.top + 'px';
+    blackEyes.style.left  = eyesBase.black.left + 'px';
+    blackEyes.style.top   = eyesBase.black.top + 'px';
+    orangeEyes.style.left = eyesBase.orange.left + 'px';
+    orangeEyes.style.top  = eyesBase.orange.top + 'px';
+    yellowEyes.style.left = eyesBase.yellow.left + 'px';
+    yellowEyes.style.top  = eyesBase.yellow.top + 'px';
+    // 重置瞳孔
+    var allPupils = [purplePupilL, purplePupilR, blackPupilL, blackPupilR,
+                     orangePupils[0], orangePupils[1], yellowPupils[0], yellowPupils[1]];
+    allPupils.forEach(function(p) { if (p) p.style.transform = ''; });
+    if (orangeMouth) orangeMouth.style.opacity = '0';
+    if (yellowMouth) yellowMouth.style.transform = '';
+    // 恢复眼球高度（可能被眨眼修改）
+    if (purpleEyeL) { purpleEyeL.style.height = ''; purpleEyeR.style.height = ''; }
+    if (blackEyeL)  { blackEyeL.style.height = '';  blackEyeR.style.height = ''; }
+    isLookingAtEachOther = false;
+  }
+
+  // ── 表单聚焦/失焦 ──
+  usernameInput.addEventListener('focus', function() {
+    isLookingAtEachOther = true;
+    // 紫色和黑色角色互相对视
+    purple.style.transform = 'skewX(-12deg) translateX(40px)';
+    purple.style.height = '410px';
+    black.style.transform  = 'skewX(10deg) translateX(20px)';
+    // 紫色看向右下方
+    purplePupilL.style.transform = 'translate(4px, 5px)';
+    purplePupilR.style.transform = 'translate(4px, 5px)';
+    // 黑色看向左上方
+    blackPupilL.style.transform = 'translate(-4px, -5px)';
+    blackPupilR.style.transform = 'translate(-4px, -5px)';
+
+    setTimeout(function() {
+      isLookingAtEachOther = false;
+    }, 800);
+  });
+
+  usernameInput.addEventListener('blur', function() {
+    if (document.activeElement !== passwordInput) {
+      resetAllCharacters();
+    }
+  });
+
+  passwordInput.addEventListener('focus', function() {
+    // 角色集体转头回避（隐私保护）
+    purple.style.transform = 'skewX(-14deg) translateX(-20px)';
+    purple.style.height = '410px';
+    black.style.transform  = 'skewX(12deg) translateX(-10px)';
+    orange.style.transform = 'skewX(-3deg)';
+    yellow.style.transform = 'skewX(-3deg)';
+
+    // 所有眼睛看向左上方（回避视线）
+    purplePupilL.style.transform = 'translate(-5px, -5px)';
+    purplePupilR.style.transform = 'translate(-5px, -5px)';
+    blackPupilL.style.transform  = 'translate(-4px, -5px)';
+    blackPupilR.style.transform  = 'translate(-4px, -5px)';
+    orangePupils[0].style.transform = 'translate(-5px, -5px)';
+    orangePupils[1].style.transform = 'translate(-5px, -5px)';
+    yellowPupils[0].style.transform = 'translate(-5px, -5px)';
+    yellowPupils[1].style.transform = 'translate(-5px, -5px)';
+    if (yellowMouth) yellowMouth.style.transform = 'translate(-5px, -5px)';
+  });
+
+  passwordInput.addEventListener('blur', function() {
+    if (document.activeElement !== usernameInput) {
+      resetAllCharacters();
+    }
+  });
+
+  // ── 登录失败 — 沮丧摇头动画 ──
+  function triggerLoginError() {
+    if (isLoginError) return;
+    isLoginError = true;
+
+    // 第一阶段：沮丧表情（眼睛低垂）
+    purplePupilL.style.transform = 'translate(-3px, 4px)';
+    purplePupilR.style.transform = 'translate(-3px, 4px)';
+    blackPupilL.style.transform  = 'translate(-3px, 4px)';
+    blackPupilR.style.transform  = 'translate(-3px, 4px)';
+    orangePupils[0].style.transform = 'translate(-3px, 4px)';
+    orangePupils[1].style.transform = 'translate(-3px, 4px)';
+    yellowPupils[0].style.transform = 'translate(-3px, 4px)';
+    yellowPupils[1].style.transform = 'translate(-3px, 4px)';
+    if (orangeMouth) orangeMouth.style.opacity = '1';
+    if (yellowMouth) yellowMouth.style.transform = 'translate(-2px, -3px) rotate(-8deg)';
+
+    // 第二阶段：摇头动画（350ms 后触发）
+    setTimeout(function() {
+      var shakeElements = [
+        purpleEyes, blackEyes, orangeEyes, yellowEyes,
+        purplePupilL, purplePupilR, blackPupilL, blackPupilR,
+        orangePupils[0], orangePupils[1], yellowPupils[0], yellowPupils[1]
+      ];
+      if (orangeMouth) shakeElements.push(orangeMouth);
+      if (yellowMouth) shakeElements.push(yellowMouth);
+
+      shakeElements.forEach(function(el) {
+        el.classList.add('shake-head');
+      });
+
+      setTimeout(function() {
+        shakeElements.forEach(function(el) {
+          el.classList.remove('shake-head');
+        });
+      }, 800);
+    }, 350);
+
+    // 第三阶段：恢复（2.5 秒后）
+    setTimeout(function() {
+      isLoginError = false;
+      resetAllCharacters();
+      updatePositions();
+    }, 2500);
+  }
+
+  // ── 监听登录错误（MutationObserver 检测 style.display 变化） ──
+  var errorObserver = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+      if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+        if (loginErrorEl.style.display === 'block' && loginErrorEl.textContent.trim()) {
+          triggerLoginError();
+        }
+      }
+    });
+  });
+  errorObserver.observe(loginErrorEl, { attributes: true, attributeFilter: ['style'] });
+
+  // ── 窗口大小变化时更新 ──
+  window.addEventListener('resize', function() {
+    if (!isLoginError) updatePositions();
+  });
+
+  // ── 暴露触发函数到全局，供 handleLogin 直接调用 ──
+  window.triggerCharShake = function() {
+    // 重置 isLoginError 以允许重新触发（处理连续错误的情况）
+    isLoginError = false;
+    triggerLoginError();
+  };
+
+  // ── 初始化：设置内联样式以便后续偏移 ──
+  purpleEyes.style.left = eyesBase.purple.left + 'px';
+  purpleEyes.style.top  = eyesBase.purple.top + 'px';
+  blackEyes.style.left  = eyesBase.black.left + 'px';
+  blackEyes.style.top   = eyesBase.black.top + 'px';
+  orangeEyes.style.left = eyesBase.orange.left + 'px';
+  orangeEyes.style.top  = eyesBase.orange.top + 'px';
+  yellowEyes.style.left = eyesBase.yellow.left + 'px';
+  yellowEyes.style.top  = eyesBase.yellow.top + 'px';
+
+  updatePositions();
+})();
+
+// ── 原有登录逻辑 ──
 async function handleLogin(e) {
   e.preventDefault();
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
+  const rememberMe = document.getElementById('remember-me').checked;
   const errorEl = document.getElementById('login-error');
 
   try {
     const resp = await fetch('/api/v1/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password, remember_me: rememberMe })
     });
     const data = await resp.json();
     if (resp.ok) {
       AppState.setAuth(data.access_token, data.user);
       window.location.href = '/dashboard';
     } else {
-      errorEl.textContent = data.detail || '登录失败';
+      errorEl.textContent = data.detail || 'Login failed';
       errorEl.style.display = 'block';
+      if (window.triggerCharShake) window.triggerCharShake();
     }
   } catch (err) {
-    errorEl.textContent = '网络错误，请重试';
+    errorEl.textContent = 'Network error, please try again';
     errorEl.style.display = 'block';
+    if (window.triggerCharShake) window.triggerCharShake();
   }
 }
 </script>

@@ -6,6 +6,7 @@ class LoginRequest(BaseModel):
     """登录请求"""
     username: str = Field(..., min_length=1, description="用户名")
     password: str = Field(..., min_length=1, description="密码")
+    remember_me: bool = Field(False, description="30天免登录")
 
 
 class TokenResponse(BaseModel):
